@@ -112,9 +112,21 @@ class AdjustmentReasonSetupController extends Controller
         event(new NewCreated('adjustment_reason_setup'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $adjust = AdjustmentReasonSetup::findOrFail($id);
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("AdjustmentReasonSetup Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+             // Try to resolve from positional parameters if needed, but 'id' route param usually works.
+        }
+
+        $adjust = AdjustmentReasonSetup::findOrFail($targetId);
         $adjust->delete();
 
         event(new NewCreated('adjustment_reason_setup'));

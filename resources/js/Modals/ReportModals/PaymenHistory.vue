@@ -279,12 +279,15 @@ paymentdetail, index
 <script setup>
 import { nextTick, ref, watch } from "vue";
 import { mdiClose, mdiMagnify } from "@mdi/js";
+import { usePage } from "@inertiajs/vue3";
 
 const props = defineProps({
     customer_code: String,
     document_no: String,
     type: String,
 });
+
+const page = usePage();
 
 const emit = defineEmits(["close", "submit"]);
 
@@ -302,7 +305,7 @@ watch(
             try {
                 isLoading.value = true;
 
-                const response = await axios.get(route("paymentHistory"), {
+                const response = await axios.get(route("paymentHistory", { tenant: page.props.tenant }), {
                     params: {
                         customer_code: newCode,
                     },

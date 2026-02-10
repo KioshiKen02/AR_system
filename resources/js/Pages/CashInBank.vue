@@ -294,7 +294,7 @@
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import PaginationLinks from "./Components/PaginationLinks.vue";
-import { router } from "@inertiajs/vue3";
+import { router, usePage } from "@inertiajs/vue3";
 import { debounce } from "lodash";
 import ToastAlert from "./Components/ToastAlert.vue";
 import ConfirmationDialog from "./Components/ConfirmationDialog.vue";
@@ -310,6 +310,8 @@ const props = defineProps({
     can: Object,
     broadcastChannel: String,
 });
+
+const page = usePage();
 
 const showModal = ref(false);
 const showEditModal = ref(false);
@@ -365,7 +367,7 @@ const handleConfirm = async (confirmed) => {
     showDialog.value = false;
     if (confirmed && pendingDeleteID.value) {
         try {
-            router.delete(route("deleteCashInBank", pendingDeleteID.value), {
+            router.delete(route("deleteCashInBank", { tenant: page.props.tenant, id: pendingDeleteID.value.id }), {
                 onSuccess: () => {
                     showSuccessToast(
                         "Cash in Bank has been deleted successfully"
@@ -394,7 +396,7 @@ const clearSearch = () => {
 const isLoading = ref(false);
 const performSearch = debounce((q) => {
     router.get(
-        route("cashinbank"),
+        route("cashinbank", { tenant: page.props.tenant }),
         { search: q },
         {
             preserveState: true,

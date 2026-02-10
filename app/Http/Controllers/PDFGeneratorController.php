@@ -10,6 +10,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use NumberFormatter;
 use Illuminate\Support\Str;
 
@@ -32,23 +33,29 @@ class PDFGeneratorController extends Controller
         $data['freight'] = (float)preg_replace('/[^0-9.]/', '', $data['freight']);
         $data['net_total'] = (float)preg_replace('/[^0-9.]/', '', $data['net_total']);
 
-        $channel = 'transaction-pdf-generation.' . Str::random(20);
+        $channel = 'transaction-pdf-generation.' . $request->user()->id;
+        $filename = 'InvoiceSlip_' . time() . '_' . Str::random(6) . '.pdf';
 
-        GenerateTransactionPDFJob::dispatch(
+        GenerateTransactionPDFJob::dispatchSync(
             $data,
             $request->user()->id,
             $channel,
             $reprintconfirmation,
             $personauthored ?? "",
             strtoupper($request->user()->name),
-            'invoicetransaction'
+            'invoicetransaction',
+            $filename
         );
+
+        $prefix = trim(config('app.url'), '/');
+        $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         return response()->json([
             'channel' => 'transaction-pdf-generation.' . $request->user()->id,
             'user_id' => $request->user()->id,
             'status' => 'started',
             'message' => 'PDF generation has started',
+            'url' => $publicUrl,
         ]);
     }
     // if the payment type is cash function 
@@ -69,23 +76,29 @@ class PDFGeneratorController extends Controller
         $data['netTotal'] = (float)preg_replace('/[^0-9.]/', '', $data['net_total']);
 
 
-        $channel = 'transaction-pdf-generation.' . Str::random(20);
+        $channel = 'transaction-pdf-generation.' . $request->user()->id;
+        $filename = 'InvoiceCashSlip_' . time() . '_' . Str::random(6) . '.pdf';
 
-        GenerateTransactionPDFJob::dispatch(
+        GenerateTransactionPDFJob::dispatchSync(
             $data,
             $request->user()->id,
             $channel,
             $reprintconfirmation,
             $personauthored ?? "",
             strtoupper($request->user()->name),
-            'invoicecashtransaction'
+            'invoicecashtransaction',
+            $filename
         );
+
+        $prefix = trim(config('app.url'), '/');
+        $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         return response()->json([
             'channel' => 'transaction-pdf-generation.' . $request->user()->id,
             'user_id' => $request->user()->id,
             'status' => 'started',
             'message' => 'PDF generation has started',
+            'url' => $publicUrl,
         ]);
     }
 
@@ -99,23 +112,29 @@ class PDFGeneratorController extends Controller
         $data['transaction_date'] = Carbon::parse($data['transaction_date'])->format('m/d/Y');
         $data['preparedBy'] = strtoupper($request->user()->name);
 
-        $channel = 'transaction-pdf-generation.' . Str::random(20);
+        $channel = 'transaction-pdf-generation.' . $request->user()->id;
+        $filename = 'AdjustmentSlip_' . time() . '_' . Str::random(6) . '.pdf';
 
-        GenerateTransactionPDFJob::dispatch(
+        GenerateTransactionPDFJob::dispatchSync(
             $data,
             $request->user()->id,
             $channel,
             $reprintconfirmation,
             $personauthored ?? "",
             strtoupper($request->user()->name),
-            'adjustmenttransaction'
+            'adjustmenttransaction',
+            $filename
         );
+
+        $prefix = trim(config('app.url'), '/');
+        $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         return response()->json([
             'channel' => 'transaction-pdf-generation.' . $request->user()->id,
             'user_id' => $request->user()->id,
             'status' => 'started',
             'message' => 'PDF generation has started',
+            'url' => $publicUrl,
         ]);
     }
 
@@ -125,23 +144,29 @@ class PDFGeneratorController extends Controller
         $reprintconfirmation = $request->input('_reprint_confirmation', false);
         $personauthored = $request->input('_person_authored', null);
 
-        $channel = 'transaction-pdf-generation.' . Str::random(20);
+        $channel = 'transaction-pdf-generation.' . $request->user()->id;
+        $filename = 'PaymentSlip_' . time() . '_' . Str::random(6) . '.pdf';
 
-        GenerateTransactionPDFJob::dispatch(
+        GenerateTransactionPDFJob::dispatchSync(
             $data,
             $request->user()->id,
             $channel,
             $reprintconfirmation,
             $personauthored ?? "",
             strtoupper($request->user()->name),
-            'paymenttransaction'
+            'paymenttransaction',
+            $filename
         );
+
+        $prefix = trim(config('app.url'), '/');
+        $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         return response()->json([
             'channel' => 'transaction-pdf-generation.' . $request->user()->id,
             'user_id' => $request->user()->id,
             'status' => 'started',
             'message' => 'PDF generation has started',
+            'url' => $publicUrl,
         ]);
     }
 
@@ -152,23 +177,29 @@ class PDFGeneratorController extends Controller
         $reprintconfirmation = $request->input('_reprint_confirmation', false);
         $personauthored = $request->input('_person_authored', null);
 
-        $channel = 'transaction-pdf-generation.' . Str::random(20);
+        $channel = 'transaction-pdf-generation.' . $request->user()->id;
+        $filename = 'CheckCleared_' . time() . '_' . Str::random(6) . '.pdf';
 
-        GenerateTransactionPDFJob::dispatch(
+        GenerateTransactionPDFJob::dispatchSync(
             $data,
             $request->user()->id,
             $channel,
             $reprintconfirmation,
             $personauthored ?? "",
             strtoupper($request->user()->name),
-            'checkclearedtransaction'
+            'checkclearedtransaction',
+            $filename
         );
+
+        $prefix = trim(config('app.url'), '/');
+        $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         return response()->json([
             'channel' => 'transaction-pdf-generation.' . $request->user()->id,
             'user_id' => $request->user()->id,
             'status' => 'started',
             'message' => 'PDF generation has started',
+            'url' => $publicUrl,
         ]);
     }
 
@@ -178,23 +209,29 @@ class PDFGeneratorController extends Controller
         $reprintconfirmation = $request->input('_reprint_confirmation', false);
         $personauthored = $request->input('_person_authored', null);
 
-        $channel = 'transaction-pdf-generation.' . Str::random(20);
+        $channel = 'transaction-pdf-generation.' . $request->user()->id;
+        $filename = 'WhtCleared_' . time() . '_' . Str::random(6) . '.pdf';
 
-        GenerateTransactionPDFJob::dispatch(
+        GenerateTransactionPDFJob::dispatchSync(
             $data,
             $request->user()->id,
             $channel,
             $reprintconfirmation,
             $personauthored ?? "",
             strtoupper($request->user()->name),
-            'whtclearedtransaction'
+            'whtclearedtransaction',
+            $filename
         );
+
+        $prefix = trim(config('app.url'), '/');
+        $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         return response()->json([
             'channel' => 'transaction-pdf-generation.' . $request->user()->id,
             'user_id' => $request->user()->id,
             'status' => 'started',
             'message' => 'PDF generation has started',
+            'url' => $publicUrl,
         ]);
     }
 

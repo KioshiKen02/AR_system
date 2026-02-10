@@ -312,8 +312,18 @@ class ItemController extends Controller
         }
     }
 
-    public function updateItem(Request $request)
+    public function updateItem(Request $request, $id)
     {
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("Item Update: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
         $fields = $request->validate(
             [
                 'item_photo' => ['nullable', 'image'],
@@ -332,7 +342,7 @@ class ItemController extends Controller
 
         $fields['name'] = ucwords(strtolower($fields['name']));
 
-        $item = Item::findOrFail($request->id);
+        $item = Item::findOrFail($targetId);
 
         if ($request->hasFile('item_photo')) {
             $file = $request->file('item_photo');
@@ -370,9 +380,19 @@ class ItemController extends Controller
         event(new NewCreated('item'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $item = Item::findOrFail($id);
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("Item Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
+        $item = Item::findOrFail($targetId);
 
         // Delete photo if it exists
         if ($item->item_photo) {

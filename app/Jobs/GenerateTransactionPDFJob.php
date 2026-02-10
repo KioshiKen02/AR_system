@@ -32,6 +32,7 @@ class GenerateTransactionPDFJob implements ShouldQueue
         protected string $personauthored,
         protected string $preparedBy,
         protected string $transactionType,
+        protected string $filename
     ) {}
 
 
@@ -149,17 +150,16 @@ class GenerateTransactionPDFJob implements ShouldQueue
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = 'InvoiceSlip_' . time() . '_' . Str::random(6) . '.pdf';
-        Storage::disk('public')->put("temp/{$filename}", $pdf->output());
+        Storage::disk('public')->put("temp/{$this->filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
         broadcast(new TransactionPdfGenerated(
             $this->userId,
-            $filename,
+            $this->filename,
             $publicUrl,
             $this->channel
         ));
@@ -241,17 +241,16 @@ class GenerateTransactionPDFJob implements ShouldQueue
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = 'InvoiceCashSlip_' . time() . '_' . Str::random(6) . '.pdf';
-        Storage::disk('public')->put("temp/{$filename}", $pdf->output());
+        Storage::disk('public')->put("temp/{$this->filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
         broadcast(new TransactionPdfGenerated(
             $this->userId,
-            $filename,
+            $this->filename,
             $publicUrl,
             $this->channel
         ));
@@ -314,17 +313,16 @@ class GenerateTransactionPDFJob implements ShouldQueue
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = 'AdjustmentSlip_' . time() . '_' . Str::random(6) . '.pdf';
-        Storage::disk('public')->put("temp/{$filename}", $pdf->output());
+        Storage::disk('public')->put("temp/{$this->filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
         broadcast(new TransactionPdfGenerated(
             $this->userId,
-            $filename,
+            $this->filename,
             $publicUrl,
             $this->channel
         ));
@@ -406,17 +404,16 @@ class GenerateTransactionPDFJob implements ShouldQueue
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = 'PaymentSlip_' . time() . '_' . Str::random(6) . '.pdf';
-        Storage::disk('public')->put("temp/{$filename}", $pdf->output());
+        Storage::disk('public')->put("temp/{$this->filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
         broadcast(new TransactionPdfGenerated(
             $this->userId,
-            $filename,
+            $this->filename,
             $publicUrl,
             $this->channel
         ));
@@ -484,17 +481,16 @@ class GenerateTransactionPDFJob implements ShouldQueue
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = 'CheckCleared_' . time() . '_' . Str::random(6) . '.pdf';
-        Storage::disk('public')->put("temp/{$filename}", $pdf->output());
+        Storage::disk('public')->put("temp/{$this->filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
         broadcast(new TransactionPdfGenerated(
             $this->userId,
-            $filename,
+            $this->filename,
             $publicUrl,
             $this->channel
         ));
@@ -561,17 +557,16 @@ class GenerateTransactionPDFJob implements ShouldQueue
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = 'WhtCleared_' . time() . '_' . Str::random(6) . '.pdf';
-        Storage::disk('public')->put("temp/{$filename}", $pdf->output());
+        Storage::disk('public')->put("temp/{$this->filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
         broadcast(new TransactionPdfGenerated(
             $this->userId,
-            $filename,
+            $this->filename,
             $publicUrl,
             $this->channel
         ));

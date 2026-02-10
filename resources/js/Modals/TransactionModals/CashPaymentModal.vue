@@ -99,7 +99,7 @@
 </template>
 
 <script setup>
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
@@ -111,6 +111,8 @@ const props = defineProps({
     show: Boolean,
     formData: Object,
 });
+
+const page = usePage();
 
 const form = useForm({
     payment_no: null,
@@ -287,9 +289,9 @@ const submit = () => {
         _cash_confirmation: true,
     };
 
-    form.transform((data) => submissionData).post(route("addPayment"), {
+    form.transform((data) => submissionData).post(route("addPayment", { tenant: page.props.tenant }), {
         onSuccess: () => {
-            axios.get(route("payment.latest.paymentNumber")).then((res) => {
+            axios.get(route("payment.latest.paymentNumber", { tenant: page.props.tenant })).then((res) => {
                 form.payment_no = res.data.payment_number;
                 emit("closeSuccess", {
                     payment_no: form.payment_no,

@@ -209,15 +209,34 @@ const startPdfGeneration = async () => {
         progress.value = 0;
         progressMessage.value = "Starting PDF generation...";
 
-        const response = await axios.post(route(props.apiEndpoint), {
+        // Start listening immediately to capture synchronous events if dispatchSync is used
+        if (userId.value) {
+            channel.value = `transaction-pdf-generation.${userId.value}`;
+            setupWebSocketListener();
+        }
+
+        const response = await axios.post(route(props.apiEndpoint, { tenant: page.props.tenant }), {
             ...props.formData,
         });
 
-        if (response.data.channel) {
+        // Check if URL is provided directly in response (Synchronous mode)
+        if (response.data.url) {
+            loading.value = false;
+            pathDelete.value = response.data.url; // Assuming it's a full URL, but deletePdf splits it. 
+            // The deletePdf function expects: pathDelete.value.split("/storage/")[1]
+            // The controller returns: $prefix . Storage::url("temp/{$filename}")
+            // Example: http://localhost/storage/temp/file.pdf
+            
+            // Just use the URL for display
+            pdfUrl.value = response.data.url;
+            progress.value = 100;
+            progressMessage.value = "Report Ready!";
+            return;
+        }
+
+        if (response.data.channel && response.data.channel !== channel.value) {
             channel.value = response.data.channel;
             setupWebSocketListener();
-        } else {
-            throw new Error("Failed to start PDF generation");
         }
     } catch (err) {
         console.error("Error starting PDF generation:", err);
@@ -228,6 +247,7 @@ const startPdfGeneration = async () => {
         loading.value = false;
     }
 };
+
 
 const setupWebSocketListener = () => {
     if (!channel.value) {
@@ -802,7 +822,7 @@ const deletePdf = async () => {
     if (!pathDelete.value) return;
 
     try {
-        await axios.delete(route("pdf.delete"), {
+        await axios.delete(route("pdf.delete", { tenant: page.props.tenant }), {
             data: { path: pathDelete.value.split("/storage/")[1] },
         });
     } catch (err) {

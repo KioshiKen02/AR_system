@@ -265,7 +265,7 @@ import {
 } from "vue";
 import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import axios from "axios";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import ManagersKey from "../ManagersKey.vue";
@@ -277,6 +277,8 @@ const props = defineProps({
     show: Boolean,
     selected: Object,
 });
+
+const page = usePage();
 
 const form = useForm({
     adjustment_no: null,
@@ -341,7 +343,7 @@ watch(
             form.amount = props.selected.amount;
             try {
                 const response = await axios.get(
-                    route("getAdjustmentReasonSetup"),
+                    route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),
                     {
                         params: {
                             apply_to: props.selected.apply_to,

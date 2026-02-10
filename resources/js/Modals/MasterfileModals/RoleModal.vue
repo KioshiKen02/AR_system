@@ -256,7 +256,7 @@
 
 <script setup>
 import { ref, reactive } from "vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 
@@ -264,6 +264,8 @@ const props = defineProps({
     userId: Number,
     permissions: Object,
 });
+
+const page = usePage();
 
 const modalLoading = ref(false);
 
@@ -456,7 +458,7 @@ const showWarningToast = (message) => {
 ////////////  //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const submit = () => {
-    form.post(route("assign.role.permissions", { user: props.userId }), {
+    form.post(route("assign.role.permissions", { tenant: page.props.tenant, user: props.userId }), {
         preserveScroll: true,
         onSuccess: () => {
             emit("closeSuccess");

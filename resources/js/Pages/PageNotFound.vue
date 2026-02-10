@@ -27,7 +27,7 @@
 
                 <div class="flex flex-col sm:flex-row gap-4">
                     <Link
-                        :href="route('landing', { tenant: page.props.tenant })"
+                        :href="route('landing', { tenant: page.props.tenant || 'feedmill' })"
                         class="px-6 py-3 rounded-md font-medium transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden bg-[var(--color-primary)] text-white disabled:opacity-70 disabled:cursor-not-allowed group hover:-translate-y-0.5"
                     >
                         <div
@@ -131,6 +131,7 @@ import LottieAnimation from "./Components/LottieAnimation.vue";
 import { mdiHome, mdiSync } from "@mdi/js";
 import useTheme from "./Composables/useTheme";
 import { onBeforeUnmount, onMounted } from "vue";
+import { route } from "../../../vendor/tightenco/ziggy/src/js"; // Add missing import
 
 defineOptions({
     layout: false,

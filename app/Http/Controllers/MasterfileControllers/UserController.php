@@ -385,22 +385,48 @@ class UserController extends Controller
         event(new NewCreated('user'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $user = User::findOrFail($id);
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("User Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
+        $user = User::findOrFail($targetId);
         $user->delete();
         event(new NewCreated('user'));
     }
 
 
-    public function assignRolePermissions(Request $request, $userId)
+    public function assignRolePermissions(Request $request, $id)
     {
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('user') ?? $request->route('id') ?? $request->route('userId');
+        
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("AssignPermissions: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+             // Fallback
+             $params = array_values($request->route()->parameters());
+             if (count($params) >= 2) {
+                  $targetId = $params[1];
+             }
+        }
+
         // Find the user
-        $user = User::findOrFail($userId);
+        $user = User::findOrFail($targetId);
 
         // Loop through roles and permissions from the request
         foreach ($request->roles as $roleId => $permissions) {
-            $existingPermission = Permission::where('user_id', $userId)
+            $existingPermission = Permission::where('user_id', $targetId)
                 ->where('role_id', $roleId)
                 ->first();
 
@@ -418,7 +444,7 @@ class UserController extends Controller
                 $existingPermission->update($data);
             } else {
                 Permission::create(array_merge([
-                    'user_id' => $userId,
+                    'user_id' => $targetId,
                     'role_id' => $roleId,
                 ], $data));
             }

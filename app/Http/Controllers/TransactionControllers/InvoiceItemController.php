@@ -10,11 +10,15 @@ use Illuminate\Http\Request;
 class InvoiceItemController extends Controller
 {
 
-    public function getByInvoiceNo($invoice_no)
+    public function getByInvoiceNo(Request $request, $invoice_no)
     {
         try {
-            // Option 1: Direct query on InvoiceItem model
-            $items = InvoiceItem::where('invoice_no', $invoice_no)
+            // Fix for route parameter mapping in tenant-prefixed routes
+            $targetId = $request->route('invoice_no');
+            if (!$targetId) {
+                 $targetId = $invoice_no;
+            }
+            $items = InvoiceItem::where('invoice_no', $targetId)
                 ->select([
                     'item_code',
                     'item_name',
@@ -24,10 +28,6 @@ class InvoiceItemController extends Controller
                     'amount'
                 ])
                 ->get();
-
-            //Option 2: Using the relationship from Invoice model
-            // $invoice = Invoice::with('items')->findOrFail($invoice_no);
-            // $items = $invoice->items;
 
             return response()->json($items);
 

@@ -369,7 +369,7 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from "vue";
 import PaginationLinks from "./Components/PaginationLinks.vue";
-import { router } from "@inertiajs/vue3";
+import { router, usePage } from "@inertiajs/vue3";
 import { debounce } from "lodash";
 import ToastAlert from "./Components/ToastAlert.vue";
 import ConfirmationDialog from "./Components/ConfirmationDialog.vue";
@@ -387,6 +387,8 @@ const props = defineProps({
     filters: Object,
     broadcastChannel: String,
 });
+
+const page = usePage();
 
 const showModal = ref(false);
 const showEditModal = ref(false);
@@ -438,12 +440,16 @@ const deleteItem = async (adjust) => {
     pendingDeleteID.value = adjust;
     showDialog.value = true;
 };
+
 const handleConfirm = async (confirmed) => {
     showDialog.value = false;
     if (confirmed && pendingDeleteID.value) {
         try {
             router.delete(
-                route("deleteAdjustmentReasonSetup", pendingDeleteID.value),
+                route("deleteAdjustmentReasonSetup", { 
+                    tenant: page.props.tenant, 
+                    id: pendingDeleteID.value.id 
+                }),
                 {
                     onSuccess: () => {
                         showSuccessToast(
@@ -482,7 +488,7 @@ const performSearch = debounce((q) => {
             statusFilters.value.length > 0 ? statusFilters.value : undefined,
     };
 
-    router.get(route("adjustmentreasonsetup"), filters, {
+    router.get(route("adjustmentreasonsetup", { tenant: page.props.tenant }), filters, {
         preserveState: true,
         replace: true,
         onFinish: () => {
@@ -525,7 +531,7 @@ const applyFilters = () => {
             statusFilters.value.length > 0 ? statusFilters.value : undefined,
     };
 
-    router.get(route("adjustmentreasonsetup"), filters, {
+    router.get(route("adjustmentreasonsetup", { tenant: page.props.tenant }), filters, {
         preserveState: true,
         replace: true,
         onStart: () => (isLoading.value = true),

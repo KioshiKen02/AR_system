@@ -41,8 +41,18 @@ class PackingTypeController extends Controller
         event(new NewCreated('packing_type'));
     }
 
-    public function editPackingType(Request $request)
+    public function editPackingType(Request $request, $id)
     {
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("PackingType Edit: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
         $fields = $request->validate([
             'sequence_no' => ['required', 'integer'],
             'packing_type' => ['required', 'string', 'max:255'],
@@ -50,7 +60,7 @@ class PackingTypeController extends Controller
 
         $fields['packing_type'] = ucwords(strtolower($fields['packing_type']));
 
-        $pt = PackingType::findOrFail($request->id);
+        $pt = PackingType::findOrFail($targetId);
 
         $fields['created_by'] =  $request->user()->name;
         $pt->update($fields);
@@ -58,9 +68,19 @@ class PackingTypeController extends Controller
         event(new NewCreated('packing_type'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $pt = PackingType::findOrFail($id);
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("PackingType Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
+        $pt = PackingType::findOrFail($targetId);
         $pt->delete();
 
         event(new NewCreated('packing_type'));

@@ -661,9 +661,9 @@ function onCashPaymentSuccess() {
             row.amount
     );
 
-    form.post(route("addInvoice"), {
+    form.post(route("addInvoice", { tenant: page.props.tenant }), {
         onSuccess: () => {
-            axios.get(route("invoice.latest.invoiceNumber")).then((res) => {
+            axios.get(route("invoice.latest.invoiceNumber", { tenant: page.props.tenant })).then((res) => {
                 form.invoice_no = res.data.invoice_number;
                 showDialog.value = true;
             });
@@ -1003,9 +1003,9 @@ const handlePaymentNo = (paymentNo) => {
             row.amount
     );
 
-    form.post(route("addInvoice"), {
+    form.post(route("addInvoice", { tenant: page.props.tenant }), {
         onSuccess: () => {
-            axios.get(route("invoice.latest.invoiceNumber")).then((res) => {
+            axios.get(route("invoice.latest.invoiceNumber", { tenant: page.props.tenant })).then((res) => {
                 form.invoice_no = res.data.invoice_number;
                 showDialog.value = true;
             });

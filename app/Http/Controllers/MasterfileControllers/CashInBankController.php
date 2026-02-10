@@ -53,8 +53,18 @@ class CashInBankController extends Controller
         event(new NewCreated('cash_in_bank'));
     }
 
-    public function editCashInBank(Request $request)
+    public function editCashInBank(Request $request, $id)
     {
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("CashInBank Edit: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
         $fields = $request->validate([
             'bank_code' => ['required', 'string'],
             'bank_name' => ['required', 'string', 'max:255'],
@@ -65,7 +75,7 @@ class CashInBankController extends Controller
 
         $fields['bank_name'] = ucwords(strtolower($fields['bank_name']));
 
-        $cab = CashInBank::findOrFail($request->id);
+        $cab = CashInBank::findOrFail($targetId);
 
         $fields['created_by'] =  $request->user()->name;
         $cab->update($fields);
@@ -73,9 +83,19 @@ class CashInBankController extends Controller
         event(new NewCreated('cash_in_bank'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $cab = CashInBank::findOrFail($id);
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("CashInBank Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
+        $cab = CashInBank::findOrFail($targetId);
         $cab->delete();
 
         event(new NewCreated('cash_in_bank'));

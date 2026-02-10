@@ -66,7 +66,7 @@
                 <div class="rounded-xl bg-[var(--color-primary)]/20 backdrop-blur-sm mt-2">
                     <div class="sticky top-0 z-10 px-2">
                         <!-- ref="tableWrapper" -->
-                        <table class="w-full text-[var(--color-text-primary)] text-sm">
+                        <table class="w-full text-[var(--color-text-primary)] text-sm table-fixed">
                             <thead>
                                 <tr class="text-sm uppercase tracking-wider text-[var(--color-text-primary)]">
                                     <th class="px-2 py-3 text-left w-[15%]">
@@ -94,7 +94,7 @@
                     <div class="relative">
                         <div
                             class="overflow-y-auto max-h-[200px] scrollbar-thin scrollbar-stable [scrollbar-gutter:stable] pl-2 pb-2">
-                            <table class="w-full text-[var(--color-text-primary)] text-sm">
+                            <table class="w-full text-[var(--color-text-primary)] text-sm table-fixed">
                                 <tbody class="rounded-xl">
                                     <tr v-if="tableLoading">
                                         <td colspan="7" class="text-center py-4">
@@ -185,7 +185,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import axios from "axios";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import ManagersKey from "../ManagersKey.vue";
@@ -201,6 +201,8 @@ const props = defineProps({
     show: Boolean,
     selected: Object,
 });
+
+const page = usePage();
 
 const form = useForm({
     invoice_no: null,
@@ -297,7 +299,10 @@ watch(
             rows.value = [];
             try {
                 const response = await axios.get(
-                    route("getInvoiceItems", props.selected.invoice_no)
+                    route("getInvoiceItems", {
+                        tenant: page.props.tenant,
+                        invoice_no: props.selected.invoice_no,
+                    })
                 );
                 const items = response.data;
 
@@ -311,7 +316,7 @@ watch(
                 }));
 
                 try {
-                    const response = await axios.get(route("ci-types"));
+                    const response = await axios.get(route("ci-types", { tenant: page.props.tenant }));
                     typeOptions.value = response.data;
                     modalLoading.value = false;
                 } catch (error) {

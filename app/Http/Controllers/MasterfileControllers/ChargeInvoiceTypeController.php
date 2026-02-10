@@ -41,8 +41,18 @@ class ChargeInvoiceTypeController extends Controller
         event(new NewCreated('charge_invoice_type'));
     }
 
-    public function editChargeInvoiceType(Request $request)
+    public function editChargeInvoiceType(Request $request, $id)
     {
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("ChargeInvoiceType Edit: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
         $fields = $request->validate([
             'sequence_no' => ['required', 'integer'],
             'ci_type' => ['required', 'string', 'max:255'],
@@ -51,7 +61,7 @@ class ChargeInvoiceTypeController extends Controller
 
         $fields['ci_type'] = ucwords(strtolower($fields['ci_type']));
 
-        $cit = ChargeInvoiceType::findOrFail($request->id);
+        $cit = ChargeInvoiceType::findOrFail($targetId);
 
         $fields['created_by'] =  $request->user()->name;
         $cit->update($fields);
@@ -59,9 +69,19 @@ class ChargeInvoiceTypeController extends Controller
         event(new NewCreated('charge_invoice_type'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $cit = ChargeInvoiceType::findOrFail($id);
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("ChargeInvoiceType Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
+        $cit = ChargeInvoiceType::findOrFail($targetId);
         $cit->delete();
 
         event(new NewCreated('charge_invoice_type'));

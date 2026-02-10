@@ -35,22 +35,42 @@ class ShortageAmountController extends Controller
         event(new NewCreated('shortage_amount'));
     }
 
-    public function editShortageAmount(Request $request)
+    public function editShortageAmount(Request $request, $id)
     {
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("ShortageAmount Edit: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
         $fields = $request->validate([
             'shortage_amnt' => ['required', 'numeric'],
         ]);
 
-        $sa = ShortageAmount::findOrFail($request->id);
+        $sa = ShortageAmount::findOrFail($targetId);
         $fields['created_by'] =  $request->user()->name;
         $sa->update($fields);
 
         event(new NewCreated('shortage_amount'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $sa = ShortageAmount::findOrFail($id);
+        // Fix for route parameter mapping in tenant-prefixed routes
+        $targetId = $request->route('id');
+        if (!$targetId) {
+             $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+             \Log::warning("ShortageAmount Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+        }
+
+        $sa = ShortageAmount::findOrFail($targetId);
         $sa->delete();
 
         event(new NewCreated('shortage_amount'));

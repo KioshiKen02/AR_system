@@ -154,7 +154,8 @@ const searchInput = ref(null);
 let debounceTimeout = null;
 
 const page = usePage();
-const appName = page.props.appName;
+const appName = page.props.tenant || page.props.appName; // Try tenant first, then appName
+const tenantName = page.props.tenant;
 
 watch(
     () => props.show,
@@ -166,73 +167,80 @@ watch(
 
                 //DYNAMIC API LINK
                 let baseUrl = "";
-                switch (appName) {
-                    case "Bilar Breeder Local":
+                // Use tenantName for matching if possible, or appName. 
+                // The switch case expects specific strings.
+                // Assuming 'feedmill', 'growout', etc. are the tenant names
+                
+                // Convert tenant to title case for matching if needed, or update switch cases to match tenant slugs
+                const switchKey = tenantName ? tenantName.toLowerCase() : (appName ? appName.toLowerCase() : "");
+
+                switch (switchKey) {
+                    case "bilar breeder local":
                         baseUrl = "http://172.16.43.148/centralized_invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=13";
                         break;
-                    case "Bilar Breeder":
+                    case "bilar breeder":
                         baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=13";
                         break;
-                    case "Gp Jagna":
+                    case "gp jagna":
                         baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50";
                         break;
-                    case "Ice Plant":
+                    case "ice plant":
                         baseUrl = "http://172.16.184.49:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=25";
                         break;
-                    case "Peanut Kisses":
+                    case "peanut kisses":
                         baseUrl = "http://172.16.184.49:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=26";
                         break;
-                    case "Cortes Poultry":
+                    case "cortes poultry":
                         baseUrl = "http://172.16.192.68:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=12";
                         break;
-                    case "Cortes Piggery":
+                    case "cortes piggery":
                         baseUrl = "http://172.16.192.68:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=11";
                         break;
-                    case "Canhayupon Breeder":
+                    case "canhayupon breeder":
                         baseUrl = "http://172.16.220.223:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=15";
                         break;
-                    case "Bilar Hatchery":
+                    case "bilar hatchery":
                         baseUrl = "http://172.16.219.200:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=14";
                         break;
-                    case "Lapsaon Breeder":
+                    case "lapsaon breeder":
                         baseUrl = "http://172.16.220.222:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=16";
                         break;
-                    case "Rizal Breeder":
+                    case "rizal breeder":
                         baseUrl = "http://172.16.217.11:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=43";
                         break;
                     // ubay server 
-                    case "Feedmill":
+                    case "feedmill":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=19";
                         break;
-                    case "Growout":
+                    case "growout":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=20";
                         break;
-                    case "Cortes Fertilizer":
+                    case "cortes fertilizer":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42";
                         break;
-                    case "Ubay Fertilizer":
+                    case "ubay fertilizer":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22";
                         break;
-                    case "Piggery Untaga":
+                    case "piggery untaga":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23";
                         break;
-                    case "Demo Farm":
+                    case "demo farm":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21";
                         break;
-                    case "Dressing Plant":
+                    case "dressing plant":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17";
                         break;
-                    case "Farmers Market":
+                    case "farmers market":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41";
                         break;
-                    case "Meat Processing":
+                    case "meat processing":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46";
                         break;
-                    case "Rendering":
+                    case "rendering":
                         baseUrl = "http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=18";
                         break;
                     default:
-                        console.error(`Unknown app name: ${appName}`);
+                        console.error(`Unknown app/tenant name: ${switchKey}`);
                 }
                 const response = await axios.get(
                     `${baseUrl}`
