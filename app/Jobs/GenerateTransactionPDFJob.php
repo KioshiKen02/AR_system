@@ -70,7 +70,8 @@ class GenerateTransactionPDFJob implements ShouldQueue
             broadcast(new TransactionPdfGenerationProgress(
                 $this->userId,
                 $progress,
-                $message
+                $message,
+                $this->channel
             ));
             //  Log::info("Progress updated: {$progress}% - {$message} - {$this->userId}");
         } catch (\Exception $e) {

@@ -35,7 +35,7 @@
                         </div>
 
                         <p class="text-center text-sm text-[var(--color-text-secondary)] font-medium">
-                            Generating your PDF document...
+                            {{ formData.file_type === 'Excel' ? 'Generating your Excel document...' : 'Generating your PDF document...' }}
                         </p>
                     </div>
 
@@ -49,7 +49,7 @@
             <div v-else
                 class="relative flex flex-col h-full w-full bg-[var(--color-bg-secondary)] rounded-lg p-6 shadow-xl overflow-hidden">
                 <!-- Modal header -->
-                <div class="text-center">
+                <div class="text-center" v-if="!formData.file_type || formData.file_type !== 'Excel'">
                     <h2 class="text-2xl font-bold text-[var(--color-text-primary)] tracking-wide">
                         DOCUMENT PREVIEW
                     </h2>
@@ -135,7 +135,7 @@ const pdfUrl = ref(null);
 const loading = ref(false);
 const error = ref(null);
 const progress = ref(0);
-const progressMessage = ref("Starting PDF generation...");
+const progressMessage = ref("Starting generation...");
 const channel = ref(null);
 let echo = null;
 const userId = ref(null);
@@ -193,7 +193,7 @@ const closeModal = async () => {
     loading.value = false;
     error.value = null;
     progress.value = 0;
-    progressMessage.value = "Starting PDF generation...";
+    progressMessage.value = "Starting generation...";
     emit("close");
 };
 
@@ -207,7 +207,9 @@ const startPdfGeneration = async () => {
         loading.value = true;
         error.value = null;
         progress.value = 0;
-        progressMessage.value = "Starting PDF generation...";
+        
+        const isExcel = props.formData.file_type === 'Excel';
+        progressMessage.value = isExcel ? "Starting Excel generation..." : "Starting PDF generation...";
 
         // Start listening immediately to capture synchronous events if dispatchSync is used
         if (userId.value) {
@@ -310,12 +312,66 @@ const setupWebSocketListener = () => {
                 error.value = null;
             })
             .listen("PdfGenerated", async (data) => {
-                loading.value = false;
+                // loading.value = false; // Moved down
 
                 try {
+                    // Check if dataUrl is inside excelData (as sent by backend)
+                    if (data.excelData && data.excelData.dataUrl) {
+                        try {
+                            const response = await fetch(data.excelData.dataUrl);
+                            if (!response.ok) throw new Error('Failed to fetch data');
+                            data.excelData = await response.json();
+                        } catch (err) {
+                            console.error("Error fetching Excel data:", err);
+                            error.value = "Failed to download report data.";
+                            loading.value = false;
+                            return;
+                        }
+                    } else if (data.dataUrl) {
+                        try {
+                            const response = await fetch(data.dataUrl);
+                            if (!response.ok) throw new Error('Failed to fetch data');
+                            data.excelData = await response.json();
+                        } catch (err) {
+                            console.error("Error fetching Excel data:", err);
+                            error.value = "Failed to download report data.";
+                            loading.value = false;
+                            return;
+                        }
+                    }
+
+                    loading.value = false;
+
                     if (data.excelData) {
-                        await generateAROutstandingExcelFile(data.excelData);
+                        if (data.excelData.reportType === 'invoiceprooflist') {
+                            await generateInvoiceProoflistExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'invoicesummary') {
+                            await generateInvoiceSummaryExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'adjustmentprooflist') {
+                            await generateAdjustmentProoflistExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'paymentprooflist_detailed') {
+                            await generatePaymentProoflistDetailedExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'paymentprooflist_summary') {
+                            await generatePaymentProoflistSummaryExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'pdcdcreport') {
+                            await generatePdcDcReportExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'customeraragingreport_ar' || data.excelData.reportType === 'customeraragingreport_pdc_dc') {
+                            await generateCustomerArAgingExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'begbalprooflistreport') {
+                            await generateBegBalProoflistExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'salesperitemreport') {
+                            await generateSalesPerItemExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'overageshortagereport') {
+                            await generateOverageShortageExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'statementofaccountreport') {
+                            await generateStatementOfAccountExcelFile(data.excelData);
+                        } else if (data.excelData.reportType === 'statementofaccountsummaryreport') {
+                            await generateStatementOfAccountSummaryExcelFile(data.excelData);
+                        } else {
+                            await generateAROutstandingExcelFile(data.excelData);
+                        }
                         emit("closeSuccess");
+                        closeModal();
                     } else if (data.path) {
                         if (!data.path) {
                             error.value = "No PDF path provided.";
@@ -357,6 +413,2833 @@ const setupWebSocketListener = () => {
     }
 };
 
+const generateInvoiceProoflistExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Invoice Prooflist");
+
+        let currentRow = 1;
+
+        // Top-right information
+        worksheet.getCell("H1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("H2").value = "Note: This document is not valid without complete signatory.";
+        worksheet.getCell("H1").font = { size: 9 };
+        worksheet.getCell("H2").font = { size: 9, color: { argb: "e74c3c" } };
+        worksheet.getCell("H1").alignment = { horizontal: "right" };
+        worksheet.getCell("H2").alignment = { horizontal: "right" };
+
+        // Header section
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Invoice Prooflist Report";
+        worksheet.getCell(`A${currentRow}`).font = { size: 12 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+
+        currentRow += 2;
+
+        // Process grouped data
+        excelData.groupedData.forEach((group) => {
+            // Customer header
+            worksheet.getCell(`A${currentRow}`).value = `${group.customer_code} - ${group.customer_name}`;
+            worksheet.getCell(`A${currentRow}`).font = { bold: true };
+            worksheet.mergeCells(`A${currentRow}:H${currentRow}`);
+
+            currentRow++;
+
+            // Table headers
+            const headers = [
+                "INVOICE NO",
+                "DATE",
+                "REFERENCE NO",
+                "PARTICULAR",
+                "ITEMS",
+                "CASH AMOUNT",
+                "AR AMOUNT",
+            ];
+
+            const headerRow = worksheet.getRow(currentRow);
+            headers.forEach((header, index) => {
+                const cell = headerRow.getCell(index + 1);
+                cell.value = header;
+                cell.font = { bold: true, size: 10 };
+                cell.alignment = { horizontal: "center", vertical: "middle" };
+                cell.border = {
+                    top: { style: "thin" },
+                    left: { style: "thin" },
+                    bottom: { style: "thin" },
+                    right: { style: "thin" },
+                };
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "f0f0f0" },
+                };
+            });
+
+            currentRow++;
+
+            // Data rows
+            group.invoices.forEach((invoice) => {
+                const dataRow = worksheet.getRow(currentRow);
+                
+                dataRow.getCell(1).value = invoice.invoice_no;
+                dataRow.getCell(2).value = new Date(invoice.transaction_date);
+                dataRow.getCell(3).value = invoice.reference_no;
+                dataRow.getCell(4).value = invoice.particular;
+                
+                // Format items
+                const itemsText = invoice.items.map(item => `${item.item_name} (${item.item_code})`).join(', ');
+                dataRow.getCell(5).value = itemsText;
+                
+                dataRow.getCell(6).value = parseFloat(invoice.cash_amount) || 0;
+                dataRow.getCell(7).value = parseFloat(invoice.ar_amount) || 0;
+
+                // Format cells
+                dataRow.getCell(1).alignment = { horizontal: "center" };
+                dataRow.getCell(2).alignment = { horizontal: "center" };
+                dataRow.getCell(2).numFmt = "mm/dd/yyyy";
+                dataRow.getCell(3).alignment = { horizontal: "center" };
+                dataRow.getCell(4).alignment = { horizontal: "left" };
+                dataRow.getCell(5).alignment = { horizontal: "left", wrapText: true };
+                
+                dataRow.getCell(6).numFmt = "#,##0.00";
+                dataRow.getCell(6).alignment = { horizontal: "right" };
+                dataRow.getCell(7).numFmt = "#,##0.00";
+                dataRow.getCell(7).alignment = { horizontal: "right" };
+
+                // Borders
+                dataRow.eachCell((cell) => {
+                    cell.border = {
+                        top: { style: "thin" },
+                        left: { style: "thin" },
+                        bottom: { style: "thin" },
+                        right: { style: "thin" },
+                    };
+                });
+
+                currentRow++;
+            });
+
+            // Customer Subtotal
+            const subtotalRow = worksheet.getRow(currentRow);
+            subtotalRow.getCell(5).value = "Sub Total :";
+            subtotalRow.getCell(6).value = parseFloat(group.customer_cash_total) || 0;
+            subtotalRow.getCell(7).value = parseFloat(group.customer_ar_total) || 0;
+
+            subtotalRow.getCell(5).font = { bold: true };
+            subtotalRow.getCell(5).alignment = { horizontal: "right" };
+            
+            [6, 7].forEach(col => {
+                subtotalRow.getCell(col).font = { bold: true };
+                subtotalRow.getCell(col).numFmt = "#,##0.00";
+                subtotalRow.getCell(col).alignment = { horizontal: "right" };
+                subtotalRow.getCell(col).border = {
+                     top: { style: "thin" },
+                     bottom: { style: "double" }
+                };
+            });
+
+            currentRow += 2;
+        });
+
+        // Grand Total
+        const totalRow = worksheet.getRow(currentRow);
+        totalRow.getCell(5).value = "Grand Total :";
+        totalRow.getCell(6).value = parseFloat(excelData.grandTotalCash) || 0;
+        totalRow.getCell(7).value = parseFloat(excelData.grandTotalAR) || 0;
+
+        totalRow.getCell(5).font = { bold: true, size: 12 };
+        totalRow.getCell(5).alignment = { horizontal: "right" };
+        
+        [6, 7].forEach(col => {
+            totalRow.getCell(col).font = { bold: true, size: 12 };
+            totalRow.getCell(col).numFmt = "#,##0.00";
+            totalRow.getCell(col).alignment = { horizontal: "right" };
+             totalRow.getCell(col).border = {
+                 top: { style: "thick" },
+                 bottom: { style: "thick" }
+            };
+        });
+
+        currentRow += 3;
+        
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        // Set column widths
+        worksheet.columns = [
+            { width: 15 }, // Invoice No
+            { width: 12 }, // Date
+            { width: 15 }, // Ref No
+            { width: 25 }, // Particular
+            { width: 40 }, // Items
+            { width: 15 }, // Cash
+            { width: 15 }, // AR
+            { width: 10 }, 
+        ];
+
+        // Generate filename
+        const currentDate = new Date().toISOString().split("T")[0];
+        const filename = `Invoice_Prooflist_${currentDate}.xlsx`;
+
+        // Generate blob and download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        saveAs(blob, filename);
+        showSuccessToast("Invoice Prooflist report exported successfully!");
+
+    } catch (error) {
+        console.error("Error generating Invoice Prooflist Excel file:", error);
+        showWarningToast("Failed to generate Invoice Prooflist Excel file.");
+        throw error;
+    }
+};
+
+const generateInvoiceSummaryExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Invoice Summary");
+
+        let currentRow = 1;
+
+        // Top-right information
+        worksheet.getCell("I1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("I2").value = "Note: This document is not valid without complete signatory.";
+        worksheet.getCell("I1").font = { size: 9 };
+        worksheet.getCell("I2").font = { size: 9, color: { argb: "e74c3c" } };
+        worksheet.getCell("I1").alignment = { horizontal: "right" };
+        worksheet.getCell("I2").alignment = { horizontal: "right" };
+
+        // Header section
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Invoice Summary Report";
+        worksheet.getCell(`A${currentRow}`).font = { size: 12 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+
+        currentRow += 2;
+
+        // Table headers
+        const headers = [
+            "CUSTOMER CODE",
+            "CUSTOMER NAME",
+            "INVOICE NO",
+            "DATE",
+            "REFERENCE NO",
+            "PARTICULAR",
+            "ITEMS",
+            "CASH AMOUNT",
+            "AR AMOUNT",
+        ];
+
+        const headerRow = worksheet.getRow(currentRow);
+        headers.forEach((header, index) => {
+            const cell = headerRow.getCell(index + 1);
+            cell.value = header;
+            cell.font = { bold: true, size: 10 };
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "f0f0f0" },
+            };
+        });
+
+        currentRow++;
+
+        // Data rows
+        excelData.invoices.forEach((invoice) => {
+            const dataRow = worksheet.getRow(currentRow);
+            
+            dataRow.getCell(1).value = invoice.customer_code;
+            dataRow.getCell(2).value = invoice.customer_name;
+            dataRow.getCell(3).value = invoice.invoice_no;
+            dataRow.getCell(4).value = new Date(invoice.transaction_date);
+            dataRow.getCell(5).value = invoice.reference_no;
+            dataRow.getCell(6).value = invoice.particular;
+            
+            // Format items
+            const itemsText = invoice.items.map(item => `${item.item_name} (${item.item_code})`).join(', ');
+            dataRow.getCell(7).value = itemsText;
+            
+            dataRow.getCell(8).value = parseFloat(invoice.cash_amount) || 0;
+            dataRow.getCell(9).value = parseFloat(invoice.ar_amount) || 0;
+
+            // Format cells
+            dataRow.getCell(1).alignment = { horizontal: "center" };
+            dataRow.getCell(2).alignment = { horizontal: "left" };
+            dataRow.getCell(3).alignment = { horizontal: "center" };
+            dataRow.getCell(4).alignment = { horizontal: "center" };
+            dataRow.getCell(4).numFmt = "mm/dd/yyyy";
+            dataRow.getCell(5).alignment = { horizontal: "center" };
+            dataRow.getCell(6).alignment = { horizontal: "left" };
+            dataRow.getCell(7).alignment = { horizontal: "left", wrapText: true };
+            
+            dataRow.getCell(8).numFmt = "#,##0.00";
+            dataRow.getCell(8).alignment = { horizontal: "right" };
+            dataRow.getCell(9).numFmt = "#,##0.00";
+            dataRow.getCell(9).alignment = { horizontal: "right" };
+
+            // Borders
+            dataRow.eachCell((cell) => {
+                cell.border = {
+                    top: { style: "thin" },
+                    left: { style: "thin" },
+                    bottom: { style: "thin" },
+                    right: { style: "thin" },
+                };
+            });
+
+            currentRow++;
+        });
+
+        // Grand Total
+        const totalRow = worksheet.getRow(currentRow);
+        totalRow.getCell(7).value = "Grand Total :";
+        totalRow.getCell(8).value = parseFloat(excelData.grandTotalCash) || 0;
+        totalRow.getCell(9).value = parseFloat(excelData.grandTotalAR) || 0;
+
+        totalRow.getCell(7).font = { bold: true, size: 12 };
+        totalRow.getCell(7).alignment = { horizontal: "right" };
+        
+        [8, 9].forEach(col => {
+            totalRow.getCell(col).font = { bold: true, size: 12 };
+            totalRow.getCell(col).numFmt = "#,##0.00";
+            totalRow.getCell(col).alignment = { horizontal: "right" };
+             totalRow.getCell(col).border = {
+                 top: { style: "thick" },
+                 bottom: { style: "thick" }
+            };
+        });
+
+        currentRow += 3;
+        
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        // Set column widths
+        worksheet.columns = [
+            { width: 15 }, // Customer Code
+            { width: 30 }, // Customer Name
+            { width: 15 }, // Invoice No
+            { width: 12 }, // Date
+            { width: 15 }, // Ref No
+            { width: 25 }, // Particular
+            { width: 40 }, // Items
+            { width: 15 }, // Cash
+            { width: 15 }, // AR
+        ];
+
+        // Generate filename
+        const currentDate = new Date().toISOString().split("T")[0];
+        const filename = `Invoice_Summary_${currentDate}.xlsx`;
+
+        // Generate blob and download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        saveAs(blob, filename);
+        showSuccessToast("Invoice Summary report exported successfully!");
+
+    } catch (error) {
+        console.error("Error generating Invoice Summary Excel file:", error);
+        showWarningToast("Failed to generate Invoice Summary Excel file.");
+        throw error;
+    }
+};
+
+const generateAdjustmentProoflistExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Adjustment Prooflist");
+
+        let currentRow = 1;
+
+        // Top-right information
+        worksheet.getCell("I1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("I2").value = "Note: This document is not valid without complete signatory.";
+        worksheet.getCell("I1").font = { size: 9 };
+        worksheet.getCell("I2").font = { size: 9, color: { argb: "e74c3c" } };
+        worksheet.getCell("I1").alignment = { horizontal: "right" };
+        worksheet.getCell("I2").alignment = { horizontal: "right" };
+
+        // Header section
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Adjustment Prooflist Report";
+        worksheet.getCell(`A${currentRow}`).font = { size: 12 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+
+        currentRow += 2;
+
+        // Process grouped data
+        excelData.groupedData.forEach((group) => {
+            // Customer header
+            worksheet.getCell(`A${currentRow}`).value = `${group.customer_code} - ${group.customer_name}`;
+            worksheet.getCell(`A${currentRow}`).font = { bold: true };
+            worksheet.mergeCells(`A${currentRow}:I${currentRow}`);
+
+            currentRow++;
+
+            // Table headers
+            const headers = [
+                "ADJUSTMENT NO",
+                "DATE",
+                "TYPE",
+                "APPLY TO",
+                "INVOICE NO",
+                "REASON",
+                "PARTICULARS",
+                "AMOUNT",
+                "BALANCE",
+            ];
+
+            const headerRow = worksheet.getRow(currentRow);
+            headers.forEach((header, index) => {
+                const cell = headerRow.getCell(index + 1);
+                cell.value = header;
+                cell.font = { bold: true, size: 10 };
+                cell.alignment = { horizontal: "center", vertical: "middle" };
+                cell.border = {
+                    top: { style: "thin" },
+                    left: { style: "thin" },
+                    bottom: { style: "thin" },
+                    right: { style: "thin" },
+                };
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "f0f0f0" },
+                };
+            });
+
+            currentRow++;
+
+            // Data rows
+            group.adjustments.forEach((adj) => {
+                const dataRow = worksheet.getRow(currentRow);
+                
+                dataRow.getCell(1).value = adj.adjustment_no;
+                dataRow.getCell(2).value = new Date(adj.transaction_date);
+                dataRow.getCell(3).value = adj.type;
+                dataRow.getCell(4).value = adj.apply_to;
+                dataRow.getCell(5).value = adj.invoice_no;
+                dataRow.getCell(6).value = adj.adjustment_reason;
+                dataRow.getCell(7).value = adj.particulars;
+                
+                dataRow.getCell(8).value = parseFloat(adj.amount) || 0;
+                dataRow.getCell(9).value = parseFloat(adj.balance) || 0;
+
+                // Format cells
+                dataRow.getCell(1).alignment = { horizontal: "center" };
+                dataRow.getCell(2).alignment = { horizontal: "center" };
+                dataRow.getCell(2).numFmt = "mm/dd/yyyy";
+                dataRow.getCell(3).alignment = { horizontal: "center" };
+                dataRow.getCell(4).alignment = { horizontal: "center" };
+                dataRow.getCell(5).alignment = { horizontal: "center" };
+                dataRow.getCell(6).alignment = { horizontal: "left", wrapText: true };
+                dataRow.getCell(7).alignment = { horizontal: "left", wrapText: true };
+                
+                dataRow.getCell(8).numFmt = "#,##0.00";
+                dataRow.getCell(8).alignment = { horizontal: "right" };
+                dataRow.getCell(9).numFmt = "#,##0.00";
+                dataRow.getCell(9).alignment = { horizontal: "right" };
+
+                // Borders
+                dataRow.eachCell((cell) => {
+                    cell.border = {
+                        top: { style: "thin" },
+                        left: { style: "thin" },
+                        bottom: { style: "thin" },
+                        right: { style: "thin" },
+                    };
+                });
+
+                currentRow++;
+            });
+
+            // Customer Subtotal
+            const subtotalRow = worksheet.getRow(currentRow);
+            subtotalRow.getCell(7).value = "Sub Total :";
+            subtotalRow.getCell(8).value = parseFloat(group.customerAmountTotal) || 0;
+
+            subtotalRow.getCell(7).font = { bold: true };
+            subtotalRow.getCell(7).alignment = { horizontal: "right" };
+            
+            subtotalRow.getCell(8).font = { bold: true };
+            subtotalRow.getCell(8).numFmt = "#,##0.00";
+            subtotalRow.getCell(8).alignment = { horizontal: "right" };
+            subtotalRow.getCell(8).border = {
+                 top: { style: "thin" },
+                 bottom: { style: "double" }
+            };
+
+            currentRow += 2;
+        });
+
+        // Grand Total
+        const totalRow = worksheet.getRow(currentRow);
+        totalRow.getCell(7).value = "Grand Total :";
+        totalRow.getCell(8).value = parseFloat(excelData.customerOverallAmountTotal) || 0;
+
+        totalRow.getCell(7).font = { bold: true, size: 12 };
+        totalRow.getCell(7).alignment = { horizontal: "right" };
+        
+        totalRow.getCell(8).font = { bold: true, size: 12 };
+        totalRow.getCell(8).numFmt = "#,##0.00";
+        totalRow.getCell(8).alignment = { horizontal: "right" };
+         totalRow.getCell(8).border = {
+             top: { style: "thick" },
+             bottom: { style: "thick" }
+        };
+
+        currentRow += 3;
+        
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        // Set column widths
+        worksheet.columns = [
+            { width: 15 }, // Adj No
+            { width: 12 }, // Date
+            { width: 15 }, // Type
+            { width: 15 }, // Apply To
+            { width: 15 }, // Invoice No
+            { width: 30 }, // Reason
+            { width: 30 }, // Particulars
+            { width: 15 }, // Amount
+            { width: 15 }, // Balance
+        ];
+
+        // Generate filename
+        const currentDate = new Date().toISOString().split("T")[0];
+        const filename = `Adjustment_Prooflist_${currentDate}.xlsx`;
+
+        // Generate blob and download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        saveAs(blob, filename);
+        showSuccessToast("Adjustment Prooflist report exported successfully!");
+
+    } catch (error) {
+        console.error("Error generating Adjustment Prooflist Excel file:", error);
+        showWarningToast("Failed to generate Adjustment Prooflist Excel file.");
+        throw error;
+    }
+};
+
+const generatePaymentProoflistDetailedExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Payment Prooflist (Detailed)");
+
+        let currentRow = 1;
+
+        // Top-right information
+        worksheet.getCell("I1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("I2").value = "Note: This document is not valid without complete signatory.";
+        worksheet.getCell("I1").font = { size: 9 };
+        worksheet.getCell("I2").font = { size: 9, color: { argb: "e74c3c" } };
+        worksheet.getCell("I1").alignment = { horizontal: "right" };
+        worksheet.getCell("I2").alignment = { horizontal: "right" };
+
+        // Header section
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Payment Prooflist (Detailed) Report";
+        worksheet.getCell(`A${currentRow}`).font = { size: 12 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+
+        currentRow += 2;
+
+        // Grouped by Payment Type
+        excelData.groupedData.forEach((paymentTypeGroup) => {
+             worksheet.getCell(`A${currentRow}`).value = paymentTypeGroup.payment_type;
+             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+             currentRow++;
+
+             // Grouped by Customer
+             paymentTypeGroup.customers.forEach((customerGroup) => {
+                 worksheet.getCell(`A${currentRow}`).value = `${customerGroup.customer_code} - ${customerGroup.customer_name}`;
+                 worksheet.getCell(`A${currentRow}`).font = { bold: true };
+                 currentRow++;
+
+                 // Headers
+                const headers = [
+                    "PAYMENT NO",
+                    "DATE",
+                    "DOC NO",
+                    "DOC DATE",
+                    "TYPE",
+                    "REF NO",
+                    "DS NO",
+                    "REMARKS",
+                    "AMOUNT PAID",
+                ];
+
+                const headerRow = worksheet.getRow(currentRow);
+                headers.forEach((header, index) => {
+                    const cell = headerRow.getCell(index + 1);
+                    cell.value = header;
+                    cell.font = { bold: true, size: 10 };
+                    cell.alignment = { horizontal: "center", vertical: "middle" };
+                    cell.border = {
+                        top: { style: "thin" },
+                        left: { style: "thin" },
+                        bottom: { style: "thin" },
+                        right: { style: "thin" },
+                    };
+                    cell.fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: "f0f0f0" },
+                    };
+                });
+                currentRow++;
+
+                customerGroup.payments.forEach((payment) => {
+                    payment.payment_details.forEach((detail, detailIndex) => {
+                        const dataRow = worksheet.getRow(currentRow);
+                        
+                        // Show Payment No and Date only on the first line of the payment
+                        if (detailIndex === 0) {
+                            dataRow.getCell(1).value = payment.payment_no;
+                            dataRow.getCell(2).value = new Date(payment.date);
+                        }
+
+                        dataRow.getCell(3).value = detail.document_no;
+                        dataRow.getCell(4).value = detail.document_date ? new Date(detail.document_date) : '';
+                        dataRow.getCell(5).value = detail.type;
+                        dataRow.getCell(6).value = detail.reference_no;
+                        dataRow.getCell(7).value = detail.ds_no;
+                        dataRow.getCell(8).value = detail.remarks;
+                        dataRow.getCell(9).value = parseFloat(detail.amount_paid) || 0;
+
+                         // Format cells
+                        dataRow.getCell(1).alignment = { horizontal: "center" };
+                        dataRow.getCell(2).alignment = { horizontal: "center" };
+                        dataRow.getCell(2).numFmt = "mm/dd/yyyy";
+                        dataRow.getCell(3).alignment = { horizontal: "center" };
+                        dataRow.getCell(4).alignment = { horizontal: "center" };
+                        dataRow.getCell(4).numFmt = "mm/dd/yyyy";
+                        dataRow.getCell(5).alignment = { horizontal: "center" };
+                        dataRow.getCell(6).alignment = { horizontal: "center" };
+                        dataRow.getCell(7).alignment = { horizontal: "center" };
+                        dataRow.getCell(8).alignment = { horizontal: "left" };
+                        dataRow.getCell(9).numFmt = "#,##0.00";
+                        dataRow.getCell(9).alignment = { horizontal: "right" };
+
+                        dataRow.eachCell((cell) => {
+                            cell.border = {
+                                top: { style: "thin" },
+                                left: { style: "thin" },
+                                bottom: { style: "thin" },
+                                right: { style: "thin" },
+                            };
+                        });
+                        currentRow++;
+                    });
+                });
+
+                // Customer Total
+                const subtotalRow = worksheet.getRow(currentRow);
+                subtotalRow.getCell(8).value = "Customer Total :";
+                subtotalRow.getCell(9).value = parseFloat(customerGroup.customer_total) || 0;
+
+                subtotalRow.getCell(8).font = { bold: true };
+                subtotalRow.getCell(8).alignment = { horizontal: "right" };
+                
+                subtotalRow.getCell(9).font = { bold: true };
+                subtotalRow.getCell(9).numFmt = "#,##0.00";
+                subtotalRow.getCell(9).alignment = { horizontal: "right" };
+                subtotalRow.getCell(9).border = { top: { style: "thin" }, bottom: { style: "double" } };
+
+                currentRow += 2;
+             });
+
+             // Payment Type Total
+            const typeTotalRow = worksheet.getRow(currentRow);
+            typeTotalRow.getCell(8).value = `${paymentTypeGroup.payment_type} Total :`;
+            typeTotalRow.getCell(9).value = parseFloat(paymentTypeGroup.type_total) || 0;
+
+            typeTotalRow.getCell(8).font = { bold: true };
+            typeTotalRow.getCell(8).alignment = { horizontal: "right" };
+            
+            typeTotalRow.getCell(9).font = { bold: true };
+            typeTotalRow.getCell(9).numFmt = "#,##0.00";
+            typeTotalRow.getCell(9).alignment = { horizontal: "right" };
+            typeTotalRow.getCell(9).border = { top: { style: "thin" }, bottom: { style: "double" } };
+
+            currentRow += 2;
+        });
+
+         // Grand Total
+        const totalRow = worksheet.getRow(currentRow);
+        totalRow.getCell(8).value = "Grand Total :";
+        totalRow.getCell(9).value = parseFloat(excelData.grandTotal) || 0;
+
+        totalRow.getCell(8).font = { bold: true, size: 12 };
+        totalRow.getCell(8).alignment = { horizontal: "right" };
+        
+        totalRow.getCell(9).font = { bold: true, size: 12 };
+        totalRow.getCell(9).numFmt = "#,##0.00";
+        totalRow.getCell(9).alignment = { horizontal: "right" };
+         totalRow.getCell(9).border = {
+             top: { style: "thick" },
+             bottom: { style: "thick" }
+        };
+
+        currentRow += 3;
+        
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        // Set column widths
+        worksheet.columns = [
+            { width: 15 }, // Payment No
+            { width: 12 }, // Date
+            { width: 15 }, // Doc No
+            { width: 12 }, // Doc Date
+            { width: 10 }, // Type
+            { width: 15 }, // Ref No
+            { width: 15 }, // DS No
+            { width: 20 }, // Remarks
+            { width: 15 }, // Amount Paid
+        ];
+
+        const currentDate = new Date().toISOString().split("T")[0];
+        const filename = `Payment_Prooflist_Detailed_${currentDate}.xlsx`;
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        saveAs(blob, filename);
+        showSuccessToast("Payment Prooflist (Detailed) exported successfully!");
+
+    } catch (error) {
+        console.error("Error generating Payment Prooflist Excel file:", error);
+        showWarningToast("Failed to generate Payment Prooflist Excel file.");
+        throw error;
+    }
+};
+
+const generatePaymentProoflistSummaryExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Payment Prooflist (Summary)");
+
+        let currentRow = 1;
+
+        // Top-right information
+        worksheet.getCell("I1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("I2").value = "Note: This document is not valid without complete signatory.";
+        worksheet.getCell("I1").font = { size: 9 };
+        worksheet.getCell("I2").font = { size: 9, color: { argb: "e74c3c" } };
+        worksheet.getCell("I1").alignment = { horizontal: "right" };
+        worksheet.getCell("I2").alignment = { horizontal: "right" };
+
+        // Header section
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Payment Prooflist (Summary) Report";
+        worksheet.getCell(`A${currentRow}`).font = { size: 12 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+
+        currentRow += 2;
+
+        // Headers
+        const headers = [
+            "PAYMENT NO",
+            "DATE",
+            "CUSTOMER",
+            "TYPE",
+            "REF NO",
+            "DS NO",
+            "DOC NO",
+            "DOC DATE",
+            "AMOUNT PAID",
+        ];
+
+        const headerRow = worksheet.getRow(currentRow);
+        headers.forEach((header, index) => {
+            const cell = headerRow.getCell(index + 1);
+            cell.value = header;
+            cell.font = { bold: true, size: 10 };
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "f0f0f0" },
+            };
+        });
+        currentRow++;
+
+        let grandTotal = 0;
+
+        excelData.payments.forEach((payment) => {
+            const dataRow = worksheet.getRow(currentRow);
+            
+            dataRow.getCell(1).value = payment.payment_no;
+            dataRow.getCell(2).value = new Date(payment.date);
+            dataRow.getCell(3).value = payment.customer;
+            dataRow.getCell(4).value = payment.payment_type;
+            dataRow.getCell(5).value = payment.reference_no;
+            dataRow.getCell(6).value = payment.ds_no;
+            dataRow.getCell(7).value = payment.document_no;
+            dataRow.getCell(8).value = payment.document_date ? new Date(payment.document_date) : '';
+            dataRow.getCell(9).value = parseFloat(payment.amount_paid) || 0;
+
+            grandTotal += parseFloat(payment.amount_paid) || 0;
+
+            // Format cells
+            dataRow.getCell(1).alignment = { horizontal: "center" };
+            dataRow.getCell(2).alignment = { horizontal: "center" };
+            dataRow.getCell(2).numFmt = "mm/dd/yyyy";
+            dataRow.getCell(3).alignment = { horizontal: "left" };
+            dataRow.getCell(4).alignment = { horizontal: "center" };
+            dataRow.getCell(5).alignment = { horizontal: "center" };
+            dataRow.getCell(6).alignment = { horizontal: "center" };
+            dataRow.getCell(7).alignment = { horizontal: "center" };
+            dataRow.getCell(8).alignment = { horizontal: "center" };
+            dataRow.getCell(8).numFmt = "mm/dd/yyyy";
+            dataRow.getCell(9).numFmt = "#,##0.00";
+            dataRow.getCell(9).alignment = { horizontal: "right" };
+
+            dataRow.eachCell((cell) => {
+                cell.border = {
+                    top: { style: "thin" },
+                    left: { style: "thin" },
+                    bottom: { style: "thin" },
+                    right: { style: "thin" },
+                };
+            });
+            currentRow++;
+        });
+
+        // Grand Total
+        const totalRow = worksheet.getRow(currentRow);
+        totalRow.getCell(8).value = "Grand Total :";
+        totalRow.getCell(9).value = grandTotal;
+
+        totalRow.getCell(8).font = { bold: true, size: 12 };
+        totalRow.getCell(8).alignment = { horizontal: "right" };
+        
+        totalRow.getCell(9).font = { bold: true, size: 12 };
+        totalRow.getCell(9).numFmt = "#,##0.00";
+        totalRow.getCell(9).alignment = { horizontal: "right" };
+         totalRow.getCell(9).border = {
+             top: { style: "thick" },
+             bottom: { style: "thick" }
+        };
+
+        currentRow += 3;
+        
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        // Set column widths
+        worksheet.columns = [
+            { width: 15 }, // Payment No
+            { width: 12 }, // Date
+            { width: 30 }, // Customer
+            { width: 10 }, // Type
+            { width: 15 }, // Ref No
+            { width: 15 }, // DS No
+            { width: 15 }, // Doc No
+            { width: 12 }, // Doc Date
+            { width: 15 }, // Amount Paid
+        ];
+
+        const currentDate = new Date().toISOString().split("T")[0];
+        const filename = `Payment_Prooflist_Summary_${currentDate}.xlsx`;
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        saveAs(blob, filename);
+        showSuccessToast("Payment Prooflist (Summary) exported successfully!");
+
+    } catch (error) {
+        console.error("Error generating Payment Prooflist Excel file:", error);
+        showWarningToast("Failed to generate Payment Prooflist Excel file.");
+        throw error;
+    }
+};
+
+const generatePdcDcReportExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("PDC DC Report");
+
+        let currentRow = 1;
+
+        // Top-right information
+        worksheet.getCell("I1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("I2").value = "Note: This document is not valid without complete signatory.";
+        worksheet.getCell("I1").font = { size: 9 };
+        worksheet.getCell("I2").font = { size: 9, color: { argb: "e74c3c" } };
+        worksheet.getCell("I1").alignment = { horizontal: "right" };
+        worksheet.getCell("I2").alignment = { horizontal: "right" };
+
+        // Header section
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Customer PDC & DC Report";
+        worksheet.getCell(`A${currentRow}`).font = { size: 12 };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+
+        currentRow += 2;
+
+        // Process grouped data
+        excelData.groupedData.forEach((group) => {
+            // Customer header
+            worksheet.getCell(`A${currentRow}`).value = `${group.customer_code} - ${group.customer_name}`;
+            worksheet.getCell(`A${currentRow}`).font = { bold: true };
+            worksheet.mergeCells(`A${currentRow}:M${currentRow}`);
+
+            currentRow++;
+
+            // Table headers
+            const headers = [
+                "PAYMENT NO",
+                "CHECK NO",
+                "DOC NO",
+                "DOC DATE",
+                "RECEIPT DATE",
+                "PAYMENT DATE",
+                "PAYMENT TYPE",
+                "TYPE",
+                "CHECK TYPE",
+                "AMOUNT PAID",
+                "DUE DATE",
+                "CLEARING DATE",
+                "STATUS",
+            ];
+
+            const headerRow = worksheet.getRow(currentRow);
+            headers.forEach((header, index) => {
+                const cell = headerRow.getCell(index + 1);
+                cell.value = header;
+                cell.font = { bold: true, size: 10 };
+                cell.alignment = { horizontal: "center", vertical: "middle" };
+                cell.border = {
+                    top: { style: "thin" },
+                    left: { style: "thin" },
+                    bottom: { style: "thin" },
+                    right: { style: "thin" },
+                };
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "f0f0f0" },
+                };
+            });
+
+            currentRow++;
+
+            // Data rows
+            group.paymentDetails.forEach((detail) => {
+                const dataRow = worksheet.getRow(currentRow);
+                
+                dataRow.getCell(1).value = detail.payment_no;
+                dataRow.getCell(2).value = detail.check_no;
+                dataRow.getCell(3).value = detail.document_no;
+                dataRow.getCell(4).value = detail.document_date ? new Date(detail.document_date) : '';
+                dataRow.getCell(5).value = detail.payment_receipt_date ? new Date(detail.payment_receipt_date) : '';
+                dataRow.getCell(6).value = detail.payment_date ? new Date(detail.payment_date) : '';
+                dataRow.getCell(7).value = detail.payment_type;
+                dataRow.getCell(8).value = detail.type;
+                dataRow.getCell(9).value = detail.check_type;
+                dataRow.getCell(10).value = parseFloat(detail.amount_paid) || 0;
+                dataRow.getCell(11).value = detail.due_date ? new Date(detail.due_date) : '';
+                dataRow.getCell(12).value = detail.clearing_date ? new Date(detail.clearing_date) : '';
+                dataRow.getCell(13).value = detail.status;
+
+                // Format cells
+                dataRow.getCell(1).alignment = { horizontal: "center" };
+                dataRow.getCell(2).alignment = { horizontal: "center" };
+                dataRow.getCell(3).alignment = { horizontal: "center" };
+                dataRow.getCell(4).numFmt = "mm/dd/yyyy"; dataRow.getCell(4).alignment = { horizontal: "center" };
+                dataRow.getCell(5).numFmt = "mm/dd/yyyy"; dataRow.getCell(5).alignment = { horizontal: "center" };
+                dataRow.getCell(6).numFmt = "mm/dd/yyyy"; dataRow.getCell(6).alignment = { horizontal: "center" };
+                dataRow.getCell(7).alignment = { horizontal: "center" };
+                dataRow.getCell(8).alignment = { horizontal: "center" };
+                dataRow.getCell(9).alignment = { horizontal: "center" };
+                dataRow.getCell(10).numFmt = "#,##0.00"; dataRow.getCell(10).alignment = { horizontal: "right" };
+                dataRow.getCell(11).numFmt = "mm/dd/yyyy"; dataRow.getCell(11).alignment = { horizontal: "center" };
+                dataRow.getCell(12).numFmt = "mm/dd/yyyy"; dataRow.getCell(12).alignment = { horizontal: "center" };
+                dataRow.getCell(13).alignment = { horizontal: "center" };
+
+                // Borders
+                dataRow.eachCell((cell) => {
+                    cell.border = {
+                        top: { style: "thin" },
+                        left: { style: "thin" },
+                        bottom: { style: "thin" },
+                        right: { style: "thin" },
+                    };
+                });
+
+                currentRow++;
+            });
+
+            // Customer Subtotal
+            const subtotalRow = worksheet.getRow(currentRow);
+            subtotalRow.getCell(9).value = "Customer Total :";
+            subtotalRow.getCell(10).value = parseFloat(group.customerAmountTotal) || 0;
+
+            subtotalRow.getCell(9).font = { bold: true };
+            subtotalRow.getCell(9).alignment = { horizontal: "right" };
+            
+            subtotalRow.getCell(10).font = { bold: true };
+            subtotalRow.getCell(10).numFmt = "#,##0.00";
+            subtotalRow.getCell(10).alignment = { horizontal: "right" };
+            subtotalRow.getCell(10).border = {
+                 top: { style: "thin" },
+                 bottom: { style: "double" }
+            };
+
+            currentRow += 2;
+        });
+
+        // Grand Total
+        const totalRow = worksheet.getRow(currentRow);
+        totalRow.getCell(9).value = "Grand Total :";
+        totalRow.getCell(10).value = parseFloat(excelData.customerOverallAmountTotal) || 0;
+
+        totalRow.getCell(9).font = { bold: true, size: 12 };
+        totalRow.getCell(9).alignment = { horizontal: "right" };
+        
+        totalRow.getCell(10).font = { bold: true, size: 12 };
+        totalRow.getCell(10).numFmt = "#,##0.00";
+        totalRow.getCell(10).alignment = { horizontal: "right" };
+         totalRow.getCell(10).border = {
+             top: { style: "thick" },
+             bottom: { style: "thick" }
+        };
+
+        currentRow += 3;
+        
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        // Set column widths
+        worksheet.columns = [
+            { width: 15 }, // Payment No
+            { width: 15 }, // Check No
+            { width: 15 }, // Doc No
+            { width: 12 }, // Doc Date
+            { width: 12 }, // Receipt Date
+            { width: 12 }, // Payment Date
+            { width: 12 }, // Payment Type
+            { width: 10 }, // Type
+            { width: 12 }, // Check Type
+            { width: 15 }, // Amount Paid
+            { width: 12 }, // Due Date
+            { width: 12 }, // Clearing Date
+            { width: 15 }, // Status
+        ];
+
+        // Generate filename
+        const currentDate = new Date().toISOString().split("T")[0];
+        const filename = `Customer_PDC_DC_Report_${currentDate}.xlsx`;
+
+        // Generate blob and download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        saveAs(blob, filename);
+        showSuccessToast("Customer PDC DC Report exported successfully!");
+
+    } catch (error) {
+        console.error("Error generating PDC DC Report Excel file:", error);
+        showWarningToast("Failed to generate PDC DC Report Excel file.");
+        throw error;
+    }
+};
+
+const generateCustomerArAgingExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Customer AR Aging");
+
+        let currentRow = 1;
+
+        // Top-right information
+        worksheet.getCell("K1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("K2").value = "Note: This document is not valid without complete signatory.";
+        worksheet.getCell("K1").font = { size: 9 };
+        worksheet.getCell("K2").font = { size: 9, color: { argb: "e74c3c" } };
+        worksheet.getCell("K1").alignment = { horizontal: "right" };
+        worksheet.getCell("K2").alignment = { horizontal: "right" };
+
+        // Header
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Customer AR Aging Report";
+        worksheet.getCell(`A${currentRow}`).font = { size: 12 };
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `As of: ${excelData.dateRange}`;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+        currentRow += 2;
+
+        // Headers
+        const headers = [
+            "CUSTOMER CODE", "CUSTOMER NAME", "TERMS", 
+            "TOTAL BALANCE", "1 - 30 DAYS", "31 - 60 DAYS", 
+            "61 - 90 DAYS", "91 - 360 DAYS", "ABOVE 1 YEAR"
+        ];
+        const headerRow = worksheet.getRow(currentRow);
+        headers.forEach((h, i) => {
+            const cell = headerRow.getCell(i + 1);
+            cell.value = h;
+            cell.font = { bold: true };
+            cell.alignment = { horizontal: "center" };
+            cell.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "f0f0f0" } };
+        });
+        currentRow++;
+
+        // Data
+        excelData.groupedData.forEach(item => {
+             const row = worksheet.getRow(currentRow);
+             row.getCell(1).value = item.customer_code;
+             row.getCell(2).value = item.customer_name;
+             row.getCell(3).value = item.payment_terms;
+             row.getCell(4).value = parseFloat(item.totals.total) || 0;
+             row.getCell(5).value = parseFloat(item.totals['1_30']) || 0;
+             row.getCell(6).value = parseFloat(item.totals['31_60']) || 0;
+             row.getCell(7).value = parseFloat(item.totals['61_90']) || 0;
+             row.getCell(8).value = parseFloat(item.totals['91_360']) || 0;
+             row.getCell(9).value = parseFloat(item.totals['above_1_year']) || 0;
+
+             // Formatting
+             for(let i=4; i<=9; i++) {
+                 row.getCell(i).numFmt = "#,##0.00";
+                 row.getCell(i).alignment = { horizontal: "right" };
+             }
+             row.eachCell(cell => {
+                 cell.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+             });
+             currentRow++;
+        });
+
+        // Totals
+        const totalRow = worksheet.getRow(currentRow);
+        totalRow.getCell(3).value = "Grand Total:";
+        totalRow.getCell(3).font = { bold: true };
+        totalRow.getCell(3).alignment = { horizontal: "right" };
+        
+        totalRow.getCell(4).value = parseFloat(excelData.grandTotals.total) || 0;
+        totalRow.getCell(5).value = parseFloat(excelData.grandTotals['1_30']) || 0;
+        totalRow.getCell(6).value = parseFloat(excelData.grandTotals['31_60']) || 0;
+        totalRow.getCell(7).value = parseFloat(excelData.grandTotals['61_90']) || 0;
+        totalRow.getCell(8).value = parseFloat(excelData.grandTotals['91_360']) || 0;
+        totalRow.getCell(9).value = parseFloat(excelData.grandTotals['above_1_year']) || 0;
+
+        for(let i=4; i<=9; i++) {
+             totalRow.getCell(i).numFmt = "#,##0.00";
+             totalRow.getCell(i).font = { bold: true };
+             totalRow.getCell(i).alignment = { horizontal: "right" };
+             totalRow.getCell(i).border = { top: { style: "thick" }, bottom: { style: "thick" } };
+        }
+        
+        currentRow += 3;
+        
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        // Column widths
+        worksheet.columns = [
+            { width: 15 }, { width: 30 }, { width: 15 },
+            { width: 15 }, { width: 15 }, { width: 15 },
+            { width: 15 }, { width: 15 }, { width: 15 }
+        ];
+
+        const filename = `Customer_AR_Aging_${new Date().toISOString().split("T")[0]}.xlsx`;
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), filename);
+        showSuccessToast("Customer AR Aging Report exported successfully!");
+    } catch (error) {
+        console.error(error);
+        showWarningToast("Failed to generate Excel file.");
+    }
+};
+
+const generateBegBalProoflistExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Beg Bal Prooflist");
+        let currentRow = 1;
+
+        worksheet.getCell("C1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("C1").alignment = { horizontal: "right" };
+        
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Beginning Balance Prooflist";
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        currentRow += 2;
+
+        const headers = ["REF NO", "DATE", "CUSTOMER", "AMOUNT"];
+        const headerRow = worksheet.getRow(currentRow);
+        headers.forEach((h, i) => {
+            headerRow.getCell(i + 1).value = h;
+            headerRow.getCell(i + 1).font = { bold: true };
+            headerRow.getCell(i + 1).border = { bottom: { style: "thin" } };
+        });
+        currentRow++;
+
+        excelData.begBals.forEach(item => {
+            const row = worksheet.getRow(currentRow);
+            row.getCell(1).value = item.beginningbalance_no;
+            row.getCell(2).value = new Date(item.date);
+            row.getCell(2).numFmt = "mm/dd/yyyy";
+            row.getCell(3).value = item.customer;
+            row.getCell(4).value = parseFloat(item.amount) || 0;
+            row.getCell(4).numFmt = "#,##0.00";
+            currentRow++;
+        });
+
+        worksheet.getCell(`C${currentRow}`).value = "Grand Total:";
+        worksheet.getCell(`D${currentRow}`).value = parseFloat(excelData.totalAmount) || 0;
+        worksheet.getCell(`D${currentRow}`).numFmt = "#,##0.00";
+        worksheet.getCell(`D${currentRow}`).font = { bold: true };
+        worksheet.getCell(`D${currentRow}`).border = { bottom: { style: "double" } };
+
+        currentRow += 3;
+
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        worksheet.columns = [{ width: 15 }, { width: 15 }, { width: 30 }, { width: 15 }];
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `BegBal_Prooflist_${new Date().toISOString().split("T")[0]}.xlsx`);
+        showSuccessToast("Report exported successfully!");
+    } catch (e) {
+        console.error(e);
+        showWarningToast("Failed to generate Excel.");
+    }
+};
+
+const generateSalesPerItemExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Sales Per Item");
+        let currentRow = 1;
+
+        worksheet.getCell("F1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("F1").alignment = { horizontal: "right" };
+        
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Sales Per Item Report";
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        currentRow += 2;
+
+        const headers = ["DATE", "INV NO", "CUSTOMER", "ITEM CODE", "ITEM NAME", "QTY", "PRICE", "AMOUNT"];
+        const headerRow = worksheet.getRow(currentRow);
+        headers.forEach((h, i) => {
+            headerRow.getCell(i + 1).value = h;
+            headerRow.getCell(i + 1).font = { bold: true };
+            headerRow.getCell(i + 1).border = { bottom: { style: "thin" } };
+        });
+        currentRow++;
+
+        excelData.salesperItems.forEach(item => {
+            const row = worksheet.getRow(currentRow);
+            row.getCell(1).value = new Date(item.date);
+            row.getCell(1).numFmt = "mm/dd/yyyy";
+            row.getCell(2).value = item.invoice_no;
+            row.getCell(3).value = item.customer_name;
+            row.getCell(4).value = item.item_code;
+            row.getCell(5).value = item.item_name;
+            row.getCell(6).value = parseFloat(item.quantity) || 0;
+            row.getCell(7).value = parseFloat(item.price) || 0;
+            row.getCell(8).value = parseFloat(item.amount) || 0;
+            
+            row.getCell(7).numFmt = "#,##0.00";
+            row.getCell(8).numFmt = "#,##0.00";
+            currentRow++;
+        });
+
+        worksheet.getCell(`G${currentRow}`).value = "Grand Total:";
+        worksheet.getCell(`H${currentRow}`).value = parseFloat(excelData.totalAmount) || 0;
+        worksheet.getCell(`H${currentRow}`).numFmt = "#,##0.00";
+        worksheet.getCell(`H${currentRow}`).font = { bold: true };
+        worksheet.getCell(`H${currentRow}`).border = { bottom: { style: "double" } };
+
+        currentRow += 3;
+
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        worksheet.columns = [
+            { width: 12 }, { width: 15 }, { width: 30 }, 
+            { width: 15 }, { width: 30 }, 
+            { width: 10 }, { width: 12 }, { width: 15 }
+        ];
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `Sales_Per_Item_${new Date().toISOString().split("T")[0]}.xlsx`);
+        showSuccessToast("Report exported successfully!");
+    } catch (e) {
+        console.error(e);
+        showWarningToast("Failed to generate Excel.");
+    }
+};
+
+const generateOverageShortageExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Overage Shortage");
+        let currentRow = 1;
+
+        worksheet.getCell("E1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("E1").alignment = { horizontal: "right" };
+        
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Overage/Shortage Report";
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Date Range: ${excelData.dateRange}`;
+        currentRow += 2;
+
+        excelData.groupedData.forEach(typeGroup => {
+            worksheet.getCell(`A${currentRow}`).value = typeGroup.payment_type;
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+            worksheet.getCell(`A${currentRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "e0e0e0" } };
+            currentRow++;
+
+            const headers = ["DATE", "DS NO", "CUSTOMER", "AMOUNT", "REMARKS"];
+            const headerRow = worksheet.getRow(currentRow);
+            headers.forEach((h, i) => {
+                headerRow.getCell(i + 1).value = h;
+                headerRow.getCell(i + 1).font = { bold: true };
+                headerRow.getCell(i + 1).border = { bottom: { style: "thin" } };
+            });
+            currentRow++;
+
+            typeGroup.customers.forEach(customer => {
+                customer.payments.forEach(item => {
+                    const row = worksheet.getRow(currentRow);
+                    row.getCell(1).value = new Date(item.date);
+                    row.getCell(1).numFmt = "mm/dd/yyyy";
+                    row.getCell(2).value = item.ds_no;
+                    row.getCell(3).value = customer.customer_name;
+                    row.getCell(4).value = parseFloat(item.amount) || 0;
+                    row.getCell(5).value = item.remarks;
+                    
+                    row.getCell(4).numFmt = "#,##0.00";
+                    currentRow++;
+                });
+                
+                // Optional: Customer Subtotal if desired, but maybe just skip to Type Total
+            });
+
+            worksheet.getCell(`C${currentRow}`).value = `Total ${typeGroup.payment_type}:`;
+            worksheet.getCell(`D${currentRow}`).value = parseFloat(typeGroup.type_total) || 0;
+            worksheet.getCell(`D${currentRow}`).numFmt = "#,##0.00";
+            worksheet.getCell(`C${currentRow}`).font = { bold: true };
+            worksheet.getCell(`D${currentRow}`).font = { bold: true };
+            worksheet.getCell(`D${currentRow}`).border = { top: { style: "thin" } };
+            currentRow += 2;
+        });
+
+        worksheet.getCell(`C${currentRow}`).value = "Grand Total:";
+        worksheet.getCell(`D${currentRow}`).value = parseFloat(excelData.grandTotal) || 0;
+        worksheet.getCell(`D${currentRow}`).numFmt = "#,##0.00";
+        worksheet.getCell(`D${currentRow}`).font = { bold: true };
+        worksheet.getCell(`D${currentRow}`).border = { bottom: { style: "double" } };
+
+        currentRow += 3;
+
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        worksheet.columns = [{ width: 12 }, { width: 15 }, { width: 30 }, { width: 15 }, { width: 30 }];
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `Overage_Shortage_${new Date().toISOString().split("T")[0]}.xlsx`);
+        showSuccessToast("Report exported successfully!");
+    } catch (e) {
+        console.error(e);
+        showWarningToast("Failed to generate Excel.");
+    }
+};
+
+const generateStatementOfAccountExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Statement of Account");
+        let currentRow = 1;
+
+        worksheet.getCell("D1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("D1").alignment = { horizontal: "right" };
+        
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Statement of Account";
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Statement Date: ${excelData.statement_date}`;
+        currentRow += 2;
+
+        excelData.groupedData.forEach(group => {
+            worksheet.getCell(`A${currentRow}`).value = `Customer: ${group.customer_name} (${group.customer_code})`;
+            worksheet.getCell(`A${currentRow}`).font = { bold: true };
+            currentRow++;
+            worksheet.getCell(`A${currentRow}`).value = `Address: ${group.address || ''}`;
+            currentRow += 2;
+
+            const headers = ["DATE", "INV NO", "PARTICULARS", "AMOUNT"];
+            const headerRow = worksheet.getRow(currentRow);
+            headers.forEach((h, i) => {
+                headerRow.getCell(i + 1).value = h;
+                headerRow.getCell(i + 1).font = { bold: true };
+                headerRow.getCell(i + 1).border = { bottom: { style: "thin" } };
+            });
+            currentRow++;
+
+            group.paymentDetails.forEach(item => {
+                const row = worksheet.getRow(currentRow);
+                row.getCell(1).value = new Date(item.date);
+                row.getCell(1).numFmt = "mm/dd/yyyy";
+                row.getCell(2).value = item.document_no;
+                row.getCell(3).value = item.type;
+                row.getCell(4).value = parseFloat(item.amount) || 0;
+                row.getCell(4).numFmt = "#,##0.00";
+                currentRow++;
+            });
+
+            worksheet.getCell(`C${currentRow}`).value = "Total Due:";
+            worksheet.getCell(`D${currentRow}`).value = parseFloat(group.total_balance) || 0;
+            worksheet.getCell(`D${currentRow}`).numFmt = "#,##0.00";
+            worksheet.getCell(`C${currentRow}`).font = { bold: true };
+            worksheet.getCell(`D${currentRow}`).font = { bold: true };
+            worksheet.getCell(`D${currentRow}`).border = { top: { style: "thin" }, bottom: { style: "double" } };
+            
+            currentRow += 3; 
+        });
+
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        worksheet.columns = [{ width: 15 }, { width: 15 }, { width: 40 }, { width: 15 }];
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `SOA_${new Date().toISOString().split("T")[0]}.xlsx`);
+        showSuccessToast("Report exported successfully!");
+    } catch (e) {
+        console.error(e);
+        showWarningToast("Failed to generate Excel.");
+    }
+};
+
+const generateStatementOfAccountSummaryExcelFile = async (excelData) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("SOA Summary");
+        let currentRow = 1;
+
+        worksheet.getCell("D1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("D1").alignment = { horizontal: "right" };
+        
+        currentRow = 4;
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Statement of Account Summary";
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `Period: ${excelData.dateRange}`;
+        currentRow += 2;
+
+        const headers = ["CUSTOMER CODE", "CUSTOMER NAME", "TOTAL AMOUNT"];
+        const headerRow = worksheet.getRow(currentRow);
+        headers.forEach((h, i) => {
+            headerRow.getCell(i + 1).value = h;
+            headerRow.getCell(i + 1).font = { bold: true };
+            headerRow.getCell(i + 1).border = { bottom: { style: "thin" } };
+        });
+        currentRow++;
+
+        excelData.groupedData.forEach(item => {
+            const row = worksheet.getRow(currentRow);
+            row.getCell(1).value = item.customer_code;
+            row.getCell(2).value = item.customer_name;
+            row.getCell(3).value = parseFloat(item.customerAmountTotal) || 0;
+            row.getCell(3).numFmt = "#,##0.00";
+            currentRow++;
+        });
+
+        worksheet.getCell(`B${currentRow}`).value = "Grand Total:";
+        worksheet.getCell(`C${currentRow}`).value = parseFloat(excelData.customerOverallAmountTotal) || 0;
+        worksheet.getCell(`C${currentRow}`).numFmt = "#,##0.00";
+        worksheet.getCell(`C${currentRow}`).font = { bold: true };
+        worksheet.getCell(`C${currentRow}`).border = { top: { style: "thin" }, bottom: { style: "double" } };
+
+        currentRow += 3;
+
+        // Signatory section
+        const signatoryStartRow = currentRow;
+
+        // Headers for signatory section
+        worksheet.getCell(`A${currentRow}`).value = "Prepared By:";
+        worksheet.getCell(`E${currentRow}`).value = "Checked By:";
+        worksheet.getCell(`I${currentRow}`).value = "Note By:";
+
+        ["A", "E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${currentRow}`).font = { bold: true };
+        });
+
+        currentRow += 2;
+
+        // Prepared By section
+        worksheet.getCell(`A${currentRow}`).value = excelData.preparedBy;
+        worksheet.getCell(`A${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value =
+            "(Signature Over Printed Name)";
+        worksheet.getCell(`A${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+        worksheet.getCell(`A${currentRow}`).font = { size: 9 };
+        worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Date:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleDateString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Time:";
+        worksheet.getCell(`B${currentRow}`).value =
+            new Date().toLocaleTimeString();
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.getCell(`B${currentRow}`).alignment = {
+            horizontal: "center",
+        };
+
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = "Designation:";
+        worksheet.getCell(`B${currentRow}`).border = {
+            bottom: { style: "thin" },
+        };
+        worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+
+        // Add similar structure for "Checked By" and "Note By" columns
+        const checkByRow = signatoryStartRow + 2;
+
+        // Checked By and Note By sections
+        ["E", "I"].forEach((col) => {
+            worksheet.getCell(`${col}${checkByRow}`).border = {
+                bottom: { style: "thin" },
+            };
+            worksheet.mergeCells(
+                `${col}${checkByRow}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 1}`).value =
+                "(Signature Over Printed Name)";
+            worksheet.getCell(`${col}${checkByRow + 1}`).alignment = {
+                horizontal: "center",
+            };
+            worksheet.getCell(`${col}${checkByRow + 1}`).font = { size: 9 };
+            worksheet.mergeCells(
+                `${col}${checkByRow + 1}:${String.fromCharCode(
+                    col.charCodeAt(0) + 3
+                )}${checkByRow + 1}`
+            );
+
+            worksheet.getCell(`${col}${checkByRow + 2}`).value = "Date:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 2}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 3}`).value = "Time:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 3}`
+            ).border = { bottom: { style: "thin" } };
+
+            worksheet.getCell(`${col}${checkByRow + 4}`).value = "Designation:";
+            worksheet.getCell(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4}`
+            ).border = { bottom: { style: "thin" } };
+            worksheet.mergeCells(
+                `${String.fromCharCode(col.charCodeAt(0) + 1)}${checkByRow + 4
+                }:${String.fromCharCode(col.charCodeAt(0) + 3)}${checkByRow + 4
+                }`
+            );
+        });
+
+        worksheet.columns = [{ width: 15 }, { width: 40 }, { width: 20 }];
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `SOA_Summary_${new Date().toISOString().split("T")[0]}.xlsx`);
+        showSuccessToast("Report exported successfully!");
+    } catch (e) {
+        console.error(e);
+        showWarningToast("Failed to generate Excel.");
+    }
+};
+
 const generateAROutstandingExcelFile = async (excelData) => {
     try {
         const workbook = new ExcelJS.Workbook();
@@ -377,7 +3260,7 @@ const generateAROutstandingExcelFile = async (excelData) => {
 
         // Header section
         currentRow = 4;
-        worksheet.getCell(`A${currentRow}`).value = "FDML UBAY-AG009";
+        worksheet.getCell(`A${currentRow}`).value = excelData.reportName;
         worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 16 };
 
         currentRow++;
@@ -386,14 +3269,14 @@ const generateAROutstandingExcelFile = async (excelData) => {
         worksheet.getCell(`A${currentRow}`).font = { size: 12 };
 
         currentRow++;
-        const label1 = excelData.dateRange.includes("to") ? "DR" : "AO";
+        const label1 = (excelData.dateRange && excelData.dateRange.includes("to")) ? "DR" : "AO";
         worksheet.getCell(
             `A${currentRow}`
         ).value = `AR Outstanding Balances (${label1})`;
         worksheet.getCell(`A${currentRow}`).font = { size: 12 };
 
         currentRow += 2;
-        const label2 = excelData.dateRange.includes("to")
+        const label2 = (excelData.dateRange && excelData.dateRange.includes("to"))
             ? "Date Range:"
             : "As of Date:";
         worksheet.getCell(
@@ -404,7 +3287,11 @@ const generateAROutstandingExcelFile = async (excelData) => {
         currentRow += 2;
 
         // Process grouped data
-        excelData.groupedData.forEach((group, groupIndex) => {
+        const groupedData = Array.isArray(excelData.groupedData) 
+            ? excelData.groupedData 
+            : (excelData.groupedData ? Object.values(excelData.groupedData) : []);
+
+        groupedData.forEach((group, groupIndex) => {
             // Customer header
             worksheet.getCell(
                 `A${currentRow}`

@@ -56,7 +56,11 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->renderable(function (AuthenticationException $e, $request) {
-            return redirect()->guest(route('session.expired'));
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+            $tenant = $request->route('tenant') ?? $request->segment(1) ?? 'feedmill';
+            return redirect()->guest(route('session.expired', ['tenant' => $tenant]));
         });
         $exceptions->renderable(function (NotFoundHttpException $e) {
             return Inertia::render('PageNotFound');

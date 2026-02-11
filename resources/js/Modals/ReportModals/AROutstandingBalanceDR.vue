@@ -704,7 +704,7 @@
 import { ref, watch } from "vue";
 import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import ToastAlertYellowWarning from "../../Pages/Components/ToastAlertYellowWarning.vue";
@@ -717,6 +717,8 @@ const props = defineProps({
     show: Boolean,
     type: String,
 });
+
+const page = usePage();
 
 const form = useForm({
     file_type: "PDF",
@@ -823,7 +825,7 @@ const submit = () => {
     Object.keys(form.errors).forEach((key) => {
         form.errors[key] = "";
     });
-    form.post(route("arOutstandingBalanceDR"), {
+    form.post(route("arOutstandingBalanceDR", { tenant: page.props.tenant }), {
         onSuccess: () => {
             showDialog.value = true;
         },

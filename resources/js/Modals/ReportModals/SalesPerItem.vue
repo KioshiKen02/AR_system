@@ -55,6 +55,33 @@
 
                     <!-- Content - Date Range Selector -->
                     <div class="flex flex-col gap-2">
+                        <!-- File Type Selection -->
+                        <div class="flex flex-col gap-2">
+                            <label class="block text-md font-bold">FILE TYPE</label>
+                            <div class="flex gap-4">
+                                <label class="inline-flex items-center cursor-pointer group">
+                                    <input type="radio" v-model="form.file_type" value="PDF" class="hidden peer" />
+                                    <div class="relative flex items-center justify-center p-2">
+                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40" :class="{ 'opacity-100': form.file_type === 'PDF' }"></div>
+                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]" :class="{ 'border-[var(--color-border)]': form.file_type === 'PDF' }">
+                                            <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity" :class="{ 'opacity-100': form.file_type === 'PDF', 'opacity-0': form.file_type !== 'PDF' }"></div>
+                                        </div>
+                                        <span class="text-sm font-medium z-10">PDF</span>
+                                    </div>
+                                </label>
+                                <label class="inline-flex items-center cursor-pointer group">
+                                    <input type="radio" v-model="form.file_type" value="Excel" class="hidden peer" />
+                                    <div class="relative flex items-center justify-center p-2">
+                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40" :class="{ 'opacity-100': form.file_type === 'Excel' }"></div>
+                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]" :class="{ 'border-[var(--color-border)]': form.file_type === 'Excel' }">
+                                            <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity" :class="{ 'opacity-100': form.file_type === 'Excel', 'opacity-0': form.file_type !== 'Excel' }"></div>
+                                        </div>
+                                        <span class="text-sm font-medium z-10">Excel</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
                         <!-- Item Selection -->
                         <div class="flex flex-col gap-2">
                             <label class="block text-md font-bold"
@@ -364,7 +391,7 @@ import {
 } from "vue";
 import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import ToastAlertYellowWarning from "../../Pages/Components/ToastAlertYellowWarning.vue";
@@ -376,12 +403,15 @@ const props = defineProps({
     show: Boolean,
 });
 
+const page = usePage();
+
 const form = useForm({
     item_type: "All Items",
     selectedItems: [],
     start_date: null,
     end_date: null,
     processtype: null,
+    file_type: "PDF",
 });
 
 const emit = defineEmits(["close", "closeSuccess"]);
@@ -400,7 +430,7 @@ const itemInput = ref(null);
 // Fetch items on component mount
 onMounted(async () => {
     try {
-        const response = await axios.get(route("getAllItemList"));
+        const response = await axios.get(route("getAllItemList", { tenant: page.props.tenant }));
         allItems.value = response.data;
     } catch (error) {
         console.error("Error fetching items:", error);
@@ -562,7 +592,7 @@ const submit = () => {
     Object.keys(form.errors).forEach((key) => {
         form.errors[key] = "";
     });
-    form.post(route("salesPerItem"), {
+    form.post(route("salesPerItem", { tenant: page.props.tenant }), {
         onSuccess: () => {
             showDialog.value = true;
         },

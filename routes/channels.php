@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Broadcast;
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
-Broadcast::channel('pdf-generation.{userId}', function (User $user, $userId) {
+Broadcast::channel('pdf-generation.{userId}.{jobId}', function ($user, $userId, $jobId) {
     return (int) $user->id === (int) $userId;
 });
 Broadcast::channel('transaction-pdf-generation.{userId}', function (User $user, $userId) {

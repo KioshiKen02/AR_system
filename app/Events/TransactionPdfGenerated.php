@@ -25,7 +25,7 @@ class TransactionPdfGenerated implements ShouldBroadcastNow
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel("transaction-pdf-generation.{$this->userId}"),
+            new PrivateChannel($this->channel),
         ];
     }
 

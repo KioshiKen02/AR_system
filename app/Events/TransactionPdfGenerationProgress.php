@@ -19,14 +19,14 @@ class TransactionPdfGenerationProgress implements ShouldBroadcastNow
     public function __construct(
         public string $userId,
         public int $progress,
-        public string $message
+        public string $message,
+        public string $channel
     ) {}
 
     public function broadcastOn(): array
     {
         return [
-            // return [new Channel($this->channel)];
-            new PrivateChannel("transaction-pdf-generation.{$this->userId}"),
+            new PrivateChannel($this->channel),
         ];
     }
 

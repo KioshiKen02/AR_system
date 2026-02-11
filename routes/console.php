@@ -27,4 +27,4 @@ Schedule::call(function () {
             }
         }
     }
-})->daily()->name('cleanup:temp-pdfs')->purpose('Clean up temporary PDF files older than 24 hours');
+})->daily()->name('cleanup:temp-pdfs');

@@ -82,8 +82,9 @@ Route::get('/', function () {
     return redirect()->route('landing', ['tenant' => 'arsystem']); // Default redirect
 });
 
+Broadcast::routes(['middleware' => ['web', 'auth']]);
+
 Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
-    Broadcast::routes(['middleware' => ['web', 'auth']]);
 
     Route::middleware('auth')->group(function () {
 

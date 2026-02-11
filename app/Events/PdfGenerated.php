@@ -25,7 +25,7 @@ class PdfGenerated implements ShouldBroadcastNow
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel("pdf-generation.{$this->userId}"),
+            new PrivateChannel($this->channel),
         ];
     }
 

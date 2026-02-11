@@ -34,7 +34,8 @@ class ReportPDFGeneratorController extends Controller
                 'date_type' => 'required',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date|after_or_equal:start_date',
-                'processtype' => 'nullable'
+                'processtype' => 'nullable',
+                'file_type' => 'nullable',
             ],
             [
                 'customer_type.required' => 'Customer Type Required',
@@ -72,24 +73,65 @@ class ReportPDFGeneratorController extends Controller
             ]);
         }
         if ($validated['processtype'] === 'axios') {
-            // Generate a unique channel for this PDF generation
-            $channel = 'pdf-generation.' . Str::random(20);
-
-            // Dispatch the job with all required data
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'invoiceprooflist'
-            );
-
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
+            // Log the request data for debugging
+            Log::info('InvoiceReport Request:', [
                 'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
+                'file_type' => $validated['file_type'] ?? 'null',
+                'app_setting_id' => $request->user()->app_setting_id
             ]);
+
+            // Generate a unique channel for this PDF generation
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
+
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                Log::info('Dispatching InvoiceProoflist to Queue (Excel)');
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'invoiceprooflist',
+                    null,
+                    $request->user()->app_setting_id
+                );
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $filename = 'InvoiceProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
+
+                try {
+                    // Dispatch the job with all required data
+                    GeneratePdfJob::dispatchSync(
+                        $validated,
+                        $request->user()->id,
+                        $channel,
+                        strtoupper($request->user()->name),
+                        'invoiceprooflist',
+                        $filename,
+                        $request->user()->app_setting_id
+                    );
+                } catch (\Exception $e) {
+                    Log::error('PDF Generation Failed: ' . $e->getMessage());
+                    Log::error($e->getTraceAsString());
+                    return response()->json(['message' => 'PDF Generation Failed: ' . $e->getMessage()], 500);
+                }
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -102,7 +144,8 @@ class ReportPDFGeneratorController extends Controller
                 'customer_name' => 'required_if:customer_type,By Customer',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date',
-                'processtype' => 'nullable'
+                'processtype' => 'nullable',
+                'file_type' => 'nullable',
             ],
             [
                 'customer_type.required' => 'Customer Type Required',
@@ -136,23 +179,50 @@ class ReportPDFGeneratorController extends Controller
 
         if ($validated['processtype'] === 'axios') {
             // Generate a unique channel for this PDF generation
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            // Dispatch the job with all required data
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'invoicesummary'
-            );
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'invoicesummary',
+                    null,
+                    $request->user()->app_setting_id
+                );
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $filename = 'InvoiceSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
+
+                // Dispatch the job with all required data
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'invoicesummary',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -166,7 +236,8 @@ class ReportPDFGeneratorController extends Controller
                 'date_type' => 'required',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date',
-                'processtype' => 'nullable'
+                'processtype' => 'nullable',
+                'file_type' => 'nullable',
             ],
             [
                 'customer_type.required' => 'Customer Type Required',
@@ -207,23 +278,50 @@ class ReportPDFGeneratorController extends Controller
 
         if ($validated['processtype'] === 'axios') {
             // Generate a unique channel for this PDF generation
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            // Dispatch the job with all required data
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'adjustmentprooflist'
-            );
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'adjustmentprooflist',
+                    null,
+                    $request->user()->app_setting_id
+                );
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $filename = 'AdjustmentProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
+
+                // Dispatch the job with all required data
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'adjustmentprooflist',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -245,6 +343,7 @@ class ReportPDFGeneratorController extends Controller
                 'reportOptions.creditableWHT' => 'boolean',
                 'sortOption' => 'required',
                 'paymentProoflistType' => 'nullable',
+                'file_type' => 'nullable',
             ],
             [
                 'customer_type.required' => 'Customer Type Required',
@@ -329,22 +428,52 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
+            
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'paymentreport',
+                    null,
+                    $request->user()->app_setting_id
+                );
 
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'paymentreport'
-            );
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $filenamePrefix = ($validated['paymentProoflistType'] ?? '') === 'Detailed' 
+                    ? 'PaymentProoflistDetailedReport_' 
+                    : 'PaymentProoflistSummaryReport_';
+                $filename = $filenamePrefix . time() . '_' . Str::random(6) . '.pdf';
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'paymentreport',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -358,7 +487,8 @@ class ReportPDFGeneratorController extends Controller
                 'date_type' => 'required',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date',
-                'processtype' => 'nullable'
+                'processtype' => 'nullable',
+                'file_type' => 'nullable',
             ],
             [
                 'customer_type.required' => 'Customer Type Required',
@@ -399,22 +529,49 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'pdcdcreport'
-            );
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'pdcdcreport',
+                    null,
+                    $request->user()->app_setting_id
+                );
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $filename = 'CustomerPdcDcReport_' . time() . '_' . Str::random(6) . '.pdf';
+
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'pdcdcreport',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -461,22 +618,49 @@ class ReportPDFGeneratorController extends Controller
             }
 
             if ($validated['processtype'] === 'axios') {
-                $channel = 'pdf-generation.' . Str::random(20);
+                $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-                GeneratePdfJob::dispatch(
-                    $validated,
-                    $request->user()->id,
-                    $channel,
-                    strtoupper($request->user()->name),
-                    'customeraragingreport'
-                );
+                if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                    GeneratePdfJob::dispatch(
+                        $validated,
+                        $request->user()->id,
+                        $channel,
+                        strtoupper($request->user()->name),
+                        'customeraragingreport',
+                        null,
+                        $request->user()->app_setting_id
+                    );
 
-                return response()->json([
-                    'channel' => 'pdf-generation.' . $request->user()->id,
-                    'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'PDF generation has started',
-                ]);
+                    return response()->json([
+                        'channel' => $channel,
+                        'user_id' => $request->user()->id,
+                        'status' => 'started',
+                        'message' => 'Excel generation has started',
+                    ]);
+                } else {
+                    $filename = 'CustomerArAgingReport_' . time() . '_' . Str::random(6) . '.pdf';
+
+                    GeneratePdfJob::dispatchSync(
+                        $validated,
+                        $request->user()->id,
+                        $channel,
+                        strtoupper($request->user()->name),
+                        'customeraragingreport',
+                        $filename,
+                        $request->user()->app_setting_id
+                    );
+
+                    $prefix = trim(config('app.url'), '/');
+                    $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                    return response()->json([
+                        'channel' => $channel,
+                        'user_id' => $request->user()->id,
+                        'status' => 'started',
+                        'message' => 'PDF generation has started',
+                        'url' => $publicUrl,
+                    ]);
+                }
             }
         } else {
             $query = PaymentDetails::where('payment_type', 'Check')
@@ -497,21 +681,28 @@ class ReportPDFGeneratorController extends Controller
             }
 
             if ($validated['processtype'] === 'axios') {
-                $channel = 'pdf-generation.' . Str::random(20);
+                $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
+                $filename = 'CustomerArPdcDcAgingReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                GeneratePdfJob::dispatch(
+                GeneratePdfJob::dispatchSync(
                     $validated,
                     $request->user()->id,
                     $channel,
                     strtoupper($request->user()->name),
-                    'customeraragingreport'
+                    'customeraragingreport',
+                    $filename,
+                    $request->user()->app_setting_id
                 );
 
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
                 return response()->json([
-                    'channel' => 'pdf-generation.' . $request->user()->id,
+                    'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
                     'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
                 ]);
             }
         }
@@ -546,21 +737,27 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
+            $filename = 'BegBalProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-            GeneratePdfJob::dispatch(
+            GeneratePdfJob::dispatchSync(
                 $validated,
                 $request->user()->id,
                 $channel,
                 strtoupper($request->user()->name),
-                'begbalprooflistreport'
+                'begbalprooflistreport',
+                $filename
             );
 
+            $prefix = trim(config('app.url'), '/');
+            $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
             return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
+                'channel' => $channel,
                 'user_id' => $request->user()->id,
                 'status' => 'started',
                 'message' => 'PDF generation has started',
+                'url' => $publicUrl,
             ]);
         }
     }
@@ -652,22 +849,49 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'aroutstandingbalanceaoreport'
-            );
+            if (($validated['file_type'] ?? '') === 'PDF') {
+                $filename = 'ArOutstandingBalanceAOReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'aroutstandingbalanceaoreport',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            } else {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'aroutstandingbalanceaoreport',
+                    null,
+                    $request->user()->app_setting_id
+                );
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                ]);
+            }
         }
     }
 
@@ -761,22 +985,48 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'aroutstandingbalancedrreport'
-            );
+            if (($validated['file_type'] ?? '') === 'PDF') {
+                $filename = 'ArOutstandingBalanceDRReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'aroutstandingbalancedrreport',
+                    $filename
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            } else {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'aroutstandingbalancedrreport',
+                    null,
+                    $request->user()->app_setting_id
+                );
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                ]);
+            }
         }
     }
 
@@ -788,7 +1038,8 @@ class ReportPDFGeneratorController extends Controller
                 'selectedItems' => 'required|array|min:1',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date',
-                'processtype' => 'nullable'
+                'processtype' => 'nullable',
+                'file_type' => 'nullable',
             ],
             [
                 'item_type.required' => 'Item Type Required',
@@ -822,22 +1073,47 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'salesperitemreport'
-            );
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'salesperitemreport'
+                );
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $filename = 'SalesPerItemReport_' . time() . '_' . Str::random(6) . '.pdf';
+
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'salesperitemreport',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -853,6 +1129,7 @@ class ReportPDFGeneratorController extends Controller
                 'end_date' => 'required|date',
                 'processtype' => 'nullable',
                 'sortOption' => 'required',
+                'file_type' => 'nullable',
             ],
             [
                 'customer_type.required' => 'Customer Type Required',
@@ -927,22 +1204,49 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'overageshortagereport'
-            );
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'overageshortagereport',
+                    null,
+                    $request->user()->app_setting_id
+                );
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $filename = 'OverageShortageReport_' . time() . '_' . Str::random(6) . '.pdf';
+
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'overageshortagereport',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -960,6 +1264,7 @@ class ReportPDFGeneratorController extends Controller
                 'statement_date' => 'required',
                 'processtype' => 'nullable',
                 'soatype' => 'nullable',
+                'file_type' => 'nullable',
 
             ],
             [
@@ -1002,22 +1307,52 @@ class ReportPDFGeneratorController extends Controller
             ]);
         }
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'statementofaccountreport'
-            );
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'statementofaccountreport',
+                    null,
+                    $request->user()->app_setting_id
+                );
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $soafilename = ($validated['soatype'] ?? 'SOA') === 'SOA'
+                    ? 'StatementOfAccount'
+                    : 'StatementOfAccountDFC';
+                $filename = $soafilename . 'Report_' . time() . '_' . Str::random(6) . '.pdf';
+
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'statementofaccountreport',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -1032,6 +1367,7 @@ class ReportPDFGeneratorController extends Controller
                 'start_date' => 'required|date',
                 'end_date' => 'required|date',
                 'processtype' => 'nullable',
+                'file_type' => 'nullable',
             ],
             [
                 'customer_type.required' => 'Customer Type Required',
@@ -1078,22 +1414,49 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            $channel = 'pdf-generation.' . Str::random(20);
+            $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            GeneratePdfJob::dispatch(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'statementofaccountsummaryreport'
-            );
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                GeneratePdfJob::dispatch(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'statementofaccountsummaryreport',
+                    null,
+                    $request->user()->app_setting_id
+                );
 
-            return response()->json([
-                'channel' => 'pdf-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-            ]);
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'Excel generation has started',
+                ]);
+            } else {
+                $filename = 'StatementOfAccountSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
+
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'statementofaccountsummaryreport',
+                    $filename,
+                    $request->user()->app_setting_id
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
