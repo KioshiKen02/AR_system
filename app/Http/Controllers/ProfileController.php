@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use App\Services\ReportIndicatorService;
 
 class ProfileController extends Controller
 {
@@ -171,6 +172,24 @@ class ProfileController extends Controller
         }
 
         $data = $response->json();
+
+        // Try to get BU based on App Setting first (Context-aware)
+        try {
+            $reportIndicator = ReportIndicatorService::reportIndicator(Auth::user());
+            
+            // Handle special case for "Local" suffix if necessary, or direct match
+            $matchedBu = collect($data)->first(function ($item) use ($reportIndicator) {
+                // Strict match or starts with (if needed)
+                return $item['bu_code'] === $reportIndicator;
+            });
+
+            if ($matchedBu) {
+                return response()->json(['success' => true, 'data' => $matchedBu]);
+            }
+        } catch (\Exception $e) {
+            // Log::warning("ReportIndicatorService failed or no match found: " . $e->getMessage());
+            // Fallback to user's assigned BU
+        }
 
         // Get the current user's bu_assign value
         $userBuAssign = Auth::user()->bu_assign;

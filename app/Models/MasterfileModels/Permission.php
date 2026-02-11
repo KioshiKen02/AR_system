@@ -23,4 +23,9 @@ class Permission extends Model
     ];
 
     public $timestamps = true;
+
+    // Ensure connection is inherited or explicitly set if needed
+    // But typically belongsTo/hasMany handles this if parent has correct connection.
+    // However, if queried directly, it might default to mysql.
+    // Let's rely on the parent (TenantUser) setting the connection for relations.
 }

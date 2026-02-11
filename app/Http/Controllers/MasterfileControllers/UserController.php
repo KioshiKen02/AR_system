@@ -6,7 +6,7 @@ use App\Events\NewCreated;
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Models\MasterfileModels\Permission;
-use App\Models\MasterfileModels\User;
+use App\Models\MasterfileModels\TenantUser as User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -128,7 +128,7 @@ class UserController extends Controller
         $user = new User();
         // Force the connection to be the current default (tenant) connection
         // Note: config('database.default') holds the current tenant connection name if configured correctly by middleware
-        $user->setConnection(config('database.default'));
+        //$user->setConnection(config('database.default'));
         
         // Fill and save
         $user->fill($fields);
@@ -420,7 +420,7 @@ class UserController extends Controller
                   $targetId = $params[1];
              }
         }
-
+        
         // Find the user
         $user = User::findOrFail($targetId);
 

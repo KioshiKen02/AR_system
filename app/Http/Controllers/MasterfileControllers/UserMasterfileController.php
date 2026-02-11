@@ -48,7 +48,7 @@ class UserMasterfileController extends Controller
         $fields = $request->validate([
             'employee_id' => ['required', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:255', 'unique:users'],
+            'username' => ['required', 'string', 'max:255', 'unique:mysql.users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => 'required|in:Admin,Invoicing,Accounting,Bookkeeper,IAD',
             'status' => ['required', 'in:Active,Not Active'],
@@ -63,7 +63,7 @@ class UserMasterfileController extends Controller
         
         $fields['password'] = Hash::make($fields['password']);
 
-        User::create($fields);
+        User::on('mysql')->create($fields);
 
         return redirect()->back()->with('success', 'User created successfully.');
     }
@@ -75,7 +75,7 @@ class UserMasterfileController extends Controller
         // $id might receive the tenant if positional mapping is confused, or if implicit binding fails silently.
         
         // Explicitly get the 'user' parameter from the route to be safe
-        $targetId = $request->route('user');
+        $targetId = $request->route('user') ?? $request->route('id') ?? $request->route('userId');
         
         // Fallback: if $targetId is null (maybe route param name is different?), use $id but check if it looks like an ID
         if (!$targetId) {
@@ -87,6 +87,11 @@ class UserMasterfileController extends Controller
              \Log::warning("UserMasterfile Update: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
              // Try to find the parameter by inspecting route parameter names if needed, 
              // but 'user' should be correct based on Route::resource or manual definition.
+             $params = array_values($request->route()->parameters());
+             if (count($params) >= 2) {
+                  // 0 is tenant, 1 is user
+                  $targetId = $params[1];
+             }
         }
 
         if ($request->user()->role !== 'Admin') {
@@ -119,10 +124,19 @@ class UserMasterfileController extends Controller
     public function destroy(Request $request, $id)
     {
         // Explicitly get the 'user' parameter from the route to be safe
-        $targetId = $request->route('user');
+        $targetId = $request->route('user') ?? $request->route('id') ?? $request->route('userId');
         
         if (!$targetId) {
              $targetId = $id;
+        }
+
+        // Debug check (optional, but good for safety)
+        if (!is_numeric($targetId)) {
+             \Log::warning("UserMasterfile Delete: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
+             $params = array_values($request->route()->parameters());
+             if (count($params) >= 2) {
+                  $targetId = $params[1];
+             }
         }
 
         if ($request->user()->role !== 'Admin') {

@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
+use App\Models\MasterfileModels\TenantUser;
+
 class CheckUserPermission
 {
     /**
@@ -22,7 +24,21 @@ class CheckUserPermission
             abort(403, 'Unauthorized');
         }
 
-        $permission = $user->permissions()->where('role_id', $roleId)->first();
+        // Check if we are in tenant context
+        if (config('database.default') === 'tenant') {
+            // Find the corresponding tenant user by username (since IDs might mismatch)
+            $tenantUser = TenantUser::on('tenant')->where('username', $user->username)->first();
+            
+            if (!$tenantUser) {
+                abort(403, 'Forbidden: User not found in tenant database.');
+            }
+            
+            // Check permissions on the TENANT user object
+            $permission = $tenantUser->permissions()->where('role_id', $roleId)->first();
+        } else {
+            // Standard check for main database or if not in tenant mode
+            $permission = $user->permissions()->where('role_id', $roleId)->first();
+        }
 
         if (!$permission) {
             abort(403, 'Forbidden: No permission record found.');
