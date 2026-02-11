@@ -407,7 +407,7 @@ const handleConfirm = async (confirmed) => {
     showDialog.value = false;
     if (confirmed && pendingDeleteID.value) {
         try {
-            router.delete(route("deleteAdjustment", pendingDeleteID.value), {
+            router.delete(route("deleteAdjustment", { tenant: page.props.tenant, id: pendingDeleteID.value }), {
                 onSuccess: () => {
                     showSuccessToast("Payment has been deleted successfully");
                 },
@@ -432,8 +432,13 @@ const clearSearch = () => {
 };
 
 const isLoading = ref(false);
+import { usePage } from "@inertiajs/vue3";
+
+const page = usePage();
+
 const performSearch = debounce((q) => {
     const filters = {
+        tenant: page.props.tenant,
         search: q,
         code_sort: codeSort.value,
         type_filters:
@@ -442,7 +447,7 @@ const performSearch = debounce((q) => {
         date_end: dateRange.value.end,
     };
 
-    router.get(route("beginningbalance"), filters, {
+    router.get(route("beginningbalance", { tenant: page.props.tenant }), filters, {
         preserveState: true,
         replace: true,
         onFinish: () => {
@@ -487,6 +492,7 @@ const clearDates = () => {
 
 const applyFilters = () => {
     const filters = {
+        tenant: page.props.tenant,
         search: search.value,
         code_sort: codeSort.value,
         type_filters:
@@ -495,7 +501,7 @@ const applyFilters = () => {
         date_end: dateRange.value.end,
     };
 
-    router.get(route("beginningbalance"), filters, {
+    router.get(route("beginningbalance", { tenant: page.props.tenant }), filters, {
         preserveState: true,
         replace: true,
         onStart: () => (isLoading.value = true),

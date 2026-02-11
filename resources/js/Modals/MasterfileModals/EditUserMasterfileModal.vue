@@ -99,9 +99,9 @@
                             <DropdownInput label="Status" v-model="form.status" :options="['Active', 'Not Active']"
                                 placeholder="Click to Select" :message="form.errors.status" />
 
-                            <DropdownInputObject label="App Setting (Database)" v-model="form.app_setting_id"
-                                :options="appSettingOptions" placeholder="Select App Setting"
-                                :message="form.errors.app_setting_id" />
+                            <MultiSelectDropdown label="App Settings (Databases)" v-model="form.app_setting_ids"
+                                :options="appSettingOptions" placeholder="Select App Settings"
+                                :message="form.errors.app_setting_ids" />
                         </div>
                     </div>
                 </div>
@@ -147,7 +147,7 @@ import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import SvgIcon from "@jamescoyle/vue-icon";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 import DropdownInput from "../../Pages/Components/DropdownInput.vue";
-import DropdownInputObject from "../../Pages/Components/DropdownInputObject.vue";
+import MultiSelectDropdown from "../../Pages/Components/MultiSelectDropdown.vue";
 import axios from "axios";
 
 const props = defineProps({
@@ -166,7 +166,7 @@ const form = useForm({
     password_confirmation: null,
     role: null,
     status: null,
-    app_setting_id: null,
+    app_setting_ids: [],
 });
 
 const modalLoading = ref(false);
@@ -231,7 +231,8 @@ const fetchEmployeeData = async () => {
             form.username = props.user.username;
             form.role = props.user.role;
             form.status = props.user.status;
-            form.app_setting_id = props.user.app_setting_id;
+            // Map app_settings array to IDs
+            form.app_setting_ids = props.user.app_settings ? props.user.app_settings.map(s => s.id) : (props.user.app_setting_id ? [props.user.app_setting_id] : []);
             
             // Re-enable image showing because now we have the correct employee name to fetch the photo
             showImage.value = true;
@@ -244,7 +245,7 @@ const fetchEmployeeData = async () => {
             form.username = props.user.username;
             form.role = props.user.role;
             form.status = props.user.status;
-            form.app_setting_id = props.user.app_setting_id;
+            form.app_setting_ids = props.user.app_settings ? props.user.app_settings.map(s => s.id) : (props.user.app_setting_id ? [props.user.app_setting_id] : []);
         }
         modalLoading.value = false;
     } catch (err) {

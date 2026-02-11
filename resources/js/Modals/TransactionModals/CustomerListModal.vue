@@ -137,6 +137,7 @@ import { mdiClose, mdiMagnify } from "@mdi/js";
 import axios from "axios";
 import { nextTick, ref, watch } from "vue";
 import { usePage } from "@inertiajs/vue3";
+import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 
 const props = defineProps({
     show: Boolean,
@@ -190,7 +191,7 @@ watch(
         isLoading.value = true;
         try {
             // Fall back to Laravel endpoint if external API fails
-            const localResponse = await axios.get(route("customers.getAll", { tenant: page.props.tenant }));
+            const localResponse = await axios.get(route("getCustomerList", { tenant: page.props.tenant }));
 
             customers.value = localResponse.data.map((customer) => ({
                 customer_code: customer.cus_code, // Adjust these fields based on your Customer model

@@ -56,6 +56,8 @@ class BeginningBalanceController extends Controller
                 'date_end' => $request->date_end,
             ],
             'broadcastChannel' => 'beginningbalances',
+            // Pass tenant info to props if needed explicitly, though shared props usually handle it
+            'tenant' => $request->route('tenant'), 
         ]);
     }
 

@@ -289,7 +289,7 @@ customer, index
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import axios from "axios";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
@@ -310,6 +310,8 @@ import usePermissions from "../../Pages/Composables/usePermissions";
 const props = defineProps({
     show: Boolean,
 });
+
+const page = usePage();
 
 const { canInsert } = usePermissions();
 const { canView } = usePermissions();
@@ -420,7 +422,7 @@ const exportTemplate = async () => {
     }
 
     try {
-        const response = await axios.get(route("getCustomerList"));
+        const response = await axios.get(route("getCustomerList", { tenant: page.props.tenant }));
         const customers = response.data.map((customer) => ({
             code: customer.cus_code,
             name: customer.cus_name,
@@ -502,7 +504,7 @@ const handleConfirm = async (confirmed) => {
         Object.keys(form.errors).forEach((key) => {
             form.errors[key] = "";
         });
-        form.post(route("addMultipleBeginningBalance"), {
+        form.post(route("addMultipleBeginningBalance", { tenant: page.props.tenant }), {
             onSuccess: () => {
                 form.reset(); // clear on success
                 emit("closeSuccess");

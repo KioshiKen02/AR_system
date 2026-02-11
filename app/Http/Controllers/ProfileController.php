@@ -164,45 +164,73 @@ class ProfileController extends Controller
     // fetching user BU assign 
     public function userBuAssign()
     {
-        // Fetch all business units from the API
-        $response = Http::get("http://172.16.18.27/centralized_masterfile/masterfileController/businessunitscontroller/fetchBusinessunits");
-
-        if (!$response->successful()) {
-            return response()->json(['error' => 'Failed to fetch Bu from API'], 500);
-        }
-
-        $data = $response->json();
-
-        // Try to get BU based on App Setting first (Context-aware)
         try {
-            $reportIndicator = ReportIndicatorService::reportIndicator(Auth::user());
+            $user = Auth::user();
             
-            // Handle special case for "Local" suffix if necessary, or direct match
-            $matchedBu = collect($data)->first(function ($item) use ($reportIndicator) {
-                // Strict match or starts with (if needed)
-                return $item['bu_code'] === $reportIndicator;
-            });
-
-            if ($matchedBu) {
-                return response()->json(['success' => true, 'data' => $matchedBu]);
+            // Explicitly use the User model from mysql connection
+            // We use 'username' to match because IDs might differ between databases
+            $mainUser = User::on('mysql')->where('username', $user->username)->first();
+            
+            $availableTenants = [];
+            if ($mainUser) {
+                 $availableTenants = $mainUser->appSettings()
+                    ->where('app_settings.is_active', true) // Qualify column
+                    ->select('app_settings.id', 'app_settings.app_name', 'app_settings.base_url') // Qualify columns
+                    ->get();
             }
+                
+            // Fetch all business units from the API
+            $response = Http::get("http://172.16.18.27/centralized_masterfile/masterfileController/businessunitscontroller/fetchBusinessunits");
+    
+            if (!$response->successful()) {
+                return response()->json([
+                    'error' => 'Failed to fetch Bu from API',
+                    'available_tenants' => $availableTenants
+                ], 500);
+            }
+    
+            $data = $response->json();
+    
+            // Try to get BU based on App Setting first (Context-aware)
+            try {
+                $reportIndicator = ReportIndicatorService::reportIndicator(Auth::user());
+                
+                $matchedBu = collect($data)->first(function ($item) use ($reportIndicator) {
+                    return $item['bu_code'] === $reportIndicator;
+                });
+    
+                if ($matchedBu) {
+                    return response()->json([
+                        'success' => true, 
+                        'data' => $matchedBu,
+                        'available_tenants' => $availableTenants
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::warning("ReportIndicatorService failed: " . $e->getMessage());
+                // Fallback to user's assigned BU
+            }
+    
+            $userBuAssign = Auth::user()->bu_assign;
+            $matchedBu = collect($data)->firstWhere('id', $userBuAssign);
+    
+            if (!$matchedBu) {
+                return response()->json([
+                    'error' => 'No matching Business Unit found',
+                    'available_tenants' => $availableTenants
+                ], 404);
+            }
+    
+            return response()->json([
+                'success' => true, 
+                'data' => $matchedBu,
+                'available_tenants' => $availableTenants
+            ]);
+            
         } catch (\Exception $e) {
-            // Log::warning("ReportIndicatorService failed or no match found: " . $e->getMessage());
-            // Fallback to user's assigned BU
+            Log::error("UserBuAssign Error: " . $e->getMessage());
+            return response()->json(['error' => 'Server Error: ' . $e->getMessage()], 500);
         }
-
-        // Get the current user's bu_assign value
-        $userBuAssign = Auth::user()->bu_assign;
-
-        // Find the matching BU by its id from the API data
-        $matchedBu = collect($data)->firstWhere('id', $userBuAssign);
-        // dd($matchedBu);
-
-        if (!$matchedBu) {
-            return response()->json(['error' => 'No matching Business Unit found'], 404);
-        }
-
-        return response()->json(['success' => true, 'data' => $matchedBu]);
     }
 
     // fetching bu list 

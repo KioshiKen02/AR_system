@@ -259,7 +259,7 @@ import {
 } from "vue";
 import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import axios from "axios";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
@@ -271,6 +271,8 @@ import DatePicker from "../../Pages/Components/DatePicker.vue";
 const props = defineProps({
     show: Boolean,
 });
+
+const page = usePage();
 
 const form = useForm({
     beginningbalance_no: null,
@@ -294,7 +296,7 @@ form.transaction_date = new Date().toISOString().split("T")[0];
 
 async function nextBeginningBalanceNo() {
     try {
-        const response = await axios.get(route("getlatestbeginningbalanceno"));
+        const response = await axios.get(route("getlatestbeginningbalanceno", { tenant: page.props.tenant }));
         return String(response.data.next_beginningbalance_no);
     } catch (err) {
         console.error(err);
@@ -348,7 +350,7 @@ const handleConfirm = async (confirmed) => {
         Object.keys(form.errors).forEach((key) => {
             form.errors[key] = "";
         });
-        form.post(route("addBeginningBalance"), {
+        form.post(route("addBeginningBalance", { tenant: page.props.tenant }), {
             onSuccess: () => {
                 form.reset(); // clear on success
                 emit("closeSuccess");

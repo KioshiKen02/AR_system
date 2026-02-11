@@ -5,6 +5,7 @@ namespace App\Models\MasterfileModels;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
 use App\Models\Message;
+use App\Models\AppSetting;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -61,7 +62,16 @@ class User extends Authenticatable
 
     public function appSetting()
     {
-        return $this->belongsTo(\App\Models\AppSetting::class, 'app_setting_id');
+        return $this->belongsTo(AppSetting::class, 'app_setting_id');
+    }
+
+    /**
+     * The user may belong to multiple app settings (tenants).
+     */
+    public function appSettings()
+    {
+        return $this->belongsToMany(AppSetting::class, 'app_setting_user', 'user_id', 'app_setting_id')
+            ->withTimestamps();
     }
 
     public function roles()

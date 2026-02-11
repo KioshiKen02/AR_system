@@ -23,11 +23,12 @@ class UserMasterfileController extends Controller
         }
 
         // Fetch users from MAIN system database (User model defaults to mysql/main)
+        // Eager load appSettings (plural) to support multiple tenants
         $users = User::when($request->search, function ($query) use ($request) {
             $query
                 ->where('name', 'like', '%' . $request->search . '%')
                 ->orWhere('username', 'like', '%' . $request->search . '%');
-        })->with('appSetting')->paginate(10)->withQueryString();
+        })->with('appSettings')->paginate(10)->withQueryString();
 
         $appSettings = AppSetting::on('mysql')->where('is_active', true)->select('id', 'app_name')->get();
 
@@ -44,7 +45,7 @@ class UserMasterfileController extends Controller
             abort(403);
         }
 
-        // Validate App Setting ID against MAIN database explicitly
+        // Validate App Setting IDs
         $fields = $request->validate([
             'employee_id' => ['required', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
@@ -52,18 +53,24 @@ class UserMasterfileController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => 'required|in:Admin,Invoicing,Accounting,Bookkeeper,IAD',
             'status' => ['required', 'in:Active,Not Active'],
-            'app_setting_id' => ['nullable', 'exists:mysql.app_settings,id'], // Force check on mysql connection
+            'app_setting_ids' => ['nullable', 'array'],
+            'app_setting_ids.*' => ['exists:mysql.app_settings,id'], // Force check on mysql connection
         ]);
 
         $fields['created_by'] =  $request->user()->name;
-        // BU Assign logic logic omitted for brevity as it seems legacy/specific, 
-        // but if needed we can copy it. For now, defaulting or leaving null?
-        // The original UserController had a switch statement for bu_assign. 
-        // We can include it if necessary.
-        
         $fields['password'] = Hash::make($fields['password']);
+        
+        // For backward compatibility, set app_setting_id to the first selected one, if any
+        if (!empty($fields['app_setting_ids'])) {
+            $fields['app_setting_id'] = $fields['app_setting_ids'][0];
+        }
 
-        User::on('mysql')->create($fields);
+        $user = User::on('mysql')->create($fields);
+
+        // Attach App Settings
+        if (!empty($request->app_setting_ids)) {
+            $user->appSettings()->attach($request->app_setting_ids);
+        }
 
         return redirect()->back()->with('success', 'User created successfully.');
     }
@@ -71,25 +78,16 @@ class UserMasterfileController extends Controller
     public function update(Request $request, $id)
     {
         // Fix for route parameter mapping in tenant-prefixed routes
-        // Route is /{tenant}/user-masterfile/{user}
-        // $id might receive the tenant if positional mapping is confused, or if implicit binding fails silently.
-        
-        // Explicitly get the 'user' parameter from the route to be safe
         $targetId = $request->route('user') ?? $request->route('id') ?? $request->route('userId');
         
-        // Fallback: if $targetId is null (maybe route param name is different?), use $id but check if it looks like an ID
         if (!$targetId) {
              $targetId = $id;
         }
         
-        // Debug check (optional, but good for safety)
         if (!is_numeric($targetId)) {
              \Log::warning("UserMasterfile Update: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
-             // Try to find the parameter by inspecting route parameter names if needed, 
-             // but 'user' should be correct based on Route::resource or manual definition.
              $params = array_values($request->route()->parameters());
              if (count($params) >= 2) {
-                  // 0 is tenant, 1 is user
                   $targetId = $params[1];
              }
         }
@@ -107,13 +105,22 @@ class UserMasterfileController extends Controller
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'role' => 'required|in:Admin,Invoicing,Accounting,Bookkeeper,IAD',
             'status' => ['required', 'in:Active,Not Active'],
-            'app_setting_id' => ['nullable', 'exists:mysql.app_settings,id'],
+            'app_setting_ids' => ['nullable', 'array'],
+            'app_setting_ids.*' => ['exists:mysql.app_settings,id'],
         ]);
 
         if (empty($fields['password'])) {
             unset($fields['password']);
         } else {
             $fields['password'] = Hash::make($fields['password']);
+        }
+
+        // Sync App Settings
+        if (isset($request->app_setting_ids)) {
+             $user->appSettings()->sync($request->app_setting_ids);
+             
+             // Update the legacy column
+             $fields['app_setting_id'] = !empty($request->app_setting_ids) ? $request->app_setting_ids[0] : null;
         }
 
         $user->update($fields);
@@ -123,14 +130,12 @@ class UserMasterfileController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        // Explicitly get the 'user' parameter from the route to be safe
         $targetId = $request->route('user') ?? $request->route('id') ?? $request->route('userId');
         
         if (!$targetId) {
              $targetId = $id;
         }
 
-        // Debug check (optional, but good for safety)
         if (!is_numeric($targetId)) {
              \Log::warning("UserMasterfile Delete: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
              $params = array_values($request->route()->parameters());

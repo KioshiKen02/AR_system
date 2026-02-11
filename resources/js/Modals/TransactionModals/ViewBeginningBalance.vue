@@ -187,7 +187,7 @@ import {
     nextTick,
 } from "vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import AllTransactionListModal from "./AllTransactionListModal.vue";
 import { mdiClose } from "@mdi/js";
 
@@ -195,6 +195,8 @@ const props = defineProps({
     show: Boolean,
     selected: Object,
 });
+
+const page = usePage();
 
 const form = useForm({
     beginningbalance_no: null,

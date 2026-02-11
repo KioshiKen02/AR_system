@@ -10,7 +10,29 @@ class ReportIndicatorService
     public static function reportIndicator($user = null)
     {
         $user = $user ?? auth()->user();
-        $reportName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
+        
+        // Check if we have a specific tenant slug in the route
+        $tenantSlug = request()->route('tenant');
+        
+        $reportName = null;
+        
+        if ($tenantSlug) {
+             // Map slug to App Name directly for performance if possible, or query DB
+             // We can query AppSetting to find the app_name for this slug
+             $appSetting = \App\Models\AppSetting::on('mysql')
+                ->where('base_url', $tenantSlug) // Assuming base_url holds the slug 'feedmill', 'growout', etc.
+                ->orWhereRaw("REPLACE(LOWER(app_name), ' ', '') = ?", [strtolower($tenantSlug)])
+                ->first();
+                
+             if ($appSetting) {
+                 $reportName = $appSetting->app_name;
+             }
+        }
+        
+        // Fallback to User's primary setting or Config
+        if (!$reportName) {
+            $reportName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
+        }
 
         switch ($reportName) {
             case 'Bilar Breeder Local':
@@ -65,7 +87,7 @@ class ReportIndicatorService
             case 'Demo Farm':
                 $reportIndicator = 'DMO UBAY-AG011';
                 break;
-            case 'Dressing plant':
+            case 'Dressing Plant':
                 $reportIndicator = 'DRSP UBAY-AG007';
                 break;
             case 'Farmers Market':

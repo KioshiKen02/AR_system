@@ -28,6 +28,25 @@
                             Marcela Farms
                         </div>
                     </div>
+                    
+                    <!-- Tenant Switcher Dropdown (Only visible if multiple accessible tenants exist) -->
+                    <div v-if="availableTenants.length > 1 && !sidebarCollapsed" class="px-4 mb-2">
+                         <div class="relative">
+                            <button @click="toggleTenantDropdown" 
+                                class="w-full flex items-center justify-between p-2 rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-xs font-semibold text-[var(--color-text-primary)] hover:border-[var(--color-primary)] transition-colors">
+                                <span class="truncate">{{ appName['bu_name'] ?? 'Select Tenant' }}</span>
+                                <ChevronDownIcon class="w-3 h-3 ml-1" />
+                            </button>
+                            
+                            <div v-if="showTenantDropdown" class="absolute z-50 w-full mt-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                <a v-for="tenant in availableTenants" :key="tenant.id" 
+                                   :href="`/${tenant.base_url}/dashboard`"
+                                   class="block px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-primary)] hover:text-white truncate transition-colors">
+                                    {{ tenant.app_name }}
+                                </a>
+                            </div>
+                         </div>
+                    </div>
 
                     <!-- Scrollable Menu Section -->
                     <div class="flex-1 pl-4 scrollbar-thin scrollbar-thumb-[var(--color-primary)]/50 scrollbar-track-[var(--color-scrollbar-track)] scrollbar-stable [scrollbar-gutter:stable] scrollbar-thumb-rounded-full scrollbar-track-rounded-full"
@@ -558,7 +577,28 @@ const error = ref(null);
 const channel = ref(null);
 const page = usePage();
 const appName = ref({});
+const availableTenants = ref([]);
+const showTenantDropdown = ref(false);
 let channelInstance = null;
+
+const toggleTenantDropdown = () => {
+    showTenantDropdown.value = !showTenantDropdown.value;
+};
+
+// Close dropdown when clicking outside
+const closeTenantDropdown = (e) => {
+    if (showTenantDropdown.value && !e.target.closest('.relative')) {
+        showTenantDropdown.value = false;
+    }
+};
+
+onMounted(() => {
+    document.addEventListener('click', closeTenantDropdown);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('click', closeTenantDropdown);
+});
 
 const showNotificationModal = () => {
     showNotifications.value = true;
@@ -569,7 +609,7 @@ const fetchingUserBuAssign = async () => {
     const response = await axios.get(route('UserBuAssign', { tenant: page.props.tenant }));
     if (response.data.success) {
         appName.value = response.data.data
-        // console.log(appName);
+        availableTenants.value = response.data.available_tenants || [];
     }
 };
 

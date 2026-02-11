@@ -75,89 +75,119 @@ class AuthController extends Controller
                     session()->flash('warning', 'Login successful, but customer sync failed.');
                 }
 
-                //DYNAMIC API LINK
-                // We should prioritize the User's App Setting if available
-                $userAppSetting = Auth::user()->appSetting;
+                // Check if user has multiple app settings
+                $user = Auth::user();
+                $accessibleTenants = $user->appSettings;
                 
-                if ($userAppSetting && $userAppSetting->is_active) {
-                    $baseUrl = $userAppSetting->base_url . '/dashboard';
+                // If user has access to multiple tenants, we might want to redirect them to a tenant selection page
+                // OR default to the first one/primary one.
+                // For now, let's keep the logic simple: 
+                // 1. If user has app_setting_id (legacy/primary), use that.
+                // 2. If not, check if they have any accessible tenants and use the first one.
+                // 3. Fallback to config('app.name') based logic.
+                
+                $redirectUrl = null;
+                
+                // Determine the target tenant
+                $targetSetting = $user->appSetting; // Primary/Legacy
+                
+                if (!$targetSetting && $accessibleTenants->count() > 0) {
+                    $targetSetting = $accessibleTenants->first();
+                }
+                
+                if ($targetSetting && $targetSetting->is_active) {
+                    // Construct URL from base_url or app_name
+                    // base_url might be full URL or just the prefix slug? 
+                    // Looking at AppSetting model, it has base_url.
+                    // Let's assume base_url is the tenant slug for now, or we derive it.
+                    // Actually, the previous code used: $baseUrl = $userAppSetting->base_url . '/dashboard';
+                    // Let's stick to that if base_url is populated with the slug (e.g. 'feedmill')
+                    
+                    // If base_url is full url (http://...), we need to parse it? 
+                    // Or is it just 'feedmill'?
+                    // Based on migrations/seeds, it likely holds the slug.
+                    
+                    $redirectUrl = $targetSetting->base_url . '/dashboard';
                 } else {
-                    // Fallback to static config if no dynamic setting
+                    // Fallback to static config if no dynamic setting found
                     $appName = config('app.name');
+                    // ... existing switch case ...
                     switch ($appName) {
                         case 'Bilar Breeder Local':
-                            $baseUrl = 'bilarbreeder/dashboard';
+                            $redirectUrl = 'bilarbreeder/dashboard';
                             break;
                         case 'Bilar Breeder':
-                            $baseUrl = 'bilarbreeder/dashboard';
+                            $redirectUrl = 'bilarbreeder/dashboard';
                             break;
                         case 'Gp Jagna':
-                            $baseUrl = 'gpjagna/dashboard';
+                            $redirectUrl = 'gpjagna/dashboard';
                             break;
                         case 'Ice Plant':
-                            $baseUrl = 'iceplant/dashboard';
+                            $redirectUrl = 'iceplant/dashboard';
                             break;
                         case 'Peanut Kisses':
-                            $baseUrl = 'peanutkisses/dashboard';
+                            $redirectUrl = 'peanutkisses/dashboard';
                             break;
                         case 'Cortes Poultry':
-                            $baseUrl = 'cortespoultry/dashboard';
+                            $redirectUrl = 'cortespoultry/dashboard';
                             break;
                         case 'Cortes Piggery':
-                            $baseUrl = 'cortespiggery/dashboard';
+                            $redirectUrl = 'cortespiggery/dashboard';
                             break;
                         case 'Canhayupon Breeder':
-                            $baseUrl = 'canhayuponbreeder/dashboard';
+                            $redirectUrl = 'canhayuponbreeder/dashboard';
                             break;
                         case 'Bilar Hatchery':
-                            $baseUrl = 'bilarhatchery/dashboard';
+                            $redirectUrl = 'bilarhatchery/dashboard';
                             break;
                         case 'Lapsaon Breeder':
-                            $baseUrl = 'lapsaonbreeder/dashboard';
+                            $redirectUrl = 'lapsaonbreeder/dashboard';
                             break;
                         case 'Rizal Breeder':
-                            $baseUrl = 'rizalbreeder/dashboard';
+                            $redirectUrl = 'rizalbreeder/dashboard';
                             break;
                         // ubay server 
                         case 'Feedmill':
-                            $baseUrl = 'feedmill/dashboard';
+                            $redirectUrl = 'feedmill/dashboard';
                             break;
                         case 'Growout':
-                            $baseUrl = 'growout/dashboard';
+                            $redirectUrl = 'growout/dashboard';
                             break;
                         case 'Cortes Fertilizer':
-                            $baseUrl = 'mficortesfertilizer/dashboard';
+                            $redirectUrl = 'mficortesfertilizer/dashboard';
                             break;
                         case 'Ubay Fertilizer':
-                            $baseUrl = 'mfiubayfertilizer/dashboard';
+                            $redirectUrl = 'mfiubayfertilizer/dashboard';
                             break;
                         case 'Piggery Untaga':
-                            $baseUrl = 'piggeryuntaga/dashboard';
+                            $redirectUrl = 'piggeryuntaga/dashboard';
                             break;
                         case 'Demo Farm':
-                            $baseUrl = 'demofarm/dashboard';
+                            $redirectUrl = 'demofarm/dashboard';
                             break;
-                        case 'Dressing plant':
-                            $baseUrl = 'dressingplant/dashboard';
+                        case 'Dressing Plant':
+                            $redirectUrl = 'dressingplant/dashboard';
                             break;
                         case 'Farmers Market':
-                            $baseUrl = 'farmersmarket/dashboard';
+                            $redirectUrl = 'farmersmarket/dashboard';
                             break;
                         case 'Meat Processing':
-                            $baseUrl = 'meatprocessing/dashboard';
+                            $redirectUrl = 'meatprocessing/dashboard';
                             break;
                         case 'Rendering':
-                            $baseUrl = 'rendering/dashboard';
+                            $redirectUrl = 'rendering/dashboard';
                             break;
                         case 'Ar System':
-                            $baseUrl = 'arsystem/dashboard';
+                            $redirectUrl = 'arsystem/dashboard';
                             break;
                         default:
-                            throw new \Exception("Unknown app name: {$appName}");
+                            // If user has no specific setting and app.name is generic, default to arsystem
+                            $redirectUrl = 'arsystem/dashboard'; 
+                            // throw new \Exception("Unknown app name: {$appName}");
                     }
                 }
 
-                return redirect()->intended($baseUrl);
+                return redirect()->intended($redirectUrl);
             } catch (Exception $e) {
                 Log::error('Status API error during login: ' . $e->getMessage());
 

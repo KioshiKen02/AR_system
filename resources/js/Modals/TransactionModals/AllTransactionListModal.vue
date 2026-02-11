@@ -292,7 +292,7 @@
 <script setup>
 import { ref, watch } from "vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import { mdiClose } from "@mdi/js";
 
 const props = defineProps({
@@ -300,6 +300,8 @@ const props = defineProps({
     receipt_date: String,
     type: String,
 });
+
+const page = usePage();
 
 const form = useForm({
     salesInvoiceTotal: null,
@@ -328,7 +330,7 @@ watch(
                 selectedDate.value = null; // Reset selection when customer changes
 
                 if (props.type === "Add") {
-                    const response = await axios.get(route("getInvoiceList"), {
+                    const response = await axios.get(route("getInvoiceList", { tenant: page.props.tenant }), {
                         params: {
                             type: newCode,
                         },
@@ -380,7 +382,7 @@ watch(
                     form.overallTotal = formatCurrency(ovtot);
                 } else if (props.type === "View") {
                     const response = await axios.get(
-                        route("getInvoiceClearedList"),
+                        route("getInvoiceClearedList", { tenant: page.props.tenant }),
                         {
                             params: {
                                 type: newCode,

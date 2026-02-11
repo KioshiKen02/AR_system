@@ -244,7 +244,11 @@
                             <span class="font-medium">{{ user.username }}</span>
                         </td>
                         <td class="px-3 py-2">
-                            <span class="font-medium text-xs">{{ user.app_setting?.app_name || 'N/A' }}</span>
+                            <span class="font-medium text-xs">
+                                {{ user.app_settings && user.app_settings.length > 0 
+                                    ? user.app_settings.map(s => s.app_name).join(', ') 
+                                    : (user.app_setting?.app_name || 'N/A') }}
+                            </span>
                         </td>
                         <td class="px-3 py-2 text-center">
                             <span

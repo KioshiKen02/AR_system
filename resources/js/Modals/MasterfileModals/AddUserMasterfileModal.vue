@@ -97,9 +97,9 @@
                             <DropdownInput label="Status" v-model="form.status" :options="['Active', 'Not Active']"
                                 placeholder="Click to Select" :message="form.errors.status" />
 
-                            <DropdownInputObject label="App Setting (Database)" v-model="form.app_setting_id"
-                                :options="appSettingOptions" placeholder="Select App Setting"
-                                :message="form.errors.app_setting_id" />
+                            <MultiSelectDropdown label="App Settings (Databases)" v-model="form.app_setting_ids"
+                                :options="appSettingOptions" placeholder="Select App Settings"
+                                :message="form.errors.app_setting_ids" />
                         </div>
                     </div>
                 </div>
@@ -138,7 +138,7 @@ import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import SvgIcon from "@jamescoyle/vue-icon";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 import DropdownInput from "../../Pages/Components/DropdownInput.vue";
-import DropdownInputObject from "../../Pages/Components/DropdownInputObject.vue";
+import MultiSelectDropdown from "../../Pages/Components/MultiSelectDropdown.vue";
 
 const props = defineProps({
     show: Boolean,
@@ -156,7 +156,7 @@ const form = useForm({
     password_confirmation: null,
     role: null,
     status: null,
-    app_setting_id: null,
+    app_setting_ids: [],
 });
 
 const showImage = ref(true);
