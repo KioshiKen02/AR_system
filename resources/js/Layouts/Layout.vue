@@ -1,6 +1,19 @@
 <template>
     <Transition name="fade" appear>
         <div class="min-h-screen bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]">
+            <!-- Database Switching Loading Screen -->
+            <div v-if="isSwitchingTenant" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm text-white transition-opacity duration-300">
+                <div class="relative flex items-center justify-center">
+                    <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-[var(--color-primary)] opacity-75"></div>
+                    <div class="absolute animate-pulse">
+                        <svg-icon type="mdi" :path="mdiDatabaseSync" class="w-8 h-8 text-white" />
+                    </div>
+                </div>
+                <h2 class="text-2xl font-bold mt-6 tracking-wide">Switching Connection</h2>
+                <p class="text-base text-gray-300 mt-3 animate-pulse">Connecting to {{ switchingToTenantName }}...</p>
+                <p class="text-xs text-gray-400 mt-8">Please wait while we refresh your session data</p>
+            </div>
+
             <Notifications v-if="showNotifications" :show="showNotifications" @close="showNotifications = false" />
             <Messages v-if="showMessages" :show="showMessages" :users="users" @close="showMessages = false" />
             <ToastAlertWarning :show="showToast" :message="toastMessage" />
@@ -41,7 +54,8 @@
                             <div v-if="showTenantDropdown" class="absolute z-50 w-full mt-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-md shadow-lg max-h-48 overflow-y-auto">
                                 <a v-for="tenant in availableTenants" :key="tenant.id" 
                                    :href="`/${tenant.base_url}/dashboard`"
-                                   class="block px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-primary)] hover:text-white truncate transition-colors">
+                                   @click="handleTenantSwitch(tenant)"
+                                   class="block px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-primary)] hover:text-white truncate transition-colors cursor-pointer">
                                     {{ tenant.app_name }}
                                 </a>
                             </div>
@@ -451,7 +465,7 @@ import {
 } from "@heroicons/vue/24/solid";
 import useTheme from "../Pages/Composables/useTheme";
 import usePermissions from "../Pages/Composables/usePermissions";
-import { mdiBell, mdiMessage } from "@mdi/js";
+import { mdiBell, mdiMessage, mdiDatabaseSync } from "@mdi/js";
 import Notifications from "../Modals/Notifications.vue";
 import Messages from "../Modals/Messages.vue";
 import ToastAlertWarning from "../Pages/Components/ToastAlertWarning.vue";
@@ -579,10 +593,28 @@ const page = usePage();
 const appName = ref({});
 const availableTenants = ref([]);
 const showTenantDropdown = ref(false);
+const isSwitchingTenant = ref(false);
+const switchingToTenantName = ref("");
 let channelInstance = null;
 
 const toggleTenantDropdown = () => {
     showTenantDropdown.value = !showTenantDropdown.value;
+};
+
+const handleTenantSwitch = (tenant) => {
+    // If we are already on this tenant, do nothing or just close dropdown
+    if (appName.value['bu_code'] === tenant.bu_code) { // Assuming bu_code is unique or use ID
+        showTenantDropdown.value = false;
+        return;
+    }
+    
+    switchingToTenantName.value = tenant.app_name;
+    isSwitchingTenant.value = true;
+    showTenantDropdown.value = false;
+    
+    // We don't need to manually navigate here because the <a> tag's href will take over.
+    // However, if we want to ensure the loading screen shows for a bit before the browser takes over:
+    // The default behavior of <a> will run immediately. 
 };
 
 // Close dropdown when clicking outside

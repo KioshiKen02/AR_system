@@ -58,23 +58,15 @@ class HandleInertiaRequests extends Middleware
                 // BUT only if we are actually in a tenant context (which we can infer from route or config)
                 
                 if (config('database.default') === 'tenant') {
-                    // Force the tenant connection on the model retrieval
-                    // Try to find the user in the tenant database
-                    // But wait, user ID might NOT be the same across databases.
-                    // When logging in, we authenticate against the MAIN database usually (or tenant?).
-                    // If auth is against MAIN DB, then $request->user() is from MAIN DB.
-                    // But we are in a tenant context.
-                    // Does the user exist in the tenant DB with the SAME ID?
-                    // If created via Users.vue (Tenant), it has an ID in Tenant DB.
-                    // If created via UserMasterfile (Main), it has an ID in Main DB.
-                    
-                    // IF the user logged in is a "Tenant User" (authenticated against tenant DB), then $user->id is correct.
-                    // IF the user logged in is a "Global User" (authenticated against Main DB), 
-                    // we need to find the corresponding user in the Tenant DB.
-                    // Matching by 'username' or 'email' is safer than ID.
-                    
-                    $username = $user->username; 
-                    $tenantUser = TenantUser::on('tenant')->where('username', $username)->first();
+                    // Try to find user by employee_id first (more reliable for same person with different usernames)
+                    $employeeId = $user->employee_id;
+                    $tenantUser = TenantUser::on('tenant')->where('employee_id', $employeeId)->first();
+
+                    // Fallback to username if employee_id lookup fails
+                    if (!$tenantUser) {
+                        $username = $user->username; 
+                        $tenantUser = TenantUser::on('tenant')->where('username', $username)->first();
+                    }
                     
                     if ($tenantUser) {
                         // Ensure permissions relationship also uses the tenant connection

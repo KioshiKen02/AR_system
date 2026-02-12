@@ -26,10 +26,18 @@ class CheckUserPermission
 
         // Check if we are in tenant context
         if (config('database.default') === 'tenant') {
-            // Find the corresponding tenant user by username (since IDs might mismatch)
-            $tenantUser = TenantUser::on('tenant')->where('username', $user->username)->first();
+            // Try to find user by employee_id first (more reliable for same person with different usernames)
+            $employeeId = $user->employee_id;
+            $tenantUser = TenantUser::on('tenant')->where('employee_id', $employeeId)->first();
+
+            // Fallback to username if employee_id lookup fails
+            if (!$tenantUser) {
+                $username = $user->username;
+                $tenantUser = TenantUser::on('tenant')->where('username', $username)->first();
+            }
             
             if (!$tenantUser) {
+                // If user doesn't exist in tenant DB, they definitely don't have permission
                 abort(403, 'Forbidden: User not found in tenant database.');
             }
             
