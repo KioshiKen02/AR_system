@@ -14,7 +14,7 @@
             max-width: 100%;
             box-sizing: border-box;
             font-family: sans-serif;
-            font-size: 10px;
+            font-size: 12px;
         }
 
         .top-right {
@@ -22,7 +22,7 @@
             top: 0;
             right: 0;
             text-align: right;
-            font-size: 9px;
+            font-size: 10px;
         }
 
         .top-right div {
@@ -158,12 +158,12 @@
         }
 
         .note {
-            font-size: 9px;
-            color: #e74c3c;
+            font-size: 10px;
+            color: #000000;
         }
 
         .run-date {
-            font-size: 9px;
+            font-size: 10px;
             color: #000000;
         }
     </style>

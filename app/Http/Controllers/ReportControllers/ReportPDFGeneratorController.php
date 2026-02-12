@@ -106,7 +106,7 @@ class ReportPDFGeneratorController extends Controller
 
                 try {
                     // Dispatch the job with all required data
-                    GeneratePdfJob::dispatchSync(
+                    GeneratePdfJob::dispatch(
                         $validated,
                         $request->user()->id,
                         $channel,
@@ -121,15 +121,12 @@ class ReportPDFGeneratorController extends Controller
                     return response()->json(['message' => 'PDF Generation Failed: ' . $e->getMessage()], 500);
                 }
 
-                $prefix = trim(config('app.url'), '/');
-                $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
+                // Return just the channel for listening, no direct URL yet
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
-                    'message' => 'PDF generation has started',
-                    'url' => $publicUrl,
+                    'message' => 'PDF generation has started in background',
                 ]);
             }
         }
@@ -202,7 +199,7 @@ class ReportPDFGeneratorController extends Controller
                 $filename = 'InvoiceSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
 
                 // Dispatch the job with all required data
-                GeneratePdfJob::dispatchSync(
+                GeneratePdfJob::dispatch(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -212,15 +209,11 @@ class ReportPDFGeneratorController extends Controller
                     $request->user()->app_setting_id
                 );
 
-                $prefix = trim(config('app.url'), '/');
-                $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
-                    'message' => 'PDF generation has started',
-                    'url' => $publicUrl,
+                    'message' => 'PDF generation has started in background',
                 ]);
             }
         }
@@ -301,7 +294,7 @@ class ReportPDFGeneratorController extends Controller
                 $filename = 'AdjustmentProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
 
                 // Dispatch the job with all required data
-                GeneratePdfJob::dispatchSync(
+                GeneratePdfJob::dispatch(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -311,15 +304,11 @@ class ReportPDFGeneratorController extends Controller
                     $request->user()->app_setting_id
                 );
 
-                $prefix = trim(config('app.url'), '/');
-                $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
-                    'message' => 'PDF generation has started',
-                    'url' => $publicUrl,
+                    'message' => 'PDF generation has started in background',
                 ]);
             }
         }
@@ -453,7 +442,7 @@ class ReportPDFGeneratorController extends Controller
                     : 'PaymentProoflistSummaryReport_';
                 $filename = $filenamePrefix . time() . '_' . Str::random(6) . '.pdf';
 
-                GeneratePdfJob::dispatchSync(
+                GeneratePdfJob::dispatch(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -463,15 +452,11 @@ class ReportPDFGeneratorController extends Controller
                     $request->user()->app_setting_id
                 );
 
-                $prefix = trim(config('app.url'), '/');
-                $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
-                    'message' => 'PDF generation has started',
-                    'url' => $publicUrl,
+                    'message' => 'PDF generation has started in background',
                 ]);
             }
         }
@@ -551,7 +536,7 @@ class ReportPDFGeneratorController extends Controller
             } else {
                 $filename = 'CustomerPdcDcReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                GeneratePdfJob::dispatchSync(
+                GeneratePdfJob::dispatch(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -561,15 +546,11 @@ class ReportPDFGeneratorController extends Controller
                     $request->user()->app_setting_id
                 );
 
-                $prefix = trim(config('app.url'), '/');
-                $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
-                    'message' => 'PDF generation has started',
-                    'url' => $publicUrl,
+                    'message' => 'PDF generation has started in background',
                 ]);
             }
         }
@@ -640,7 +621,7 @@ class ReportPDFGeneratorController extends Controller
                 } else {
                     $filename = 'CustomerArAgingReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                    GeneratePdfJob::dispatchSync(
+                    GeneratePdfJob::dispatch(
                         $validated,
                         $request->user()->id,
                         $channel,
@@ -650,15 +631,11 @@ class ReportPDFGeneratorController extends Controller
                         $request->user()->app_setting_id
                     );
 
-                    $prefix = trim(config('app.url'), '/');
-                    $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
                     return response()->json([
                         'channel' => $channel,
                         'user_id' => $request->user()->id,
                         'status' => 'started',
-                        'message' => 'PDF generation has started',
-                        'url' => $publicUrl,
+                        'message' => 'PDF generation has started in background',
                     ]);
                 }
             }
@@ -1093,7 +1070,7 @@ class ReportPDFGeneratorController extends Controller
             } else {
                 $filename = 'SalesPerItemReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                GeneratePdfJob::dispatchSync(
+                GeneratePdfJob::dispatch(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -1103,15 +1080,11 @@ class ReportPDFGeneratorController extends Controller
                     $request->user()->app_setting_id
                 );
 
-                $prefix = trim(config('app.url'), '/');
-                $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
-                    'message' => 'PDF generation has started',
-                    'url' => $publicUrl,
+                    'message' => 'PDF generation has started in background',
                 ]);
             }
         }
@@ -1226,7 +1199,7 @@ class ReportPDFGeneratorController extends Controller
             } else {
                 $filename = 'OverageShortageReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                GeneratePdfJob::dispatchSync(
+                GeneratePdfJob::dispatch(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -1236,15 +1209,11 @@ class ReportPDFGeneratorController extends Controller
                     $request->user()->app_setting_id
                 );
 
-                $prefix = trim(config('app.url'), '/');
-                $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
-                    'message' => 'PDF generation has started',
-                    'url' => $publicUrl,
+                    'message' => 'PDF generation has started in background',
                 ]);
             }
         }
@@ -1436,7 +1405,7 @@ class ReportPDFGeneratorController extends Controller
             } else {
                 $filename = 'StatementOfAccountSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                GeneratePdfJob::dispatchSync(
+                GeneratePdfJob::dispatch(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -1446,15 +1415,11 @@ class ReportPDFGeneratorController extends Controller
                     $request->user()->app_setting_id
                 );
 
-                $prefix = trim(config('app.url'), '/');
-                $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
                     'status' => 'started',
-                    'message' => 'PDF generation has started',
-                    'url' => $publicUrl,
+                    'message' => 'PDF generation has started in background',
                 ]);
             }
         }

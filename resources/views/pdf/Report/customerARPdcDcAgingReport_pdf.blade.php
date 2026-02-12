@@ -194,8 +194,8 @@
         }
 
         .note {
-            font-size: 9px;
-            color: #e74c3c;
+            font-size: 10px;
+            color: #000000;
         }
 
         .run-date {
