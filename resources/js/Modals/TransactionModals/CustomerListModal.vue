@@ -158,7 +158,7 @@ const handleSelect = (code) => {
     emit("submit", {
         cus_code: code.customer_code,
         cus_name: code.customer_name,
-        price_group: code.customer_type,
+        price_group: code.customer_price_group,
         adv_py_bal: code.customer_adv_py_bal,
         editable_wht: code.editable_wht,
         journal_voucher: code.journal_voucher,
@@ -197,6 +197,7 @@ watch(
                 customer_code: customer.cus_code, // Adjust these fields based on your Customer model
                 customer_name: customer.cus_name,
                 customer_type: customer.cus_type,
+                customer_price_group: customer.cus_price_group,
                 customer_adv_py_bal: customer.advanced_payment_balance,
                 editable_wht: customer.editable_wht,
                 journal_voucher: customer.journal_voucher,

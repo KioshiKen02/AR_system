@@ -220,9 +220,17 @@ class CustomerController extends Controller
 
     public function getCustomerList()
     {
-        $customers = Customer::select(['cus_code', 'cus_name'])
-            ->get()
-            ->toArray();
+        $customers = Customer::select([
+            'cus_code', 
+            'cus_name', 
+            'cus_type', 
+            'cus_price_group', 
+            'advanced_payment_balance', 
+            'editable_wht', 
+            'journal_voucher'
+        ])
+        ->get()
+        ->toArray();
 
         return response()->json($customers);
     }
