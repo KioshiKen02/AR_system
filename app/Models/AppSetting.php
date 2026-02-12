@@ -9,6 +9,7 @@ class AppSetting extends Model
     protected $connection = 'mysql';
 
     protected $fillable = [
+        'bu_id',
         'app_name',
         'base_url',
         'db_driver',

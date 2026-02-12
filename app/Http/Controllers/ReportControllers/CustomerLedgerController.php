@@ -38,14 +38,57 @@ class CustomerLedgerController extends Controller
         }
 
         if ($request->customer_code) {
-            $partialPaymentForwarded = (float) CustomerLedger::where('customer_code', $request->customer_code)
+            // Fetch all adjustments for this customer to ensure we have the latest adjusted amounts
+            // Grouped by invoice_no and apply_to
+            $adjustmentsGrouped = Adjustment::where('customer_code', $request->customer_code)
+                ->selectRaw("invoice_no, apply_to, SUM(CASE WHEN type='Positive' THEN amount WHEN type='Negative' THEN -amount ELSE 0 END) as total_adjustment")
+                ->groupBy('invoice_no', 'apply_to')
+                ->get()
+                ->groupBy(['invoice_no', 'apply_to']);
+
+            // $partialPaymentForwarded = (float) CustomerLedger::where('customer_code', $request->customer_code)
+            //     ->whereDate('date', '<', $request->date_start)
+            //     ->sum('running_balance');
+
+            // Recalculate true forwarded balance from scratch
+            $prevRecords = CustomerLedger::where('customer_code', $request->customer_code)
                 ->whereDate('date', '<', $request->date_start)
-                ->sum('running_balance');
+                ->get();
+            
+            $partialPaymentForwarded = $prevRecords->sum(function ($record) use ($adjustmentsGrouped) {
+                 $applyTo = $record->type;
+                 if ($record->type === 'BG') {
+                     $applyTo = 'Beginning Balance';
+                 } elseif ($record->type === 'Charge Invoice') {
+                     $applyTo = 'Other Income';
+                 }
+
+                 $adjAmount = $adjustmentsGrouped
+                        ->get($record->invoice_number, collect())
+                        ->get($applyTo, collect())
+                        ->first()
+                        ->total_adjustment ?? 0;
+
+                 // For BG/Beginning Balance, the amount column is already Net (updated by Adjustment), 
+                 // so we should NOT add the adjustment again.
+                 if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
+                     $adjAmount = 0;
+                 }
+
+                 return ($record->amount ?? 0)
+                    - ($record->shrinkage ?? 0)
+                    + ($record->overage ?? 0)
+                    - ($record->return ?? 0)
+                    + $adjAmount // Use dynamic adjustment
+                    - ($record->amount_paid ?? 0);
+            });
 
             $totalFloatingAmount = (float) PaymentDetails::where('customer_code', $request->customer_code)
                 ->whereDate('document_date', '<', $request->date_start)
                 ->where('status', 'Floating')
                 ->sum('amount_paid');
+        } else {
+             $adjustmentsGrouped = collect();
         }
         $paymentForwarded = 0;
 
@@ -63,7 +106,7 @@ class CustomerLedgerController extends Controller
 
             // Calculate running balance per customer and type
             $runningBalances = [];
-            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $paymentForwarded) {
+            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $paymentForwarded, $adjustmentsGrouped) {
                 $key = $record->customer_code;
 
                 // Initialize running balance for this customer+type if not exists
@@ -71,19 +114,48 @@ class CustomerLedgerController extends Controller
                     $runningBalances[$key] = $paymentForwarded;
                 }
 
+                // Helper to safely parse float from string with commas
+                $val = function($v) {
+                    return (float) str_replace(',', '', (string)($v ?? 0));
+                };
+
                 // Calculate debit and credit based on transaction type
-                $debit = ($record->amount ?? 0)
-                    - ($record->shrinkage ?? 0)
-                    + ($record->overage ?? 0)
-                    - ($record->return ?? 0)
-                    + ($record->adjusted_amount ?? 0);
-                $credit = min($record->amount_paid, $debit);
+                $amount = $val($record->amount);
+                $shrinkage = $val($record->shrinkage);
+                $overage = $val($record->overage);
+                $return = $val($record->return);
+                
+                $applyTo = $record->type;
+                if ($record->type === 'BG') {
+                    $applyTo = 'Beginning Balance';
+                } elseif ($record->type === 'Charge Invoice') {
+                    $applyTo = 'Other Income';
+                }
+
+                $adjustedAmount = $adjustmentsGrouped
+                        ->get($record->invoice_number, collect())
+                        ->get($applyTo, collect())
+                        ->first()
+                        ->total_adjustment ?? 0;
+
+                $grossDebit = $amount - $shrinkage + $overage - $return;
+
+                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
+                    // For BG, amount is treated as Net.
+                    $netDebit = $grossDebit;
+                } else {
+                    $netDebit = $grossDebit + $adjustedAmount;
+                }
+
+                $credit = $val($record->amount_paid);
 
                 $record->document_balance = $record->running_balance; // for display document real balance
                 // Update running balance
-                $runningBalances[$key] += $debit - $credit;
+                $runningBalances[$key] += $netDebit - $credit;
                 $record->running_balance = $runningBalances[$key];
-                $record->debit_amount = $debit;  // Optional: store for display
+                
+                // Store Net for display (Backend calculated)
+                $record->debit_amount = $netDebit;  
                 $record->credit_amount = $credit; // Optional: store for display
 
                 return $record;
@@ -108,7 +180,7 @@ class CustomerLedgerController extends Controller
 
             // Calculate running balance per customer and type
             $runningBalances = [];
-            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $floatingAmounts, $paymentForwarded) {
+            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $floatingAmounts, $paymentForwarded, $adjustmentsGrouped) {
                 $key = $record->customer_code;
 
                 // Initialize running balance for this customer+type if not exists
@@ -122,19 +194,50 @@ class CustomerLedgerController extends Controller
                     ->first()
                     ->total_floating ?? 0;
 
-                // Calculate debit and credit based on transaction type
-                $debit = ($record->amount ?? 0)
-                    - ($record->shrinkage ?? 0)
-                    + ($record->overage ?? 0)
-                    - ($record->return ?? 0)
-                    + ($record->adjusted_amount ?? 0);
-                $credit = min(($record->amount_paid) + ($floatingAmount), $debit);
+                // Helper to safely parse float from string with commas
+                $val = function($v) {
+                    return (float) str_replace(',', '', (string)($v ?? 0));
+                };
 
-                $record->document_balance = $record->running_balance - $floatingAmount; // for display document real balance
+                // Calculate debit and credit based on transaction type
+                $amount = $val($record->amount);
+                $shrinkage = $val($record->shrinkage);
+                $overage = $val($record->overage);
+                $return = $val($record->return);
+                
+                $applyTo = $record->type;
+                if ($record->type === 'BG') {
+                    $applyTo = 'Beginning Balance';
+                } elseif ($record->type === 'Charge Invoice') {
+                    $applyTo = 'Other Income';
+                }
+                
+                $adjustedAmount = $adjustmentsGrouped
+                        ->get($record->invoice_number, collect())
+                        ->get($applyTo, collect())
+                        ->first()
+                        ->total_adjustment ?? 0;
+
+                $grossDebit = $amount - $shrinkage + $overage - $return;
+
+                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
+                    // For BG, amount is treated as Net.
+                    $netDebit = $grossDebit;
+                } else {
+                    $netDebit = $grossDebit + $adjustedAmount;
+                }
+
+                $credit = $val($record->amount_paid) + $floatingAmount;
+                $record->amount_paid = $credit;
+
+                // for display document real balance
+                $record->document_balance = $record->running_balance - $floatingAmount;
+                
                 // Update running balance
-                $runningBalances[$key] += $debit - $credit;
+                $runningBalances[$key] += $netDebit - $credit;
                 $record->running_balance = $runningBalances[$key];
-                $record->debit_amount = $debit;  // Optional: store for display
+                
+                $record->debit_amount = $netDebit;  // Store Net for display
                 $record->amount_paid = $credit; // Optional: store for display
 
                 return $record;
@@ -150,7 +253,7 @@ class CustomerLedgerController extends Controller
 
             // Calculate running balance per customer and type
             $runningBalances = [];
-            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances) {
+            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $adjustmentsGrouped) {
                 $key = $record->customer_code;
 
                 // Initialize running balance for this customer+type if not exists
@@ -158,19 +261,46 @@ class CustomerLedgerController extends Controller
                     $runningBalances[$key] = 0;
                 }
 
+                // Helper to safely parse float from string with commas
+                $val = function($v) {
+                    return (float) str_replace(',', '', (string)($v ?? 0));
+                };
+
                 // Calculate debit and credit based on transaction type
-                $debit = ($record->amount ?? 0)
-                    - ($record->shrinkage ?? 0)
-                    + ($record->overage ?? 0)
-                    - ($record->return ?? 0)
-                    + ($record->adjusted_amount ?? 0);
-                $credit = $record->amount_paid;
+                $amount = $val($record->amount);
+                $shrinkage = $val($record->shrinkage);
+                $overage = $val($record->overage);
+                $return = $val($record->return);
+                
+                $applyTo = $record->type;
+                if ($record->type === 'BG') {
+                    $applyTo = 'Beginning Balance';
+                } elseif ($record->type === 'Charge Invoice') {
+                    $applyTo = 'Other Income';
+                }
+
+                $adjustedAmount = $adjustmentsGrouped
+                        ->get($record->invoice_number, collect())
+                        ->get($applyTo, collect())
+                        ->first()
+                        ->total_adjustment ?? 0;
+
+                $grossDebit = $amount - $shrinkage + $overage - $return;
+
+                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
+                    // For BG, amount is treated as Net.
+                    $netDebit = $grossDebit;
+                } else {
+                    $netDebit = $grossDebit + $adjustedAmount;
+                }
+
+                $credit = $val($record->amount_paid);
 
                 $record->document_balance = $record->running_balance; // for display document real balance
                 // Update running balance
-                $runningBalances[$key] += $debit - $credit;
+                $runningBalances[$key] += $netDebit - $credit;
                 $record->running_balance = $runningBalances[$key];
-                $record->debit_amount = $debit;  // Optional: store for display
+                $record->debit_amount = $netDebit;  // Store Net for display
                 $record->credit_amount = $credit; // Optional: store for display
 
                 return $record;
@@ -228,7 +358,7 @@ class CustomerLedgerController extends Controller
                     'transaction_no' => $beginningBalance->beginningbalance_no,
                     'description' => 'Beginning Balance',
                     'type' => 'Initial',
-                    'debit' => $amount,
+                    'debit' => $amount ,
                     'credit' => 0,
                     'balance' => $runningBalance,
                 ];
@@ -258,8 +388,15 @@ class CustomerLedgerController extends Controller
         }
 
         // 2. Get Adjustments
+        $applyTo = $type;
+        if ($type === 'BG') {
+            $applyTo = 'Beginning Balance';
+        } elseif ($type === 'Charge Invoice') {
+            $applyTo = 'Other Income';
+        }
+
         $adjustments = Adjustment::where('invoice_no', $invoiceNo)
-            ->where('apply_to', $type === 'BG' ? 'Beginning Balance' : $type)
+            ->where('apply_to', $applyTo)
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -345,7 +482,11 @@ class CustomerLedgerController extends Controller
             ]);
 
             // Laravel will automatically add timestamps
-            $ledger = CustomerLedger::create($validated);
+            // Force the connection to be 'tenant' if bu_id was provided (handled by middleware)
+            $ledger = new CustomerLedger();
+            $ledger->setConnection('tenant'); // Ensure it uses the tenant connection
+            $ledger->fill($validated);
+            $ledger->save();
 
             event(new NewCreated('customerledger'));
 

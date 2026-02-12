@@ -113,7 +113,7 @@ class ItemController extends Controller
     {
         try {
             // Change the ip address to dynamic based on the server ip address
-            $response = Http::get('http://172.16.43.148/centralized_masterfile/masterfileController/ItemsController/fetchItems?fetchAll=true'); // this is for local
+            $response = Http::get('http://172.16.18.27/centralized_masterfile/masterfileController/ItemsController/fetchItems?fetchAll=true'); // this is for local
             if (!$response->successful()) {
                 return response()->json(['error' => 'Failed to fetch items from API'], 500);
             }

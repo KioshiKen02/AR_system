@@ -549,14 +549,7 @@
                             }}
                         </td>
                         <td class="px-3 py-1 text-right">
-                            {{
-                                customerledger.amount_paid >
-                                calculateNetAmount(customerledger)
-                                    ? formatCurrency(
-                                          calculateNetAmount(customerledger)
-                                      )
-                                    : formatCurrency(customerledger.amount_paid)
-                            }}
+                            {{ formatCurrency(customerledger.amount_paid) }}
                         </td>
                         <td class="px-3 py-1 text-right">
                             {{ formatCurrency(customerledger.running_balance) }}
@@ -779,22 +772,7 @@ const formatDate = (dateString) => {
 };
 
 const calculateNetAmount = (ledger) => {
-    if (ledger.type === "Sales Invoice") {
-        const amount = parseFloat(ledger.amount) || 0;
-        const returnamount = parseFloat(ledger.return) || 0;
-        const overage = parseFloat(ledger.overage) || 0;
-        const shrinkage = parseFloat(ledger.shrinkage) || 0;
-        const adjustment = parseFloat(ledger.adjusted_amount) || 0;
-        const temptot = amount - shrinkage + overage - returnamount;
-        return parseFloat((temptot + adjustment).toFixed(2)); // Since adjustment is already negative
-    } else if (ledger.type === "BG") {
-        // For Beginning Balance, DEBIT column should show the original amount
-        return parseFloat(ledger.amount) || 0;
-    } else {
-        const amount = parseFloat(ledger.amount) || 0;
-        const adjustment = parseFloat(ledger.adjusted_amount) || 0;
-        return parseFloat((amount + adjustment).toFixed(2)); // Since adjustment is already negative
-    }
+    return parseFloat(ledger.debit_amount || 0);
 };
 
 const formatCurrency = (amount) => {

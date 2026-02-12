@@ -393,15 +393,13 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
 });
 
 
-Route::middleware(['api', 'throttle:10,1'])->group(function () {
-    Route::prefix('api/{tenant}')->group(function () {
-        Route::get('/cash-in-bank', [CashInBankController::class, 'cashInBankListAPI']);
-        Route::get('/getlatestpaymentno', [PaymentController::class, 'latest']);
-        Route::post('/insertcustomerledger', [CustomerLedgerController::class, 'store']);
-        Route::put('/updatecustomerledger', [CustomerLedgerController::class, 'update']);
-        Route::post('/insertpayment', [PaymentController::class, 'storePaymentAPI']);
-        Route::get('/get-customerledger-list', [CustomerLedgerController::class, 'getCustomerLedgerList']);
-    });
+Route::middleware(['api', 'throttle:10,1', \App\Http\Middleware\SetTenantDatabase::class])->prefix('api')->group(function () {
+    Route::get('/cash-in-bank', [CashInBankController::class, 'cashInBankListAPI']);
+    Route::get('/getlatestpaymentno', [PaymentController::class, 'latest']);
+    Route::post('/insertcustomerledger', [CustomerLedgerController::class, 'store']);
+    Route::put('/updatecustomerledger', [CustomerLedgerController::class, 'update']);
+    Route::post('/insertpayment', [PaymentController::class, 'storePaymentAPI']);
+    Route::get('/get-customerledger-list', [CustomerLedgerController::class, 'getCustomerLedgerList']);
 });
 // Route::middleware('api', 'throttle:10,1')->group(function () use ($baseUrl) {
 //     $appName = config('app.name');

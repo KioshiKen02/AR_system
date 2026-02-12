@@ -229,24 +229,9 @@ watch(
                 form.neg_adjustment = formatCurrency(negAdj);
 
                 // Use calculated total payments only for BG/Beginning Balance types
-                if (form.type === 'BG' || form.type === 'Beginning Balance') {
-                    form.amount_paid = formatCurrency(calculatedTotalPayments);
-                // } else {
-                //     // For other types, fallback to the prop value or keep calculated if desired.
-                //     // If the user implies that ONLY BG had computation issues, we can default others to props.
-                //     // However, usually calculated from details is more accurate if details exist.
-                //     // But to strictly follow "if document type is BG... computation was not properly total",
-                //     // it implies we should trust the calculated one for BG.
-                //     // Let's use the calculated one for BG, and maybe the prop for others?
-                //     // Actually, if details are fetched, sum of payments in details IS the total payment.
-                //     // But if the user insists on the condition:
-                //     form.amount_paid = formatCurrency(calculatedTotalPayments); 
-                }
-                
-                // Wait, the user said "computation of payment was not properly total. It shold still use the if document type is BG or type is BG".
-                // This suggests the PREVIOUS logic (which had the IF block) was actually desired for some reason, 
-                // OR that my removal of the IF block caused an issue?
-                // Ah, maybe for non-BG types, the "Total Payments" should just be the prop value because the details might be empty or handled differently?
+                // if (form.type === 'BG' || form.type === 'Beginning Balance') {
+                //     form.amount_paid = formatCurrency(calculatedTotalPayments);
+                // }
                 
                 if (form.type === 'BG' || form.type === 'Beginning Balance') {
                      form.amount_paid = formatCurrency(calculatedTotalPayments);
@@ -255,8 +240,16 @@ watch(
                 }
 
                 // Running Balance Computation
-                
-                const beginningAmount = parseFloat(props.selected.amount || 0);
+                let beginningAmount = parseFloat(props.selected.amount || 0);
+
+                if (form.type === 'BG' || form.type === 'Beginning Balance') {
+                    beginningAmount = parseFloat(props.selected.amount || 0) - posAdj + negAdj;
+                    form.amount = formatCurrency(beginningAmount);
+                } else {
+                    beginningAmount = parseFloat(props.selected.amount || 0)
+                     form.amount = formatCurrency(beginningAmount);
+                }
+
                 const overage = parseFloat(props.selected.overage || 0);
                 const shrinkage = parseFloat(props.selected.shrinkage || 0);
                 const returnAmount = parseFloat(props.selected.return || 0);
@@ -271,8 +264,7 @@ watch(
                 }
                 
                 // Formula: (Beginning + Pos Adj - Neg Adj - Overage - Shrinkage - Return - WHT)
-                
-                const adjustedAmountVal = beginningAmount + posAdj - negAdj - overage - shrinkage - returnAmount - whtAmount;
+                const adjustedAmountVal = beginningAmount - overage - shrinkage - returnAmount - whtAmount + posAdj - negAdj;
                 form.adjusted_amount = formatCurrency(adjustedAmountVal);
                 
                 const runningBalanceVal = adjustedAmountVal - totalPaymentsVal;
