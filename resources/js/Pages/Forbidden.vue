@@ -28,7 +28,7 @@
 
                 <div class="flex flex-col sm:flex-row gap-4">
                     <Link
-                        :href="route('landing', { tenant: page.props.tenant || 'arsystem' })"
+                        :href="route('dashboard', { tenant: page.props.tenant || 'arsystem' })"
                         class="px-6 py-3 rounded-md font-medium transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden bg-[var(--color-primary)] text-white disabled:opacity-70 disabled:cursor-not-allowed group hover:-translate-y-0.5"
                     >
                         <div
