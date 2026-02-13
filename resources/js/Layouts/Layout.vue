@@ -766,7 +766,11 @@ onMounted(async () => {
     });
 });
 
+const isLoggingOut = ref(false);
+
 const markUserOffline = () => {
+    if (isLoggingOut.value) return;
+
     const url = route("user.markOffline", { tenant: page.props.tenant });
     const data = new FormData();
     data.append(
@@ -1018,6 +1022,7 @@ const handleLinkClick = (
 };
 
 const handleLogout = (subUser) => {
+    isLoggingOut.value = true;
     // pageTitle.value = "";
     localStorage.removeItem("activeUserMenu");
     localStorage.removeItem("activeUserSubmenu");
