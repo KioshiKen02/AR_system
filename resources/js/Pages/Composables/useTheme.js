@@ -19,7 +19,16 @@ export default function useTheme() {
 
         const props = getProps();
         if (props.auth?.user) {
-            await axios.post(route("setTheme", { tenant: page.props.tenant }), { theme: newTheme });
+            try {
+                await axios.post(route("setTheme", { tenant: page.props.tenant }), { theme: newTheme });
+            } catch (error) {
+                if (error.response?.status === 422) {
+                    console.warn(`Invalid theme "${newTheme}" rejected by server. Reverting to Light.`);
+                    if (newTheme !== 'Light') {
+                        setTheme('Light');
+                    }
+                }
+            }
         }
     };
 

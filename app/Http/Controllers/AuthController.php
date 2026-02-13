@@ -79,13 +79,6 @@ class AuthController extends Controller
                 $user = Auth::user();
                 $accessibleTenants = $user->appSettings;
                 
-                // If user has access to multiple tenants, we might want to redirect them to a tenant selection page
-                // OR default to the first one/primary one.
-                // For now, let's keep the logic simple: 
-                // 1. If user has app_setting_id (legacy/primary), use that.
-                // 2. If not, check if they have any accessible tenants and use the first one.
-                // 3. Fallback to config('app.name') based logic.
-                
                 $redirectUrl = null;
                 
                 // Determine the target tenant
@@ -96,16 +89,6 @@ class AuthController extends Controller
                 }
                 
                 if ($targetSetting && $targetSetting->is_active) {
-                    // Construct URL from base_url or app_name
-                    // base_url might be full URL or just the prefix slug? 
-                    // Looking at AppSetting model, it has base_url.
-                    // Let's assume base_url is the tenant slug for now, or we derive it.
-                    // Actually, the previous code used: $baseUrl = $userAppSetting->base_url . '/dashboard';
-                    // Let's stick to that if base_url is populated with the slug (e.g. 'feedmill')
-                    
-                    // If base_url is full url (http://...), we need to parse it? 
-                    // Or is it just 'feedmill'?
-                    // Based on migrations/seeds, it likely holds the slug.
                     
                     $redirectUrl = $targetSetting->base_url . '/dashboard';
                 } else {
