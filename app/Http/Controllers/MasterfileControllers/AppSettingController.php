@@ -11,6 +11,10 @@ class AppSettingController extends Controller
 {
     public function index(Request $request)
     {
+        if ($request->user()->role !== 'Admin') {
+            abort(403);
+        }
+
         $appSettings = AppSetting::on('mysql') // Force use of mysql connection
             ->when($request->search, function ($query, $search) {
                 $query->where('app_name', 'like', "%{$search}%")
@@ -28,6 +32,10 @@ class AppSettingController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->user()->role !== 'Admin') {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'app_name' => 'required|string|unique:mysql.app_settings,app_name',
             'base_url' => 'required|string',
@@ -52,6 +60,10 @@ class AppSettingController extends Controller
 
     public function update(Request $request, $id)
     {
+        if ($request->user()->role !== 'Admin') {
+            abort(403);
+        }
+
         // Debugging
         // The first route parameter is actually the tenant prefix (e.g. 'feedmill') because of the route group.
         // Route::prefix($baseUrl)->whereIn('tenant', ...)->group(...)
@@ -94,6 +106,10 @@ class AppSettingController extends Controller
 
     public function destroy(Request $request, $id)
     {
+        if ($request->user()->role !== 'Admin') {
+            abort(403);
+        }
+
         $targetId = $request->route('appSetting');
         $appSetting = AppSetting::on('mysql')->find($targetId);
 

@@ -920,12 +920,15 @@ const menus = ref([
     },
 ]);
 
-const user_menus = ref([
+const user_menus = computed(() => [
     {
         subUserMenus: [
             { name: "My Profile", link: route("profile", { tenant: page.props.tenant }) },
-            { name: "User Masterfile", link: route("user-masterfile.index", { tenant: page.props.tenant }) }, // New
-            { name: "Database Setup", link: route("app-settings.index", { tenant: page.props.tenant }) }, // Moved from Sidebar?
+            // Only show Masterfile and DB Setup to Admin
+            ...(page.props.auth.user.role === 'Admin' ? [
+                { name: "User Masterfile", link: route("user-masterfile.index", { tenant: page.props.tenant }) },
+                { name: "Database Setup", link: route("app-settings.index", { tenant: page.props.tenant }) },
+            ] : []),
             { name: "Logout", link: route("logout", { tenant: page.props.tenant }) },
         ],
     },
