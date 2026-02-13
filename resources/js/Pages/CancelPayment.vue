@@ -276,8 +276,8 @@ import { router } from "@inertiajs/vue3";
 import { debounce } from "lodash";
 import ToastAlert from "./Components/ToastAlert.vue";
 import { mdiClose, mdiEye, mdiMagnify, mdiPlus } from "@mdi/js";
-import AddCancelPayment from "../Modals/UtilityModals/AddCancelPayment.vue";
-import ViewCancelPayment from "../Modals/UtilityModals/ViewCancelPayment.vue";
+import AddCancelPayment from "@/Modals/UtilityModals/AddCancelPayment.vue";
+import ViewCancelPayment from "@/Modals/UtilityModals/ViewCancelPayment.vue";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import usePermissions from "./Composables/usePermissions";
 

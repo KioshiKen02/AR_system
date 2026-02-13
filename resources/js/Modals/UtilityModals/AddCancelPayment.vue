@@ -798,10 +798,10 @@
 
 <script setup>
 import { computed, nextTick, ref, watch, onMounted, onUnmounted } from "vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
-import CustomerListModal from "../TransactionModals/CustomerListModal.vue";
+import CustomerListModal from "@/Modals/TransactionModals/CustomerListModal.vue";
 import DropdownInput from "../../Pages/Components/DropdownInput.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 
@@ -877,6 +877,8 @@ const handleSelectedCustomer = (selectedData) => {
 ///////////////// FETCH PAYMENT DETAILS ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 const paymentDetails = ref([]);
 
+const page = usePage();
+
 const fetchPaymentDetails = async (customerCode) => {
     isLoading.value = true;
     try {
@@ -884,14 +886,14 @@ const fetchPaymentDetails = async (customerCode) => {
         let params = {};
 
         if (cancellation_type.value === "Document No") {
-            apiUrl = route("payment_list");
+            apiUrl = route("payment_list", { tenant: page.props.tenant });
             params = {
                 customer_code: customerCode,
                 document_no: form.document_no,
                 type: form.type,
             };
         } else if (cancellation_type.value === "Payment No") {
-            apiUrl = route("documentspaid_list");
+            apiUrl = route("documentspaid_list", { tenant: page.props.tenant });
             params = { payment_no: form.payment_no };
         }
 
@@ -1025,7 +1027,7 @@ const submit = () => {
             amount: payment.amount_paid,
             remarks: payment.remarks,
         }));
-        form.post(route("cancel-payment"), {
+        form.post(route("cancel-payment", { tenant: page.props.tenant }), {
             onSuccess: () => {
                 form.reset();
                 paymentDetails.value = [];
@@ -1048,7 +1050,7 @@ const submit = () => {
             remarks: payment.remarks,
         }));
 
-        form.post(route("cancel-payment-two"), {
+        form.post(route("cancel-payment-two", { tenant: page.props.tenant }), {
             onSuccess: () => {
                 form.reset();
                 paymentDetails.value = [];

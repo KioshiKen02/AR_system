@@ -41,6 +41,8 @@ class GeneratePdfJob implements ShouldQueue
 
     public function handle()
     {
+        ini_set('memory_limit', '1024M');
+
         if ($this->appSettingId) {
             $setting = \App\Models\AppSetting::find($this->appSettingId);
 
@@ -223,63 +225,52 @@ class GeneratePdfJob implements ShouldQueue
             $totalRows,
             &$lastProgress
         ) {
-            $invoices = $invoicesChunk->groupBy(function ($invoice) {
-                return $invoice->customer_code . '|' . $invoice->name;
-            });
-
-            foreach ($invoices as $customerKey => $customerInvoices) {
-                [$customerCode, $customerName] = explode('|', $customerKey);
-                $existing = collect($groupedData)->firstWhere('customer_code', $customerCode);
-
-                $customerData = $existing ?? [
-                    'customer_code' => $customerCode,
-                    'customer_name' => $customerName,
-                    'invoices' => [],
-                    'customer_cash_total' => 0,
-                    'customer_ar_total' => 0
-                ];
-
-                foreach ($customerInvoices as $invoice) {
-                    $items = $invoice->items->map(fn($item) => [
-                        'item_code' => $item->item_code,
-                        'item_name' => $item->item_name,
-                    ])->toArray();
-
-                    $cashAmount = $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0;
-                    $arAmount = $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0;
-
-                    $customerData['invoices'][] = [
-                        'invoice_no' => $invoice->invoice_no,
-                        'transaction_date' => $this->validatedData['date_type'] === 'Receipt Date'
-                            ? $invoice->receipt_date
-                            : $invoice->transaction_date,
-                        'reference_no' => $invoice->reference_no,
-                        'particular' => $invoice->particular,
-                        'items' => $items,
-                        'cash_amount' => $cashAmount,
-                        'ar_amount' => $arAmount,
+            foreach ($invoicesChunk as $invoice) {
+                $customerCode = $invoice->customer_code;
+                
+                if (!isset($groupedData[$customerCode])) {
+                    $groupedData[$customerCode] = [
+                        'customer_code' => $customerCode,
+                        'customer_name' => $invoice->name,
+                        'invoices' => [],
+                        'customer_cash_total' => 0,
+                        'customer_ar_total' => 0
                     ];
-
-                    $customerData['customer_cash_total'] += $cashAmount;
-                    $customerData['customer_ar_total'] += $arAmount;
-
-                    $processedRows++;
-                    $progress = intval(($processedRows / $totalRows) * 100);
-
-                    if ($progress > $lastProgress) {
-                        $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
-                        $lastProgress = $progress;
-                    }
                 }
 
-                $grandTotalCash += $customerData['customer_cash_total'];
-                $grandTotalAR += $customerData['customer_ar_total'];
+                $items = $invoice->items->map(fn($item) => [
+                    'item_code' => $item->item_code,
+                    'item_name' => $item->item_name,
+                ])->toArray();
 
-                $groupedData = collect($groupedData)
-                    ->reject(fn($d) => $d['customer_code'] === $customerCode)
-                    ->values()
-                    ->toArray();
-                $groupedData[] = $customerData;
+                $cashAmount = $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0;
+                $arAmount = $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0;
+
+                $groupedData[$customerCode]['invoices'][] = [
+                    'invoice_no' => $invoice->invoice_no,
+                    'transaction_date' => $this->validatedData['date_type'] === 'Receipt Date'
+                        ? $invoice->receipt_date
+                        : $invoice->transaction_date,
+                    'reference_no' => $invoice->reference_no,
+                    'particular' => $invoice->particular,
+                    'items' => $items,
+                    'cash_amount' => $cashAmount,
+                    'ar_amount' => $arAmount,
+                ];
+
+                $groupedData[$customerCode]['customer_cash_total'] += $cashAmount;
+                $groupedData[$customerCode]['customer_ar_total'] += $arAmount;
+
+                $grandTotalCash += $cashAmount;
+                $grandTotalAR += $arAmount;
+
+                $processedRows++;
+                $progress = intval(($processedRows / $totalRows) * 100);
+
+                if ($progress > $lastProgress) {
+                    $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
+                    $lastProgress = $progress;
+                }
             }
         });
 
@@ -292,7 +283,7 @@ class GeneratePdfJob implements ShouldQueue
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
-            'groupedData' => $groupedData,
+            'groupedData' => array_values($groupedData),
             'preparedBy' => $this->preparedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
@@ -318,6 +309,12 @@ class GeneratePdfJob implements ShouldQueue
 
         $this->updateProgress(100, 'Report Ready!');
 
+        // Clear memory before broadcasting
+        unset($pdf, $data, $groupedData);
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
+
         try {
             broadcast(new PdfGenerated(
                 $this->userId,
@@ -330,11 +327,23 @@ class GeneratePdfJob implements ShouldQueue
         }
     }
 
-    protected function broadcastData(array $data)
+    protected function broadcastData(array $data, ?string $pdfUrl = null)
     {
-        $this->updateProgress(100, 'Data Ready for Excel Generation!');
+        $this->updateProgress(100, 'Report Ready!');
 
         try {
+            // If PDF URL is provided, we broadcast the PdfGenerated event
+            if ($pdfUrl) {
+                broadcast(new PdfGenerated(
+                    $this->userId,
+                    $this->filename,
+                    $pdfUrl,
+                    $this->channel
+                ));
+                return;
+            }
+
+            // Otherwise, we proceed with Excel data broadcasting logic (if used elsewhere)
             // Save data to a temporary JSON file to avoid Pusher payload limits
             $filename = 'excel_data_' . Str::random(40) . '.json';
             Storage::disk('public')->put("temp/{$filename}", json_encode($data));
@@ -343,6 +352,12 @@ class GeneratePdfJob implements ShouldQueue
             // Fix URL if it's missing the domain (common in some setups)
             if (!Str::startsWith($url, ['http://', 'https://'])) {
                 $url = config('app.url') . $url;
+            }
+
+            // Clear huge data from memory before broadcasting
+            unset($data);
+            if (function_exists('gc_collect_cycles')) {
+                gc_collect_cycles();
             }
 
             broadcast(new PdfGenerated(
@@ -354,8 +369,8 @@ class GeneratePdfJob implements ShouldQueue
             ));
         } catch (\Exception $e) {
             Log::error('Failed to save Excel data to file: ' . $e->getMessage());
-            // Fallback to old method if file save fails (though unlikely to help if payload is huge)
-            $this->broadcastData($data);
+            // Do NOT fallback to broadcasting raw data if it's huge
+            // $this->broadcastData($data); 
         }
     }
 
@@ -401,63 +416,52 @@ class GeneratePdfJob implements ShouldQueue
             $totalRows,
             &$lastProgress
         ) {
-            $invoices = $invoicesChunk->groupBy(function ($invoice) {
-                return $invoice->customer_code . '|' . $invoice->name;
-            });
-
-            foreach ($invoices as $customerKey => $customerInvoices) {
-                [$customerCode, $customerName] = explode('|', $customerKey);
-                $existing = collect($groupedData)->firstWhere('customer_code', $customerCode);
-
-                $customerData = $existing ?? [
-                    'customer_code' => $customerCode,
-                    'customer_name' => $customerName,
-                    'invoices' => [],
-                    'customer_cash_total' => 0,
-                    'customer_ar_total' => 0
-                ];
-
-                foreach ($customerInvoices as $invoice) {
-                    $items = $invoice->items->map(fn($item) => [
-                        'item_code' => $item->item_code,
-                        'item_name' => $item->item_name,
-                    ])->toArray();
-
-                    $cashAmount = $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0;
-                    $arAmount = $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0;
-
-                    $customerData['invoices'][] = [
-                        'invoice_no' => $invoice->invoice_no,
-                        'transaction_date' => $this->validatedData['date_type'] === 'Receipt Date'
-                            ? $invoice->receipt_date
-                            : $invoice->transaction_date,
-                        'reference_no' => $invoice->reference_no,
-                        'particular' => $invoice->particular,
-                        'items' => $items,
-                        'cash_amount' => $cashAmount,
-                        'ar_amount' => $arAmount,
+            foreach ($invoicesChunk as $invoice) {
+                $customerCode = $invoice->customer_code;
+                
+                if (!isset($groupedData[$customerCode])) {
+                    $groupedData[$customerCode] = [
+                        'customer_code' => $customerCode,
+                        'customer_name' => $invoice->name,
+                        'invoices' => [],
+                        'customer_cash_total' => 0,
+                        'customer_ar_total' => 0
                     ];
-
-                    $customerData['customer_cash_total'] += $cashAmount;
-                    $customerData['customer_ar_total'] += $arAmount;
-
-                    $processedRows++;
-                    $progress = intval(($processedRows / $totalRows) * 100);
-
-                    if ($progress > $lastProgress) {
-                        $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
-                        $lastProgress = $progress;
-                    }
                 }
 
-                $grandTotalCash += $customerData['customer_cash_total'];
-                $grandTotalAR += $customerData['customer_ar_total'];
+                $items = $invoice->items->map(fn($item) => [
+                    'item_code' => $item->item_code,
+                    'item_name' => $item->item_name,
+                ])->toArray();
 
-                $groupedData = collect($groupedData)
-                    ->reject(fn($d) => $d['customer_code'] === $customerCode)
-                    ->values()
-                    ->toArray();
-                $groupedData[] = $customerData;
+                $cashAmount = $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0;
+                $arAmount = $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0;
+
+                $groupedData[$customerCode]['invoices'][] = [
+                    'invoice_no' => $invoice->invoice_no,
+                    'transaction_date' => $this->validatedData['date_type'] === 'Receipt Date'
+                        ? $invoice->receipt_date
+                        : $invoice->transaction_date,
+                    'reference_no' => $invoice->reference_no,
+                    'particular' => $invoice->particular,
+                    'items' => $items,
+                    'cash_amount' => $cashAmount,
+                    'ar_amount' => $arAmount,
+                ];
+
+                $groupedData[$customerCode]['customer_cash_total'] += $cashAmount;
+                $groupedData[$customerCode]['customer_ar_total'] += $arAmount;
+
+                $grandTotalCash += $cashAmount;
+                $grandTotalAR += $arAmount;
+
+                $processedRows++;
+                $progress = intval(($processedRows / $totalRows) * 100);
+
+                if ($progress > $lastProgress) {
+                    $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
+                    $lastProgress = $progress;
+                }
             }
         });
 
@@ -588,6 +592,12 @@ class GeneratePdfJob implements ShouldQueue
 
         $this->updateProgress(100, 'Report Ready!');
 
+        // Clear memory before broadcasting
+        unset($pdf, $data, $flatInvoices);
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
+
         try {
             broadcast(new PdfGenerated(
                 $this->userId,
@@ -693,6 +703,10 @@ class GeneratePdfJob implements ShouldQueue
     protected function generateAdjustmentProoflist()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
+        
+        // Increase memory limit for this job
+        ini_set('memory_limit', '1024M');
+        
         // Format date range
         $formattedStartDate = date('m/d/Y', strtotime($this->validatedData['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($this->validatedData['end_date']));
@@ -721,54 +735,45 @@ class GeneratePdfJob implements ShouldQueue
         $customerOverallAmountTotal = 0;
 
         $query->chunkById(500, function ($adjustmentsChunk) use (&$groupedData, &$customerOverallAmountTotal, &$totalRows, &$processedRows, &$lastProgress) {
-            $adjustments = $adjustmentsChunk->groupBy(function ($adjustment) {
-                return $adjustment->customer_code . '|' . $adjustment->name;
-            });
+            foreach ($adjustmentsChunk as $adjustment) {
+                $customerCode = $adjustment->customer_code;
+                $customerName = $adjustment->name;
 
-            foreach ($adjustments as $customerKey => $customerAdjustments) {
-                [$customerCode, $customerName] = explode('|', $customerKey);
-                $customerAmountTotal = 0;
-
-                $existing = collect($groupedData)->firstWhere('customer_code', $customerCode);
-
-                $customerData = $existing ?? [
-                    'customer_code' => $customerCode,
-                    'customer_name' => $customerName,
-                    'adjustments' => [],
-                    'customerAmountTotal' => 0
-                ];
-
-                foreach ($customerAdjustments as $adjustment) {
-                    $customerAmountTotal += $adjustment->amount;
-
-                    $customerData['adjustments'][] = [
-                        'adjustment_no' => $adjustment->adjustment_no,
-                        'transaction_date' => $this->validatedData['date_type'] === 'Receipt Date'
-                            ? $adjustment->receipt_date
-                            : $adjustment->transaction_date,
-                        'type' => $adjustment->type,
-                        'apply_to' => $adjustment->apply_to,
-                        'invoice_no' => $adjustment->invoice_no,
-                        'adjustment_reason' => $adjustment->adjustment_reason,
-                        'particulars' => $adjustment->particulars,
-                        'amount' => $adjustment->amount,
-                        'balance' => $adjustment->balance,
+                if (!isset($groupedData[$customerCode])) {
+                    $groupedData[$customerCode] = [
+                        'customer_code' => $customerCode,
+                        'customer_name' => $customerName,
+                        'adjustments' => [],
+                        'customerAmountTotal' => 0
                     ];
-
-                    $processedRows++;
-                    $progress = intval(($processedRows / $totalRows) * 100);
-
-                    if ($progress > $lastProgress) {
-                        $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
-                        $lastProgress = $progress;
-                    }
                 }
 
-                $customerData['customerAmountTotal'] += $customerAmountTotal;
+                $customerAmountTotal = $adjustment->amount;
+
+                $groupedData[$customerCode]['adjustments'][] = [
+                    'adjustment_no' => $adjustment->adjustment_no,
+                    'transaction_date' => $this->validatedData['date_type'] === 'Receipt Date'
+                        ? $adjustment->receipt_date
+                        : $adjustment->transaction_date,
+                    'type' => $adjustment->type,
+                    'apply_to' => $adjustment->apply_to,
+                    'invoice_no' => $adjustment->invoice_no,
+                    'adjustment_reason' => $adjustment->adjustment_reason,
+                    'particulars' => $adjustment->particulars,
+                    'amount' => $adjustment->amount,
+                    'balance' => $adjustment->balance,
+                ];
+
+                $groupedData[$customerCode]['customerAmountTotal'] += $customerAmountTotal;
                 $customerOverallAmountTotal += $customerAmountTotal;
 
-                $groupedData = collect($groupedData)->reject(fn($d) => $d['customer_code'] === $customerCode)->values()->toArray();
-                $groupedData[] = $customerData;
+                $processedRows++;
+                $progress = intval(($processedRows / $totalRows) * 100);
+
+                if ($progress > $lastProgress) {
+                    $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
+                    $lastProgress = $progress;
+                }
             }
         });
 
@@ -778,7 +783,7 @@ class GeneratePdfJob implements ShouldQueue
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
-            'groupedData' => $groupedData,
+            'groupedData' => array_values($groupedData),
             'preparedBy' => $this->preparedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
@@ -803,6 +808,12 @@ class GeneratePdfJob implements ShouldQueue
 
         $this->updateProgress(100, 'Report Ready!');
 
+        // Clear memory before broadcasting
+        unset($pdf, $data, $groupedData);
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
+
         try {
             broadcast(new PdfGenerated(
                 $this->userId,
@@ -818,6 +829,10 @@ class GeneratePdfJob implements ShouldQueue
     protected function generateAdjustmentProoflistDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
+        
+        // Increase memory limit for this job
+        ini_set('memory_limit', '1024M');
+
         // Format date range
         $formattedStartDate = date('m/d/Y', strtotime($this->validatedData['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($this->validatedData['end_date']));
@@ -846,54 +861,45 @@ class GeneratePdfJob implements ShouldQueue
         $customerOverallAmountTotal = 0;
 
         $query->chunkById(500, function ($adjustmentsChunk) use (&$groupedData, &$customerOverallAmountTotal, &$totalRows, &$processedRows, &$lastProgress) {
-            $adjustments = $adjustmentsChunk->groupBy(function ($adjustment) {
-                return $adjustment->customer_code . '|' . $adjustment->name;
-            });
+            foreach ($adjustmentsChunk as $adjustment) {
+                $customerCode = $adjustment->customer_code;
+                $customerName = $adjustment->name;
 
-            foreach ($adjustments as $customerKey => $customerAdjustments) {
-                [$customerCode, $customerName] = explode('|', $customerKey);
-                $customerAmountTotal = 0;
-
-                $existing = collect($groupedData)->firstWhere('customer_code', $customerCode);
-
-                $customerData = $existing ?? [
-                    'customer_code' => $customerCode,
-                    'customer_name' => $customerName,
-                    'adjustments' => [],
-                    'customerAmountTotal' => 0
-                ];
-
-                foreach ($customerAdjustments as $adjustment) {
-                    $customerAmountTotal += $adjustment->amount;
-
-                    $customerData['adjustments'][] = [
-                        'adjustment_no' => $adjustment->adjustment_no,
-                        'transaction_date' => $this->validatedData['date_type'] === 'Receipt Date'
-                            ? $adjustment->receipt_date
-                            : $adjustment->transaction_date,
-                        'type' => $adjustment->type,
-                        'apply_to' => $adjustment->apply_to,
-                        'invoice_no' => $adjustment->invoice_no,
-                        'adjustment_reason' => $adjustment->adjustment_reason,
-                        'particulars' => $adjustment->particulars,
-                        'amount' => $adjustment->amount,
-                        'balance' => $adjustment->balance,
+                if (!isset($groupedData[$customerCode])) {
+                    $groupedData[$customerCode] = [
+                        'customer_code' => $customerCode,
+                        'customer_name' => $customerName,
+                        'adjustments' => [],
+                        'customerAmountTotal' => 0
                     ];
-
-                    $processedRows++;
-                    $progress = intval(($processedRows / $totalRows) * 100);
-
-                    if ($progress > $lastProgress) {
-                        $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
-                        $lastProgress = $progress;
-                    }
                 }
 
-                $customerData['customerAmountTotal'] += $customerAmountTotal;
+                $customerAmountTotal = $adjustment->amount;
+
+                $groupedData[$customerCode]['adjustments'][] = [
+                    'adjustment_no' => $adjustment->adjustment_no,
+                    'transaction_date' => $this->validatedData['date_type'] === 'Receipt Date'
+                        ? $adjustment->receipt_date
+                        : $adjustment->transaction_date,
+                    'type' => $adjustment->type,
+                    'apply_to' => $adjustment->apply_to,
+                    'invoice_no' => $adjustment->invoice_no,
+                    'adjustment_reason' => $adjustment->adjustment_reason,
+                    'particulars' => $adjustment->particulars,
+                    'amount' => $adjustment->amount,
+                    'balance' => $adjustment->balance,
+                ];
+
+                $groupedData[$customerCode]['customerAmountTotal'] += $customerAmountTotal;
                 $customerOverallAmountTotal += $customerAmountTotal;
 
-                $groupedData = collect($groupedData)->reject(fn($d) => $d['customer_code'] === $customerCode)->values()->toArray();
-                $groupedData[] = $customerData;
+                $processedRows++;
+                $progress = intval(($processedRows / $totalRows) * 100);
+
+                if ($progress > $lastProgress) {
+                    $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
+                    $lastProgress = $progress;
+                }
             }
         });
 
@@ -904,7 +910,7 @@ class GeneratePdfJob implements ShouldQueue
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
-            'groupedData' => $groupedData,
+            'groupedData' => array_values($groupedData),
             'preparedBy' => $this->preparedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -919,6 +925,9 @@ class GeneratePdfJob implements ShouldQueue
     protected function generatePaymentReport()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
+
+        // Increase memory limit for this job
+        ini_set('memory_limit', '1024M');
 
         $formattedStartDate = date('m/d/Y', strtotime($this->validatedData['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($this->validatedData['end_date']));
@@ -4368,7 +4377,8 @@ class GeneratePdfJob implements ShouldQueue
         $prefix = trim(config('app.url'), '/');
         $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
-        $this->broadcastData($excelData);
+        // Pass an empty array or the relevant data if needed instead of the undefined $excelData
+        $this->broadcastData([], $publicUrl);
     }
 
 

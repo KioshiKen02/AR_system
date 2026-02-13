@@ -406,7 +406,7 @@ const generateExport = async () => {
         progressMessage.value = "Starting Text File Generation...";
 
         const response = await axios.post(
-            route("generateTextFile"),
+            route("generateTextFile", { tenant: page.props.tenant }),
             form.data(),
             {}
         );
@@ -456,7 +456,7 @@ const generateExport = async () => {
 };
 
 const untagExport = () => {
-    form.post(route("untagExport"), {
+    form.post(route("untagExport", { tenant: page.props.tenant }), {
         onSuccess: () => {
             showSuccessToast("Untagged Successfully");
             form.reset();
@@ -477,7 +477,7 @@ const deletePdf = async () => {
     if (!pathDelete.value) return;
 
     try {
-        await axios.delete(route("pdf.delete"), {
+        await axios.delete(route("pdf.delete", { tenant: page.props.tenant }), {
             data: { path: pathDelete.value.split("/storage/")[1] },
         });
     } catch (err) {

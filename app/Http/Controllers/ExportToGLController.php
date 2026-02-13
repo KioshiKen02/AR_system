@@ -65,10 +65,30 @@ class ExportToGLController extends Controller
 
             $channel = 'textfile-generation.' . Str::random(20);
 
+            // Resolve current tenant ID from route slug
+            $tenantSlug = $request->route('tenant');
+            $appSettingId = null;
+            if ($tenantSlug) {
+                // Find matching AppSetting (simplified logic similar to middleware)
+                $appSetting = \App\Models\AppSetting::on('mysql')
+                    ->where('is_active', true)
+                    ->get()
+                    ->first(function ($setting) use ($tenantSlug) {
+                        $normalizedName = strtolower(str_replace(' ', '', $setting->app_name));
+                        return str_contains(strtolower($tenantSlug), $normalizedName) 
+                            || $normalizedName === strtolower($tenantSlug);
+                    });
+                
+                if ($appSetting) {
+                    $appSettingId = $appSetting->id;
+                }
+            }
+
             GenerateTextFile::dispatch(
                 $validated,
                 $request->user()->id,
                 $channel,
+                $appSettingId,
             );
 
             return response()->json([

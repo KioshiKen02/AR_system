@@ -778,7 +778,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch, onMounted, onUnmounted } from "vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
@@ -793,6 +793,8 @@ import usePermissions from "../../Pages/Composables/usePermissions";
 const props = defineProps({
     show: Boolean,
 });
+
+const page = usePage();
 
 const form = useForm({
     clearing_no: null,
@@ -885,7 +887,7 @@ const paymentDetails = ref([]);
 const fetchPaymentDetails = async (customerCode) => {
     isLoading.value = true;
     try {
-        const response = await axios.get(route("getFloatingChecks"), {
+        const response = await axios.get(route("getFloatingChecks", { tenant: page.props.tenant }), {
             params: {
                 customer_code: customerCode,
                 checktype: form.check_type,

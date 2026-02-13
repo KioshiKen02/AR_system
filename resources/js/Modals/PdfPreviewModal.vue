@@ -221,16 +221,25 @@ const startPdfGeneration = async () => {
             ...props.formData,
         });
 
+        // Check for HTML response (redirect to login/dashboard)
+        if (response.headers['content-type'] && response.headers['content-type'].includes('text/html')) {
+             throw new Error("Session expired or invalid request. Please refresh the page and try again.");
+        }
+
         // Check if URL is provided directly in response (Synchronous mode)
         if (response.data.url) {
             loading.value = false;
-            pathDelete.value = response.data.url; // Assuming it's a full URL, but deletePdf splits it. 
-            // The deletePdf function expects: pathDelete.value.split("/storage/")[1]
             // The controller returns: $prefix . Storage::url("temp/{$filename}")
-            // Example: http://localhost/storage/temp/file.pdf
+            // Example: http://localhost:8000/storage/temp/file.pdf
             
             // Just use the URL for display
             pdfUrl.value = response.data.url;
+            
+            // Extract the path for deletion if needed (though typically handled by server cleanup)
+            // If response.data.url is "http://localhost/storage/temp/file.pdf"
+            // We want to store it for potential cleanup if your logic requires it.
+            pathDelete.value = response.data.url; 
+
             progress.value = 100;
             progressMessage.value = "Report Ready!";
             return;
@@ -242,10 +251,17 @@ const startPdfGeneration = async () => {
         }
     } catch (err) {
         console.error("Error starting PDF generation:", err);
-        error.value =
-            err.response?.data?.message ||
-            err.message ||
-            "Failed to start PDF generation";
+        
+        // Handle 404 specifically for route not found issues
+        if (err.response && err.response.status === 404) {
+             error.value = "Report generation endpoint not found. Please check your network connection or contact support.";
+        } else {
+            error.value =
+                err.response?.data?.message ||
+                err.message ||
+                "Failed to start PDF generation";
+        }
+        
         loading.value = false;
     }
 };

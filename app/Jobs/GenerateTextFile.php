@@ -33,11 +33,13 @@ class GenerateTextFile implements ShouldQueue
         protected array $validatedData,
         protected string $userId,
         protected string $channel,
+        protected ?int $appSettingId = null,
     ) {}
-
 
     public function handle()
     {
+        $this->configureTenantEnvironment();
+
         $this->validatedData['file_format'] = $this->validatedData['file_format'] ?? 'csv';
         
         switch ($this->validatedData["export_type"]) {
@@ -176,7 +178,26 @@ class GenerateTextFile implements ShouldQueue
 
                 // save to network location 
                 rewind($stream);
-                Storage::disk('nav_textfiles')->writeStream($networkStoragePath, $stream);
+                $fullPath = $networkStoragePath;
+                
+                // Use plain PHP file_put_contents as a fallback/test to verify permissions bypassing Storage facade
+                $destination = config('filesystems.disks.nav_textfiles.root') . DIRECTORY_SEPARATOR . $fullPath;
+                
+                // Ensure directory exists
+                $directory = dirname($destination);
+                if (!is_dir($directory)) {
+                    mkdir($directory, 0777, true);
+                }
+
+                $content = stream_get_contents($stream);
+                file_put_contents($destination, $content);
+
+                // Log the exact path we wrote to
+                Log::info("Textfile generated (via file_put_contents) at: " . $destination);
+                
+                // Reset stream for local save if needed (though local save is commented out)
+                rewind($stream);
+
 
                 // Save to storage
                 rewind($stream);
@@ -315,7 +336,27 @@ class GenerateTextFile implements ShouldQueue
 
                 // save to network location 
                 rewind($stream);
-                Storage::disk('nav_textfiles')->writeStream($networkStoragePath, $stream);
+                $fullPath = $networkStoragePath;
+                
+                // Use plain PHP file_put_contents as a fallback/test to verify permissions bypassing Storage facade
+                $destination = config('filesystems.disks.nav_textfiles.root') . DIRECTORY_SEPARATOR . $fullPath;
+                
+                // Ensure directory exists
+                $directory = dirname($destination);
+                if (!is_dir($directory)) {
+                    mkdir($directory, 0777, true);
+                }
+
+                $content = stream_get_contents($stream);
+                file_put_contents($destination, $content);
+
+                // Log the exact path we wrote to
+                Log::info("Textfile generated (via file_put_contents) at: " . $destination);
+                
+                // Reset stream for local save if needed (though local save is commented out)
+                rewind($stream);
+
+
 
                 // Save to storage
                 rewind($stream);
@@ -506,7 +547,26 @@ class GenerateTextFile implements ShouldQueue
 
                 // save to network location 
                 rewind($stream);
-                Storage::disk('nav_textfiles')->writeStream($networkStoragePath, $stream);
+                $fullPath = $networkStoragePath;
+                
+                // Use plain PHP file_put_contents as a fallback/test to verify permissions bypassing Storage facade
+                $destination = config('filesystems.disks.nav_textfiles.root') . DIRECTORY_SEPARATOR . $fullPath;
+                
+                // Ensure directory exists
+                $directory = dirname($destination);
+                if (!is_dir($directory)) {
+                    mkdir($directory, 0777, true);
+                }
+
+                $content = stream_get_contents($stream);
+                file_put_contents($destination, $content);
+
+                // Log the exact path we wrote to
+                Log::info("Textfile generated (via file_put_contents) at: " . $destination);
+                
+                // Reset stream for local save if needed (though local save is commented out)
+                rewind($stream);
+
 
                 // Save to storage
                 rewind($stream);
@@ -1062,6 +1122,60 @@ class GenerateTextFile implements ShouldQueue
 
 
 
+
+    protected function configureTenantEnvironment()
+    {
+        try {
+            // Find the AppSetting
+            $appSetting = null;
+
+            if ($this->appSettingId) {
+                $appSetting = \App\Models\AppSetting::find($this->appSettingId);
+            }
+
+            // Fallback to user's default app setting if not provided
+            if (!$appSetting) {
+                $user = User::find($this->userId);
+                $appSetting = $user ? $user->appSetting : null;
+            }
+
+            if ($appSetting) {
+                // 1. Configure Tenant Database Connection
+                config([
+                    'database.connections.tenant' => [
+                        'driver'    => $appSetting->db_driver ?? 'mysql',
+                        'host'      => $appSetting->db_host,
+                        'port'      => $appSetting->db_port,
+                        'database'  => $appSetting->db_database,
+                        'username'  => $appSetting->db_username,
+                        'password'  => $appSetting->db_password,
+                        'charset'   => 'utf8mb4',
+                        'collation' => 'utf8mb4_unicode_ci',
+                        'prefix'    => '',
+                        'strict'    => true,
+                        'engine'    => null,
+                    ],
+                ]);
+
+                // Set 'tenant' as the default connection
+                config(['database.default' => 'tenant']);
+
+                // Purge and reconnect to apply changes
+                DB::purge('tenant');
+                DB::reconnect('tenant');
+
+                // 2. Configure Tenant Storage Disk
+                $tenantPath = config('tenant_paths.textfile_paths.' . $appSetting->app_name);
+
+                if ($tenantPath) {
+                    config(['filesystems.disks.nav_textfiles.root' => $tenantPath]);
+                    Storage::forgetDisk('nav_textfiles');
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error("GenerateTextFile: Failed to configure tenant environment: " . $e->getMessage());
+        }
+    }
 
     protected function formatDate($dateString)
     {

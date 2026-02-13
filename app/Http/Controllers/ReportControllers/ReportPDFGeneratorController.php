@@ -1327,26 +1327,39 @@ class ReportPDFGeneratorController extends Controller
 
     public function statementOfAccountSummary(Request $request)
     {
-        $validated = $request->validate(
-            [
-                'customer_type' => 'required',
-                'customer_code' => 'required_if:customer_type,By Customer Code',
-                'customer_name' => 'required_if:customer_type,By Customer Code',
-                'customer_select_type' => 'required_if:customer_type,By Customer Type',
-                'start_date' => 'required|date',
-                'end_date' => 'required|date',
-                'processtype' => 'nullable',
-                'file_type' => 'nullable',
-            ],
-            [
-                'customer_type.required' => 'Customer Type Required',
-                'customer_code.required_if' => 'Customer Code Required',
-                'customer_name.required_if' => 'Customer Name Required',
-                'customer_select_type.required_if' => 'Customer Type Required',
-                'start_date.required' => 'Start Date Required',
-                'end_date.required' => 'End Date Required',
-            ]
-        );
+        Log::info('statementOfAccountSummary hit', [
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'all' => $request->all(),
+            'processtype' => $request->input('processtype'),
+            'user' => $request->user() ? $request->user()->id : 'guest',
+        ]);
+
+        try {
+            $validated = $request->validate(
+                [
+                    'customer_type' => 'required',
+                    'customer_code' => 'required_if:customer_type,By Customer Code',
+                    'customer_name' => 'required_if:customer_type,By Customer Code',
+                    'customer_select_type' => 'required_if:customer_type,By Customer Type',
+                    'start_date' => 'required|date',
+                    'end_date' => 'required|date',
+                    'processtype' => 'nullable',
+                    'file_type' => 'nullable',
+                ],
+                [
+                    'customer_type.required' => 'Customer Type Required',
+                    'customer_code.required_if' => 'Customer Code Required',
+                    'customer_name.required_if' => 'Customer Name Required',
+                    'customer_select_type.required_if' => 'Customer Type Required',
+                    'start_date.required' => 'Start Date Required',
+                    'end_date.required' => 'End Date Required',
+                ]
+            );
+        } catch (ValidationException $e) {
+            Log::error('Validation failed for statementOfAccountSummary', $e->errors());
+            throw $e;
+        }
 
         $formattedStartDate = date('m/d/Y', strtotime($validated['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($validated['end_date']));
