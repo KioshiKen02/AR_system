@@ -382,6 +382,9 @@ const emit = defineEmits(["close"]);
 
 const { canInsert } = usePermissions();
 
+import { usePage } from "@inertiajs/vue3";
+const page = usePage();
+
 const showToast = ref(false);
 const toastMessage = ref("");
 let toastTimeout = null;
@@ -417,7 +420,7 @@ function formatDate(dateString) {
 async function fetchNotifications() {
     modalLoading.value = true;
     try {
-        const { data } = await axios.get(route("getNotifications"));
+        const { data } = await axios.get(route("getNotifications", { tenant: page.props.tenant }));
         notifications.value = data;
     } catch (error) {
         console.log("Error : ", error);
@@ -428,18 +431,18 @@ async function fetchNotifications() {
 }
 
 async function markAsRead(id) {
-    await axios.post(route("markAsRead", id));
+    await axios.post(route("markAsRead", { tenant: page.props.tenant, id: id }));
     const notification = notifications.value.find((n) => n.id === id);
     if (notification) notification.read = true;
 }
 
 async function markAllAsRead() {
-    await axios.post(route("markAllAsRead"));
+    await axios.post(route("markAllAsRead", { tenant: page.props.tenant }));
     notifications.value.forEach((n) => (n.read = true));
 }
 
 async function clearAll() {
-    await axios.delete(route("clearAll"));
+    await axios.delete(route("clearAll", { tenant: page.props.tenant }));
     notifications.value = [];
 }
 
@@ -464,7 +467,7 @@ async function createNotification() {
     }
 
     try {
-        const { data } = await axios.post(route("createNotifications"), {
+        const { data } = await axios.post(route("createNotifications", { tenant: page.props.tenant }), {
             message: newNotification.value.message,
             roles: newNotification.value.role,
             notified_at: newNotification.value.notified_at || undefined,
