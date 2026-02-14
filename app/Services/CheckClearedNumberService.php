@@ -11,7 +11,7 @@ class CheckClearedNumberService
 
     public function generate(): int
     {
-        $latest = CheckCleared::withTrashed()
+        $latest = CheckCleared::on('tenant')->withTrashed()
             ->lockForUpdate()
             ->orderByDesc('clearing_no')
             ->first();

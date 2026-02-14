@@ -24,7 +24,7 @@ class CheckClearedController extends Controller
 {
     public function index(Request $request)
     {
-        $query = CheckCleared::query();
+        $query = CheckCleared::on('tenant');
 
         // Search functionality
         if ($request->search) {
@@ -98,15 +98,15 @@ class CheckClearedController extends Controller
 
         $notificationsController = new NotificationsController();
 
-        $clrNo = DB::transaction(function () use ($validated, $request, $checkClearedNumberService) {
+        $clrNo = DB::connection('tenant')->transaction(function () use ($validated, $request, $checkClearedNumberService) {
             $clearingNo = $checkClearedNumberService->generate();
             // Validate the payment number is unique (just in case)
-            if (CheckCleared::where('clearing_no', $clearingNo)->exists()) {
+            if (CheckCleared::on('tenant')->where('clearing_no', $clearingNo)->exists()) {
                 throw ValidationException::withMessages([
                     'clearing_no' => 'Error Please Try Again',
                 ]);
             }
-            CheckCleared::create([
+            CheckCleared::on('tenant')->create([
                 'clearing_no' => $clearingNo,
                 'transaction_date' => $validated['transaction_date'],
                 'clearing_date' => $validated['clearing_date'],
@@ -129,11 +129,11 @@ class CheckClearedController extends Controller
                 ];
             }, $validated['payment_details']);
 
-            CheckClearedItems::insert($checkClearedItems);
+            CheckClearedItems::on('tenant')->insert($checkClearedItems);
 
             foreach ($validated['payment_details'] as $payment) {
                 // Update the original payment status
-                $pd = PaymentDetails::where([
+                $pd = PaymentDetails::on('tenant')->where([
                     'payment_no' => $payment['payment_no'],
                     'check_no'   => $payment['check_no'],
                     'type'       => $payment['type'],
@@ -149,7 +149,7 @@ class CheckClearedController extends Controller
                 }
 
                 if ($payment['status'] === 'Cleared') {
-                    $ledger = CustomerLedger::where('invoice_number', $payment['document_no'])->where('type', $payment['type'])->firstOrFail();
+                    $ledger = CustomerLedger::on('tenant')->where('invoice_number', $payment['document_no'])->where('type', $payment['type'])->firstOrFail();
                     $newAmount = max($ledger->running_balance - $payment['amount'], 0);
                     if ($newAmount < 0) {
                         throw ValidationException::withMessages([
@@ -164,7 +164,7 @@ class CheckClearedController extends Controller
                 }
 
                 if ($payment['status'] === 'Cancelled') {
-                    $cust = Customer::where('cus_code', $validated['customer_code'])
+                    $cust = Customer::on('tenant')->where('cus_code', $validated['customer_code'])
                         ->lockForUpdate()
                         ->first();
 
@@ -197,8 +197,8 @@ class CheckClearedController extends Controller
 
     public function latest()
     {
-        return DB::transaction(function () {
-            $latestCheckCleared = CheckCleared::lockForUpdate()
+        return DB::connection('tenant')->transaction(function () {
+            $latestCheckCleared = CheckCleared::on('tenant')->lockForUpdate()
                 ->orderByDesc('clearing_no')
                 ->first();
 
