@@ -11,6 +11,8 @@ class Message extends Model
 {
     use HasFactory;
 
+    protected $connection = 'mysql';
+
     protected $fillable = [
         'sender_id',
         'receiver_id',

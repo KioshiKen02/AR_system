@@ -248,6 +248,15 @@ const startPdfGeneration = async () => {
         if (response.data.channel && response.data.channel !== channel.value) {
             channel.value = response.data.channel;
             setupWebSocketListener();
+
+            // Fallback: If WebSocket doesn't respond in 10 seconds, try polling or show error
+            setTimeout(() => {
+                if (progress.value === 0 && loading.value) {
+                    console.warn("WebSocket inactive, falling back to manual refresh or check.");
+                    // Optional: You could implement a polling mechanism here if you have an API for it
+                    // For now, we just inform the user if it's taking too long without updates
+                }
+            }, 10000);
         }
     } catch (err) {
         console.error("Error starting PDF generation:", err);

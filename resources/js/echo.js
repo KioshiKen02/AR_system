@@ -3,6 +3,10 @@ import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 window.Pusher = Pusher;
 
+// Determine tenant from URL
+const pathSegments = window.location.pathname.split('/').filter(Boolean);
+const tenant = pathSegments.length > 0 ? pathSegments[0] : 'arsystem'; // Default or fallback
+
 window.Echo = new Echo({
     broadcaster: "reverb",
     key: import.meta.env.VITE_REVERB_APP_KEY,
@@ -14,4 +18,5 @@ window.Echo = new Echo({
     disableStats: true,
     cluster: 'mt1',
     encrypted: false, // Explicitly disable encryption
+    authEndpoint: `/${tenant}/broadcasting/auth`,
 });

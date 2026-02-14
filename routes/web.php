@@ -82,9 +82,9 @@ Route::get('/', function () {
     return redirect()->route('landing', ['tenant' => 'arsystem']); // Default redirect
 });
 
-Broadcast::routes(['middleware' => ['web', 'auth']]);
-
 Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
+
+    Broadcast::routes(['middleware' => ['web', 'auth']]);
 
     Route::middleware('auth')->group(function () {
 
@@ -342,7 +342,13 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
         // Get all users for messaging
         Route::get('/usersformessage', [MessageController::class, 'getUsers'])->name('messages.users');
 
-        // Get conversation with a specific user
+        // Get unread message count
+        Route::get('/unread-count', [MessageController::class, 'getUnreadCount'])->name('messages.unreadCount');
+
+        // Get recent conversations
+        Route::get('/recent', [MessageController::class, 'getRecentConversations'])->name('messages.recent');
+
+        // Get conversation with a specific user (MOVED DOWN)
         Route::get('/conversation/{user}', [MessageController::class, 'getConversation'])->name('messages.conversation');
 
         // Send a new message
@@ -351,14 +357,8 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
         // Mark messages as read
         Route::post('/mark-message-read/{user}', [MessageController::class, 'markAsRead'])->name('messages.markAsRead');
 
-        // Get unread message count
-        Route::get('/unread-count', [MessageController::class, 'getUnreadCount'])->name('messages.unreadCount');
-
         // Delete a message
         Route::delete('/{message}', [MessageController::class, 'deleteMessage'])->name('messages.delete');
-
-        // Get recent conversations
-        Route::get('/recent', [MessageController::class, 'getRecentConversations'])->name('messages.recent');
 
         Route::post('/markuseroffline', [MessageController::class, 'markAsOffline'])->name('user.markOffline');
     });

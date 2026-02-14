@@ -470,6 +470,7 @@ const initializeEcho = () => {
             wsPort: import.meta.env.VITE_REVERB_PORT || 8081, // Must match REVERB_PORT in .env
             forceTLS: false,
             enabledTransports: ["ws", "wss"],
+            authEndpoint: `/${page.props.tenant}/broadcasting/auth`,
         });
     }
 
@@ -568,7 +569,10 @@ const initializeEcho = () => {
 const fetchUsers = async () => {
     usersLoading.value = true;
     try {
-        const { data } = await axios.get(route("messages.users"));
+        const { data } = await axios.get(route("messages.users", { 
+            tenant: page.props.tenant,
+            _t: Date.now()
+        }));
         users.value = data;
     } catch (error) {
         console.error("Error fetching users:", error);
@@ -580,6 +584,12 @@ const fetchUsers = async () => {
 
 // Select user and load messages
 const selectUser = async (user) => {
+    console.log("Selecting user:", user);
+    if (!user || !user.id) {
+        console.error("Invalid user selected");
+        return;
+    }
+
     selectedUser.value = user;
     user.unread_count = 0; // Reset unread count
 
@@ -590,22 +600,49 @@ const selectUser = async (user) => {
     }
     newMessage.value = "";
 
+    // Clear previous messages immediately
+    messages.value = []; 
+    
+    // Fetch new conversation
     await fetchMessages();
     await markMessagesAsRead();
-    // scrollToBottom();
+    
+    // Focus input
+    nextTick(() => {
+        messageInput.value?.focus();
+    });
 };
+
+// Remove the watcher to avoid complexity and potential double-firing or missing fires
+// watch(selectedUser, ...)
 
 // Fetch messages between current user and selected user
 const fetchMessages = async () => {
     if (!selectedUser.value) return;
 
+    // Don't set loading true if we are just refreshing silently or if it's already loading
+    // But for initial load on selectUser, we want it.
+    // Let's rely on the spinner check in template.
     messagesLoading.value = true;
+    
     try {
+        console.log("Fetching messages for user:", selectedUser.value.id);
         const { data } = await axios.get(
-            route("messages.conversation", selectedUser.value.id)
+            route("messages.conversation", { 
+                tenant: page.props.tenant, 
+                user: selectedUser.value.id,
+                _t: Date.now() // Cache buster
+            })
         );
-        messages.value = data;
-        nextTick(() => scrollToBottom());
+        
+        // Ensure data is an array
+        const fetchedMessages = Array.isArray(data) ? data : (data.data ? data.data : []);
+        
+        // Only update if we are still looking at the same user
+        if (selectedUser.value) {
+             messages.value = Array.isArray(fetchedMessages) ? fetchedMessages : [];
+             nextTick(() => scrollToBottom());
+        }
     } catch (error) {
         console.error("Error fetching messages:", error);
         showWarningToast("Failed to load messages");
@@ -630,7 +667,7 @@ const sendMessage = async () => {
     }
 
     try {
-        const { data } = await axios.post(route("messages.send"), {
+        const { data } = await axios.post(route("messages.send", { tenant: page.props.tenant }), {
             receiver_id: selectedUser.value.id,
             content: messageContent,
         });
@@ -660,7 +697,7 @@ const markMessagesAsRead = async () => {
     if (!selectedUser.value) return;
 
     try {
-        await axios.post(route("messages.markAsRead", selectedUser.value.id));
+        await axios.post(route("messages.markAsRead", { tenant: page.props.tenant, user: selectedUser.value.id }));
     } catch (error) {
         console.error("Error marking messages as read:", error);
     }
@@ -822,6 +859,8 @@ const handleInput = () => {
 };
 
 const shouldShowTimestamp = (message) => {
+    if (!Array.isArray(messages.value) || messages.value.length === 0) return false;
+    
     const lastSent = getLastSentMessage.value;
     const lastReceived = getLastReceivedMessage.value;
     const lastSeen = lastSeenMessage.value;
@@ -834,18 +873,21 @@ const shouldShowTimestamp = (message) => {
 };
 
 const getLastSentMessage = computed(() => {
+    if (!Array.isArray(messages.value)) return null;
     return messages.value
         .filter((msg) => msg.sender_id === currentUser.value.id)
         .slice(-1)[0];
 });
 
 const getLastReceivedMessage = computed(() => {
+    if (!Array.isArray(messages.value)) return null;
     return messages.value
         .filter((msg) => msg.sender_id !== currentUser.value.id)
         .slice(-1)[0];
 });
 
 const lastSeenMessage = computed(() => {
+    if (!Array.isArray(messages.value)) return null;
     return messages.value
         .filter((msg) => msg.sender_id === currentUser.value.id && msg.read_at)
         .slice(-1)[0]; // get the last one

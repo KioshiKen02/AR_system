@@ -33,6 +33,9 @@ return Application::configure(basePath: dirname(__DIR__))
             SetTenantDatabase::class,
             HandleInertiaRequests::class,
         ]);
+        $middleware->redirectGuestsTo(fn () => route('login', [
+            'tenant' => request()->route('tenant') ?? request()->segment(1) ?? 'arsystem'
+        ]));
         $middleware->validateCsrfTokens(except: [
             // 'rizalbreeder/broadcasting/*',
             // 'rizalbreeder/invoice-report',

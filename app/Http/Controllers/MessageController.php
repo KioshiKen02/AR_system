@@ -85,7 +85,7 @@ class MessageController extends Controller
                     'is_online' => $user->is_online ?? false,
                     'last_seen' => $user->last_seen_at,
                     'unread_count' => $unreadCount,
-                    'latest_message_at' => $latestMessage ? $latestMessage->created_at : null,
+                    'latest_message_at' => $latestMessage ? $latestMessage->created_at->toISOString() : null, // Ensure ISO format
                 ];
             })
             ->sortByDesc('latest_message_at')
@@ -97,35 +97,88 @@ class MessageController extends Controller
     /**
      * Get conversation between current user and another user
      */
-    public function getConversation(User $user)
+    public function getConversation(Request $request, $tenant, $userId)
     {
+        // $tenant is the first route parameter (e.g., 'feedmill')
+        // $userId is the second route parameter (e.g., '45')
+        
         $currentUserId = Auth::id();
+        
+        Log::info('DEBUG: getConversation HIT', [
+            'tenant' => $tenant,
+            'auth_id' => $currentUserId,
+            'requested_user_id' => $userId,
+        ]);
 
-        $messages = Message::where(function ($query) use ($currentUserId, $user) {
-            $query->where('sender_id', $currentUserId)
-                ->where('receiver_id', $user->id);
-        })
-            ->orWhere(function ($query) use ($currentUserId, $user) {
-                $query->where('sender_id', $user->id)
+        // Use strict connection for Message model to ensure we query 'mysql' DB
+        $messages = Message::on('mysql')
+            ->where(function ($query) use ($currentUserId, $userId) {
+                $query->where('sender_id', $currentUserId)
+                    ->where('receiver_id', $userId);
+            })
+            ->orWhere(function ($query) use ($currentUserId, $userId) {
+                $query->where('sender_id', $userId)
                     ->where('receiver_id', $currentUserId);
             })
-            ->with(['sender:id,name', 'receiver:id,name'])
             ->orderBy('created_at', 'asc')
-            ->get()
-            ->map(function ($message) {
+            ->get();
+            
+        Log::info('Messages found', ['count' => $messages->count()]);
+        
+        // Remove debug wrapper now that we know the issue
+        /*
+        $debugInfo = [
+            'auth_id' => $currentUserId,
+            'target_id' => $userId,
+            'message_count' => $messages->count(),
+            'query_log' => DB::getQueryLog(),
+        ];
+        */
+
+        if ($messages->isEmpty()) {
+             // Debug if messages exist at all in the main DB
+             $countSender = Message::on('mysql')->where('sender_id', $currentUserId)->count();
+             $countReceiver = Message::on('mysql')->where('receiver_id', $userId)->count();
+             // Log::info("DEBUG MAIN DB: Sender($currentUserId) sent $countSender. Receiver($userId) received $countReceiver.");
+        }
+
+        // Transform collection and reset keys to ensure JSON array
+        $messages = $messages->map(function ($message) {
+                // Manually fetch names if needed
+                // We must be careful here: User model might default to Tenant DB.
+                // If users are synced, it's fine. If not, names might be missing.
+                
+                $senderName = 'Unknown';
+                $receiverName = 'Unknown';
+                
+                try {
+                     // Force user lookup on the connection where users exist (likely Tenant or Main depending on setup)
+                     // Assuming users are in Tenant DB for now as per `getUsers` method
+                     $sender = User::find($message->sender_id);
+                     $receiver = User::find($message->receiver_id);
+                     
+                     if ($sender) $senderName = $sender->name;
+                     if ($receiver) $receiverName = $receiver->name;
+                } catch (\Exception $e) {
+                    // Ignore relation errors
+                }
+
                 return [
                     'id' => $message->id,
                     'content' => $message->content,
                     'sender_id' => $message->sender_id,
                     'receiver_id' => $message->receiver_id,
-                    'sender_name' => $message->sender->name,
-                    'receiver_name' => $message->receiver->name,
+                    'sender_name' => $senderName,
+                    'receiver_name' => $receiverName,
                     'read_at' => $message->read_at,
                     'created_at' => $message->created_at->toISOString(),
                 ];
-            });
+            })->values();
 
-        return response()->json($messages);
+        return response()->json($messages)
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     /**
@@ -133,42 +186,47 @@ class MessageController extends Controller
      */
     public function sendMessage(Request $request)
     {
-        $request->validate([
-            'receiver_id' => 'required|exists:users,id|different:' . Auth::id(),
-            'content' => 'required|string|max:1000',
+        $validated = $request->validate([
+            'receiver_id' => 'required',
+            'content' => 'required|string',
         ]);
+
+        $sender = Auth::user();
+        $receiver = User::findOrFail($validated['receiver_id']);
 
         $message = Message::create([
-            'sender_id' => Auth::id(),
-            'receiver_id' => $request->receiver_id,
-            'content' => trim($request->content),
+            'sender_id' => $sender->id,
+            'receiver_id' => $receiver->id,
+            'content' => $validated['content'],
         ]);
 
+        // Load relationships for response
         $message->load(['sender:id,name', 'receiver:id,name']);
 
-        // Broadcast the message
+        // Format message for response/broadcast to match getConversation structure
+        $formattedMessage = [
+            'id' => $message->id,
+            'content' => $message->content,
+            'sender_id' => $message->sender_id,
+            'receiver_id' => $message->receiver_id,
+            'sender_name' => $message->sender ? $message->sender->name : 'Unknown',
+            'receiver_name' => $message->receiver ? $message->receiver->name : 'Unknown',
+            'read_at' => null,
+            'created_at' => $message->created_at->toISOString(),
+        ];
+
+        // Broadcast to receiver
         broadcast(new MessageSent($message))->toOthers();
 
-        return response()->json([
-            'success' => true,
-            'message' => [
-                'id' => $message->id,
-                'content' => $message->content,
-                'sender_id' => $message->sender_id,
-                'receiver_id' => $message->receiver_id,
-                'sender_name' => $message->sender->name,
-                'receiver_name' => $message->receiver->name,
-                'read_at' => $message->read_at,
-                'created_at' => $message->created_at->toISOString(),
-            ]
-        ]);
+        return response()->json(['message' => $formattedMessage]);
     }
 
     /**
      * Mark messages as read
      */
-    public function markAsRead(User $user)
+    public function markAsRead(Request $request, $user)
     {
+        $user = User::findOrFail($user);
         $currentUserId = Auth::id();
         $currentUser = Auth::user();
 
@@ -223,8 +281,8 @@ class MessageController extends Controller
     {
         $currentUserId = Auth::id();
 
-        $conversations = DB::table('messages')
-            ->select([
+        // Use the model to ensure tenant connection is used instead of default DB facade
+        $conversations = Message::select([
                 DB::raw('CASE 
                     WHEN sender_id = ' . $currentUserId . ' THEN receiver_id 
                     ELSE sender_id 
@@ -247,13 +305,16 @@ class MessageController extends Controller
             ->keyBy('id');
 
         $result = $conversations->map(function ($conversation) use ($users) {
+            // Check if user exists (might be deleted or from another tenant context)
             $user = $users->get($conversation->other_user_id);
+            if (!$user) return null;
+            
             return [
                 'user' => $user,
                 'last_message_at' => $conversation->last_message_at,
                 'unread_count' => $conversation->unread_count,
             ];
-        });
+        })->filter()->values(); // Remove nulls and re-index
 
         return response()->json($result);
     }
