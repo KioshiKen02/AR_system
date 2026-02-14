@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CheckClearedItems extends Model
 {
+    protected $connection = 'tenant';
     protected $table = "check_cleared_items";
 
     protected $fillable = [

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class WHTClearedItems extends Model
 {
+    protected $connection = 'tenant';
     protected $table = "wht_cleared_items";
 
     protected $fillable = [

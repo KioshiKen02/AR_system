@@ -9,6 +9,7 @@ class WHTCleared extends Model
 {
     use SoftDeletes;
 
+    protected $connection = 'tenant';
     protected $table = "wht_cleared";
 
     protected $fillable = [

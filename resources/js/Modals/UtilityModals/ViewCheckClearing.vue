@@ -842,14 +842,30 @@ watch(
     async (visible, oldVisible) => {
         if (visible && !oldVisible) {
             modalLoading.value = true;
-            form.clearing_no = props.selected.clearing_no;
-            form.transaction_date = props.selected.transaction_date;
-            form.clearing_date = props.selected.clearing_date;
-            form.customer_code = props.selected.customer_code;
-            form.customer_name = props.selected.customer_name;
-            form.check_type = props.selected.check_type;
+            paymentDetails.value = []; // Reset
+
+            form.clearing_no = props.selected?.clearing_no || null;
+            form.transaction_date = props.selected?.transaction_date || null;
+            form.clearing_date = props.selected?.clearing_date || null;
+            form.customer_code = props.selected?.customer_code || null;
+            form.customer_name = props.selected?.customer_name || null;
+            form.check_type = props.selected?.check_type || null;
 
             try {
+                if (!page.props.tenant) {
+                    console.error("Tenant is missing in page props");
+                    showWarningToast("Application context (tenant) is missing. Please refresh.");
+                    modalLoading.value = false;
+                    return;
+                }
+
+                if (!props.selected?.clearing_no) {
+                    console.error("Clearing Number is missing in selected props");
+                    showWarningToast("Invalid selection. Clearing number is missing.");
+                    modalLoading.value = false;
+                    return;
+                }
+
                 const response = await axios.get(
                     route("getCheckClearedItems", {
                         clearing_no: props.selected.clearing_no,
@@ -857,23 +873,31 @@ watch(
                     })
                 );
 
-                // Ensure response.data is an array before mapping
-                const data = Array.isArray(response.data) ? response.data : [];
+                let rawData = [];
+                if (Array.isArray(response.data)) {
+                    rawData = response.data;
+                } else if (response.data?.payment_details && Array.isArray(response.data.payment_details)) {
+                    rawData = response.data.payment_details;
+                } else if (response.data?.check_details && Array.isArray(response.data.check_details)) {
+                    rawData = response.data.check_details;
+                } else if (response.data?.items && Array.isArray(response.data.items)) {
+                    rawData = response.data.items;
+                }
 
-                // Map the response data to our table structure
-                paymentDetails.value = data.map((payment) => ({
-                    payment_no: payment.payment_no,
-                    check_no: payment.check_no,
-                    document_no: payment.document_no,
-                    due_date: payment.due_date,
-                    amount: payment.amount,
-                    status: payment.status,
+                // Map the response data to our table structure with robust fallbacks
+                paymentDetails.value = rawData.map((payment) => ({
+                    payment_no: payment.payment_no || "N/A",
+                    check_no: payment.check_no || "N/A",
+                    document_no: payment.document_no || "N/A",
+                    due_date: payment.due_date || payment.check_due_date || payment.payment_date || payment.document_date || null,
+                    amount: parseFloat(payment.amount || payment.amount_paid || 0),
+                    status: payment.status || "Cleared",
                     remarks: payment.remarks || "No Remarks",
                 }));
             } catch (error) {
                 console.error("Error fetching payment details:", error);
                 paymentDetails.value = [];
-                showWarningToast("Failed to fetch payment details");
+                showWarningToast("Failed to fetch payment details. Please try again.");
             } finally {
                 modalLoading.value = false;
             }

@@ -9,6 +9,7 @@ class CheckCleared extends Model
 {
     use SoftDeletes;
 
+    protected $connection = 'tenant';
     protected $table = "check_cleared";
 
     protected $fillable = [
