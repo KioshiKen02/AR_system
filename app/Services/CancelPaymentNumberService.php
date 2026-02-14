@@ -11,7 +11,7 @@ class CancelPaymentNumberService
 
     public function generate(): int
     {
-        $latest = CancelPayment::orderByDesc('cancellation_no')
+        $latest = CancelPayment::on('tenant')->orderByDesc('cancellation_no')
             ->lockForUpdate()
             ->first();
 

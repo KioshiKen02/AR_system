@@ -11,6 +11,7 @@ use App\Models\UtilityModels\CancelPaymentItems;
 use App\Services\CancelPaymentNumberService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -18,7 +19,7 @@ class CancelPaymentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = CancelPayment::query();
+        $query = CancelPayment::on('tenant');
 
         if ($request->search) {
             $query->where(function ($q) use ($request) {
@@ -53,15 +54,15 @@ class CancelPaymentController extends Controller
             'payment_details.*.remarks' => 'nullable|string'
         ]);
 
-        DB::transaction(function () use ($validated, $request, $cancelPaymentNumberService) {
+        DB::connection('tenant')->transaction(function () use ($validated, $request, $cancelPaymentNumberService) {
             $cancellationNo = $cancelPaymentNumberService->generate();
             // Validate the payment number is unique (just in case)
-            if (CancelPayment::where('cancellation_no', $cancellationNo)->exists()) {
+            if (CancelPayment::on('tenant')->where('cancellation_no', $cancellationNo)->exists()) {
                 throw ValidationException::withMessages([
                     'cancellation_no' => 'Error Please Try Again',
                 ]);
             }
-            CancelPayment::create([
+            CancelPayment::on('tenant')->create([
                 'cancellation_no' => $cancellationNo,
                 'document_no' => $validated['document_no'],
                 'type' => $validated['type'],
@@ -81,12 +82,12 @@ class CancelPaymentController extends Controller
                 ];
             }, $validated['payment_details']);
 
-            CancelPaymentItems::insert($cancelPaymentItems);
+            CancelPaymentItems::on('tenant')->insert($cancelPaymentItems);
 
             $paymentItemsAdvPy = 0;
             foreach ($validated['payment_details'] as $payment) {
                 // Update the original payment status
-                DB::table('payment_details')
+                DB::connection('tenant')->table('payment_details')
                     ->where('id', $payment['id'])
                     ->update([
                         'status' => 'Cancelled',
@@ -94,16 +95,23 @@ class CancelPaymentController extends Controller
                     ]);
                 $paymentItemsAdvPy += $payment['advpy_amount_paid'];
             }
-            $ledger = CustomerLedger::where('invoice_number', $validated['document_no'])->where('type', $validated['type'])->firstOrFail();
+            $ledger = CustomerLedger::on('tenant')->where('invoice_number', $validated['document_no'])->where('type', $validated['type'])->firstOrFail();
 
             $ledger->update([
                 'running_balance' => ($ledger->amount + $ledger->adjusted_amount) + ($ledger->overage - $ledger->shrinkage) - $ledger->return,
                 'amount_paid' => 0.00,
             ]);
 
-            $cust = Customer::where('cus_code', $validated['customer_code'])
+            $cust = Customer::on('tenant')->where('cus_code', $validated['customer_code'])
                 ->lockForUpdate()
                 ->first();
+
+            if (!$cust) {
+                 Log::error("CancelPayment(DocNo): Customer not found", ['customer_code' => $validated['customer_code']]);
+                 throw ValidationException::withMessages([
+                     'customer_code' => 'Customer record not found for code: ' . $validated['customer_code'],
+                 ]);
+            }
 
             $cust->update([
                 'advanced_payment_balance' => $paymentItemsAdvPy + $cust->advanced_payment_balance,
@@ -131,15 +139,28 @@ class CancelPaymentController extends Controller
             'payment_details.*.remarks' => 'nullable|string'
         ]);
 
-        DB::transaction(function () use ($validated, $request, $cancelPaymentNumberService) {
+        DB::connection('tenant')->transaction(function () use ($validated, $request, $cancelPaymentNumberService) {
             $cancellationNo = $cancelPaymentNumberService->generate();
             // Validate the payment number is unique (just in case)
-            if (CancelPayment::where('cancellation_no', $cancellationNo)->exists()) {
+            if (CancelPayment::on('tenant')->where('cancellation_no', $cancellationNo)->exists()) {
                 throw ValidationException::withMessages([
                     'cancellation_no' => 'Error Please Try Again',
                 ]);
             }
-            CancelPayment::create([
+
+            // Fetch customer once and validate existence
+            $cust = Customer::on('tenant')->where('cus_code', $validated['customer_code'])
+                ->lockForUpdate()
+                ->first();
+
+            if (!$cust) {
+                Log::error("CancelPayment: Customer not found", ['customer_code' => $validated['customer_code']]);
+                throw ValidationException::withMessages([
+                    'customer_code' => 'Customer record not found for code: ' . $validated['customer_code'],
+                ]);
+            }
+
+            CancelPayment::on('tenant')->create([
                 'cancellation_no' => $cancellationNo,
                 'payment_no' => $validated['payment_no'],
                 'type' => $validated['type'],
@@ -159,17 +180,17 @@ class CancelPaymentController extends Controller
                 ];
             }, $validated['payment_details']);
 
-            CancelPaymentItems::insert($cancelPaymentItems);
+            CancelPaymentItems::on('tenant')->insert($cancelPaymentItems);
 
             foreach ($validated['payment_details'] as $payment) {
-                $paymentRow = DB::table('payment_details')->where('id', $payment['id'])->first();
+                $paymentRow = DB::connection('tenant')->table('payment_details')->where('id', $payment['id'])->first();
 
                 if (!$paymentRow) {
                     continue; // skip if no payment found (safety check)
                 }
 
                 // Update the original payment status
-                DB::table('payment_details')
+                DB::connection('tenant')->table('payment_details')
                     ->where('id', $payment['id'])
                     ->update([
                         'status' => 'Cancelled',
@@ -177,17 +198,13 @@ class CancelPaymentController extends Controller
                     ]);
 
                 if ($paymentRow->status === 'Paid') {
-                    $ledger = CustomerLedger::where('invoice_number', $payment['document_no'])->where('type', $payment['type'])->firstOrFail();
+                    $ledger = CustomerLedger::on('tenant')->where('invoice_number', $payment['document_no'])->where('type', $payment['type'])->firstOrFail();
 
                     $ledger->update([
                         'running_balance' => ($ledger->amount + $ledger->adjusted_amount) + ($ledger->overage - $ledger->shrinkage) - $ledger->return,
                         'amount_paid' => $ledger->amount_paid - $payment['amount'],
                     ]);
                 }
-
-                $cust = Customer::where('cus_code', $validated['customer_code'])
-                    ->lockForUpdate()
-                    ->first();
 
                 $cust->update([
                     'advanced_payment_balance' => $payment['advpy_amount_paid'] + $cust->advanced_payment_balance,
@@ -201,8 +218,8 @@ class CancelPaymentController extends Controller
 
     public function latest()
     {
-        return DB::transaction(function () {
-            $latestCancellationNo = CancelPayment::lockForUpdate()
+        return DB::connection('tenant')->transaction(function () {
+            $latestCancellationNo = CancelPayment::on('tenant')->lockForUpdate()
                 ->orderByDesc('cancellation_no')
                 ->first();
 

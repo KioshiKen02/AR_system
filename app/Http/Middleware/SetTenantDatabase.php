@@ -86,7 +86,7 @@ class SetTenantDatabase
 
                 // Super Admin might access all? (Optional)
                 if ($user->role === 'Admin') {
-                    // $hasAccess = true; // Uncomment if Admin should access all tenants automatically
+                    $hasAccess = true; // Uncomment if Admin should access all tenants automatically
                 }
             } else {
                 // Allow API access without user session (for system-to-system calls)
