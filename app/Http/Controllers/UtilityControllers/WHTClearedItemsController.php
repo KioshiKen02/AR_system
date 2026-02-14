@@ -8,11 +8,12 @@ use Illuminate\Http\Request;
 
 class WHTClearedItemsController extends Controller
 {
-    public function getByWhtClearingNo($wht_clearing_no)
+    public function getByWhtClearingNo(Request $request, $tenant, $wht_clearing_no)
     {
         try {
+            $wht_clearing_no = trim($wht_clearing_no);
             // Option 1: Direct query on InvoiceItem model
-            $items = WHTClearedItems::where('wht_clearing_no', $wht_clearing_no)
+            $items = WHTClearedItems::on('tenant')->where('wht_clearing_no', $wht_clearing_no)
                 ->select([
                     'payment_no',
                     'wht_no',

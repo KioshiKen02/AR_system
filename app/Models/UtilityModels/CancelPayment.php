@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CancelPayment extends Model
 {
+    protected $connection = 'tenant';
     protected $table = "cancelled_payments";
 
     protected $fillable = [

@@ -424,7 +424,7 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from "vue";
 import PaginationLinks from "./Components/PaginationLinks.vue";
-import { router } from "@inertiajs/vue3";
+import { router, usePage } from "@inertiajs/vue3";
 import { debounce } from "lodash";
 import ToastAlert from "./Components/ToastAlert.vue";
 import WHTClearing from "../Modals/UtilityModals/WHTClearing.vue";
@@ -434,6 +434,8 @@ import { FunnelIcon } from "@heroicons/vue/24/solid";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import DatePicker from "./Components/DatePicker.vue";
 import usePermissions from "./Composables/usePermissions";
+
+const page = usePage();
 
 const props = defineProps({
     wht_clearings: Object,
@@ -520,7 +522,7 @@ const handleConfirm = async (confirmed) => {
     showDialog.value = false;
     if (confirmed && pendingDeleteID.value) {
         try {
-            router.delete(route("deletePayment", pendingDeleteID.value), {
+            router.delete(route("deletePayment", { id: pendingDeleteID.value, tenant: page.props.tenant }), {
                 onSuccess: () => {
                     showSuccessToast("Clearing has been deleted successfully");
                 },
@@ -553,7 +555,7 @@ const performSearch = debounce((q) => {
         date_end: dateRange.value.end,
     };
 
-    router.get(route("withholdingtaxclearing"), filters, {
+    router.get(route("withholdingtaxclearing", { tenant: page.props.tenant }), filters, {
         preserveState: true,
         replace: true,
         onFinish: () => {
@@ -602,7 +604,7 @@ const applyFilters = () => {
         date_end: dateRange.value.end,
     };
 
-    router.get(route("withholdingtaxclearing"), filters, {
+    router.get(route("withholdingtaxclearing", { tenant: page.props.tenant }), filters, {
         preserveState: true,
         replace: true,
         onStart: () => (isLoading.value = true),

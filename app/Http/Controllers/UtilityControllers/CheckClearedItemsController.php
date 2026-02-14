@@ -8,11 +8,12 @@ use Illuminate\Http\Request;
 
 class CheckClearedItemsController extends Controller
 {
-    public function getByClearingNo($clearing_no)
+    public function getByClearingNo(Request $request, $tenant, $clearing_no)
     {
         try {
+            $clearing_no = trim($clearing_no);
             // Option 1: Direct query on InvoiceItem model
-            $items = CheckClearedItems::where('clearing_no', $clearing_no)
+            $items = CheckClearedItems::on('tenant')->where('clearing_no', $clearing_no)
                 ->select([
                     'payment_no',
                     'check_no',

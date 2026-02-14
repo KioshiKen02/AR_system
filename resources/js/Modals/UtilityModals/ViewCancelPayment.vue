@@ -442,11 +442,13 @@
 
 <script setup>
 import { computed, nextTick, ref, watch, onMounted, onUnmounted } from "vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import CustomerListModal from "../TransactionModals/CustomerListModal.vue";
 import { mdiClose } from "@mdi/js";
+
+const page = usePage();
 
 const props = defineProps({
     show: Boolean,
@@ -509,35 +511,63 @@ const showWarningToast = (message) => {
 const paymentDetails = ref([]);
 watch(
     () => props.show,
-    async (visible, oldVisible) => {
-        if (visible && !oldVisible) {
+    async (visible) => {
+        if (visible) {
             modalLoading.value = true;
-            form.document_no = props.selected.document_no
-                ? props.selected.document_no
-                : props.selected.payment_no;
-            form.type = props.selected.type;
-            form.customer_code = props.selected.customer_code;
-            form.customer_name = props.selected.customer_name;
+            paymentDetails.value = []; // Reset
+
+            form.document_no = props.selected?.document_no || props.selected?.payment_no;
+            form.type = props.selected?.type;
+            form.customer_code = props.selected?.customer_code;
+            form.customer_name = props.selected?.customer_name;
+
+            if (!props.selected?.cancellation_no) {
+                console.warn("No cancellation_no provided for fetching items");
+                modalLoading.value = false;
+                return;
+            }
 
             try {
+                if (!page.props.tenant) {
+                    console.error("Tenant is missing in page props");
+                    showWarningToast("Application context (tenant) is missing. Please refresh.");
+                    modalLoading.value = false;
+                    return;
+                }
+
                 const response = await axios.get(
-                    route("getCancelledItems", props.selected.cancellation_no)
+                    route("getCancelledItems", {
+                        tenant: page.props.tenant,
+                        cancellation_no: props.selected.cancellation_no,
+                    })
                 );
 
-                // Map the response data to our table structure
-                paymentDetails.value = response.data.map((payment) => ({
-                    id: payment.id,
-                    payment_no: payment.payment_no,
-                    document_no: payment.document_no,
-                    payment_type: payment.payment_type,
-                    receipt_date: payment.receipt_date,
-                    amount_paid: payment.amount,
-                    status: payment.status,
-                    remarks: payment.remarks,
-                }));
+                let rawData = [];
+                if (Array.isArray(response.data)) {
+                    rawData = response.data;
+                } else if (response.data?.payment_details && Array.isArray(response.data.payment_details)) {
+                    // Support for older nested format if it ever comes back
+                    rawData = response.data.payment_details;
+                } else if (response.data?.payment_info && response.data?.payment_details) {
+                    // Support for the specific nested format reported by user
+                    rawData = response.data.payment_details;
+                }
+
+                paymentDetails.value = rawData.map((item) => {
+                    const mapped = {
+                        id: item.id,
+                        payment_no: item.payment_no || item.document_no, // Fallback
+                        document_no: item.document_no || item.payment_no, // Fallback
+                        payment_type: item.payment_type || item.type || "N/A",
+                        receipt_date: item.receipt_date || item.payment_receipt_date || item.payment_date || item.document_date,
+                        amount_paid: item.amount_paid || item.amount || 0,
+                        status: item.status || "Cancelled",
+                        remarks: item.remarks || "No remarks",
+                    };
+                    return mapped;
+                });
             } catch (error) {
-                console.error("Error fetching payment details:", error);
-                paymentDetails.value = [];
+                console.error("Error fetching cancel payment items:", error);
                 showWarningToast("Failed to fetch payment details");
             } finally {
                 modalLoading.value = false;
@@ -548,37 +578,8 @@ watch(
 );
 
 const submit = () => {
-    // Filter only rows with status changed to "Cleared"
-    const clearedPayments = paymentDetails.value.filter(
-        (payment) => payment.status !== "Floating"
-    );
-
-    if (clearedPayments.length === 0) {
-        showWarningToast("No checks selected for clearing");
-        return;
-    }
-
-    // Prepare the data to submit
-    form.payment_details = clearedPayments.map((payment) => ({
-        payment_no: payment.payment_no,
-        wht_no: payment.wht_no,
-        document_no: payment.document_no,
-        type: payment.type,
-        receipt_date: payment.receipt_date,
-        amount: payment.amount_paid,
-        status: payment.status,
-        remarks: payment.remarks,
-    }));
-
-    form.post(route("whtclearing"), {
-        onSuccess: () => {
-            showDialog.value = true;
-        },
-        onError: (errors) => {
-            console.log(errors);
-            showWarningToast(errors.message || "Failed to clear WHT");
-        },
-    });
+    // This is a view-only modal for Cancel Payment
+    console.log("Submit triggered but not implemented for ViewCancelPayment");
 };
 
 //#region ///////////////////////////////////ANIMATION////////////////////////////////////////

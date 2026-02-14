@@ -439,13 +439,15 @@
 
 <script setup>
 import { computed, nextTick, ref, watch, onMounted, onUnmounted } from "vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import ManagersKey from "../ManagersKey.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 import usePermissions from "../../Pages/Composables/usePermissions";
+
+const page = usePage();
 
 const props = defineProps({
     show: Boolean,
@@ -532,7 +534,7 @@ const previewInvoice = async () => {
         };
 
         const response = await axios.post(
-            route("previewWhtCleared"),
+            route("previewWhtCleared", { tenant: page.props.tenant }),
             submissionData,
             {
                 responseType: "blob", // important to handle PDF as binary
@@ -573,11 +575,17 @@ watch(
 
             try {
                 const response = await axios.get(
-                    route("getWHTClearedItems", props.selected.wht_clearing_no)
+                    route("getWHTClearedItems", {
+                        wht_clearing_no: props.selected.wht_clearing_no,
+                        tenant: page.props.tenant,
+                    })
                 );
 
+                // Ensure response.data is an array before mapping
+                const data = Array.isArray(response.data) ? response.data : [];
+
                 // Map the response data to our table structure
-                paymentDetails.value = response.data.map((payment) => ({
+                paymentDetails.value = data.map((payment) => ({
                     payment_no: payment.payment_no,
                     wht_no: payment.wht_no,
                     document_no: payment.document_no,

@@ -17,7 +17,7 @@ use Inertia\Inertia;
 
 class CancelPaymentController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, $tenant)
     {
         $query = CancelPayment::on('tenant');
 
@@ -37,7 +37,7 @@ class CancelPaymentController extends Controller
         ]);
     }
 
-    public function cancelPaymentUsingDocumentNo(Request $request, CancelPaymentNumberService $cancelPaymentNumberService)
+    public function cancelPaymentUsingDocumentNo(Request $request, $tenant, CancelPaymentNumberService $cancelPaymentNumberService)
     {
         $validated = $request->validate([
             'document_no' => 'required|string',
@@ -47,6 +47,7 @@ class CancelPaymentController extends Controller
             'payment_details' => 'required|array',
             'payment_details.*.id' => 'required|numeric',
             'payment_details.*.payment_no' => 'required|string',
+            'payment_details.*.document_no' => 'nullable|string',
             'payment_details.*.receipt_date' => 'required|date',
             'payment_details.*.payment_type' => 'required|string',
             'payment_details.*.advpy_amount_paid' => 'required|numeric',
@@ -75,6 +76,7 @@ class CancelPaymentController extends Controller
                 return [
                     'cancellation_no' => $cancellationNo,
                     'payment_no' => $item['payment_no'],
+                    'document_no' => $item['document_no'] ?? null,
                     'receipt_date' => $item['receipt_date'],
                     'payment_type' => $item['payment_type'],
                     'amount' => $item['amount'],
@@ -121,7 +123,7 @@ class CancelPaymentController extends Controller
         });
     }
 
-    public function cancelPaymentUsingPaymentNo(Request $request, CancelPaymentNumberService $cancelPaymentNumberService)
+    public function cancelPaymentUsingPaymentNo(Request $request, $tenant, CancelPaymentNumberService $cancelPaymentNumberService)
     {
         $validated = $request->validate([
             'payment_no' => 'required|string',
@@ -131,6 +133,7 @@ class CancelPaymentController extends Controller
             'payment_details' => 'required|array',
             'payment_details.*.id' => 'required|numeric',
             'payment_details.*.document_no' => 'required|string',
+            'payment_details.*.payment_no' => 'nullable|string',
             'payment_details.*.receipt_date' => 'required|date',
             'payment_details.*.payment_type' => 'required|string',
             'payment_details.*.type' => 'required|string',
@@ -173,6 +176,7 @@ class CancelPaymentController extends Controller
                 return [
                     'cancellation_no' => $cancellationNo,
                     'document_no' => $item['document_no'],
+                    'payment_no' => $item['payment_no'] ?? null,
                     'receipt_date' => $item['receipt_date'],
                     'payment_type' => $item['payment_type'],
                     'amount' => $item['amount'],
@@ -216,7 +220,7 @@ class CancelPaymentController extends Controller
         });
     }
 
-    public function latest()
+    public function latest(Request $request, $tenant)
     {
         return DB::connection('tenant')->transaction(function () {
             $latestCancellationNo = CancelPayment::on('tenant')->lockForUpdate()
