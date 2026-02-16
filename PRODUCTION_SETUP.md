@@ -56,7 +56,7 @@ Reverb needs to run permanently as a background service.
    nssm install ar_sys_reverb
    ```
 3. In the NSSM GUI:
-   - **Path**: Click `...` and select your PHP executable (e.g., `D:\laragon6\bin\php\php-8.2.4\php.exe`).
+   - **Path**: Click `...` and select your PHP executable (e.g., `D:\laragon6\bin\php\php-8.3.12-Win32-vs16-x64\php.exe`).
    - **Startup directory**: Select your project root folder (e.g., `D:\laragon6\www\ar_system`).
    - **Arguments**: 
      ```
