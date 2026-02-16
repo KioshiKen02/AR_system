@@ -39,7 +39,9 @@ const visiblePages = computed(() => {
 
 // Build URL with all current query parameters
 const buildPageUrl = (page) => {
-    const url = new URL(props.paginator.path, window.location.origin);
+    const rawPath = props.paginator.path || "";
+    const path =
+        rawPath.replace(/^https?:\/\/[^/]+/i, "") || window.location.pathname;
 
     // Preserve all existing query parameters except 'page'
     const params = new URLSearchParams(window.location.search);
@@ -52,7 +54,8 @@ const buildPageUrl = (page) => {
         params.delete("page"); // Remove page param if going to page 1
     }
 
-    return `${url.pathname}?${params.toString()}`;
+    const query = params.toString();
+    return query ? `${path}?${query}` : path;
 };
 
 const makeLabel = (label) => {
