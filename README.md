@@ -111,11 +111,9 @@ composer install --no-dev --optimize-autoloader
 npm install
 <img width="659" height="31" alt="Dependencies Installation" src="https://github.com/user-attachments/assets/756fed73-3134-463f-a607-2f2f0386b9af" />
 Step 4: Copy to Server
-Copy the project folder into the UniServerZ www folder (provided setup).
+Copy the project folder into the Laragon www folder (recommended) or UniServerZ www folder.
 
-Location: Paste project inside the WWW folder of UniServerZ
-
-<img width="681" height="203" alt="UniServerZ Folder Structure" src="https://github.com/user-attachments/assets/59566aa5-f3e6-4044-94f4-86bf11e4d828" />
+Location: Paste project inside the `www` folder of Laragon (e.g., `C:\laragon\www\`)
 Step 5: Archive UniServerZ
 Archive the UniServerZ folder after adding your project.
 
