@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
 class AuthController extends Controller
 {
@@ -199,7 +200,6 @@ class AuthController extends Controller
 
         $request->session()->regenerateToken();
 
-        // Always redirect to arsystem on logout
-        return redirect()->route('landing', ['tenant' => 'arsystem']);
+        return Inertia::location(route('landing', ['tenant' => 'arsystem']));
     }
 }

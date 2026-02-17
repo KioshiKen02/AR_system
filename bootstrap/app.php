@@ -36,6 +36,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn () => route('login', [
             'tenant' => request()->route('tenant') ?? request()->segment(1) ?? 'arsystem'
         ]));
+        $middleware->redirectUsersTo(function () {
+            $user = request()->user();
+            if ($user) {
+                $targetSetting = $user->appSetting ?: ($user->appSettings->first() ?: null);
+                if ($targetSetting && $targetSetting->is_active) {
+                    return route('dashboard', ['tenant' => strtolower($targetSetting->base_url)]);
+                }
+            }
+            return route('dashboard', [
+                'tenant' => request()->route('tenant') ?? request()->segment(1) ?? 'arsystem'
+            ]);
+        });
         $middleware->validateCsrfTokens(except: [
             // 'rizalbreeder/broadcasting/*',
             // 'rizalbreeder/invoice-report',

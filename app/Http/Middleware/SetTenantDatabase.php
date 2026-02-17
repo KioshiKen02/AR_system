@@ -21,6 +21,10 @@ class SetTenantDatabase
         $tenantSlug = $request->route('tenant');
         $buId = $request->input('bu_id');
 
+        if ($tenantSlug && strtolower($tenantSlug) === 'arsystem') {
+            return $next($request);
+        }
+
         // If no tenant in route and no bu_id in request, proceed without switching (uses default mysql)
         if (!$tenantSlug && !$buId) {
             return $next($request);
@@ -33,7 +37,11 @@ class SetTenantDatabase
             $targetSetting = AppSetting::on('mysql')->where('bu_id', $buId)->first();
             
             if (!$targetSetting) {
-                 return response()->json(['error' => 'Business Unit (bu_id) not found'], 404);
+                 if ($request->expectsJson()) {
+                     return response()->json(['error' => 'Business Unit (bu_id) not found'], 404);
+                 }
+                 $fallbackTenant = 'arsystem';
+                 return redirect()->route('session.expired', ['tenant' => $fallbackTenant]);
             }
         } else {
             // Prefer exact base_url (slug) match for active settings, then fallback to normalized app_name matching
@@ -48,7 +56,11 @@ class SetTenantDatabase
                 ->first();
 
             if (!$targetSetting) {
-                return response()->json(['error' => 'Tenant not found'], 404);
+                if ($request->expectsJson()) {
+                    return response()->json(['error' => 'Tenant not found'], 404);
+                }
+                $fallbackTenant = 'arsystem';
+                return redirect()->route('session.expired', ['tenant' => $fallbackTenant]);
             }
         }
 
@@ -104,7 +116,11 @@ class SetTenantDatabase
                     DB::reconnect('tenant');
                 } else {
                     // User found, Tenant found, but No Access
-                    return response()->json(['error' => 'Forbidden: You do not have access to this tenant.'], 403);
+                    if ($request->expectsJson()) {
+                        return response()->json(['error' => 'Forbidden: You do not have access to this tenant.'], 403);
+                    }
+                    $fallbackTenant = 'arsystem';
+                    return redirect()->route('session.expired', ['tenant' => $fallbackTenant]);
                 }
         }
 
