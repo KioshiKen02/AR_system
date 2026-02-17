@@ -195,7 +195,6 @@ watch(
             form.amount_paid = formatCurrency(props.selected.amount_paid);
             form.wht_amount = formatCurrency(props.selected.wht_amount);
             form.running_balance = formatCurrency(
-                props.selected.document_balance
             );
 
             try {
@@ -207,68 +206,17 @@ watch(
                     }
                 });
                 detailedTransactions.value = detailResponse.data.data;
-
-                // Compute totals
-                let posAdj = 0;
-                let negAdj = 0;
-                let calculatedTotalPayments = 0;
-                
-                detailedTransactions.value.forEach(item => {
-                    if (item.description === 'Positive Adjustment') {
-                        posAdj += parseFloat(item.debit || 0);
-                    } else if (item.description === 'Negative Adjustment') {
-                        negAdj += parseFloat(item.credit || 0);
-                    }
-                    
-                    if (item.type === 'Payment') {
-                        calculatedTotalPayments += parseFloat(item.credit || 0);
-                    }
-                });
-
-                form.pos_adjustment = formatCurrency(posAdj);
-                form.neg_adjustment = formatCurrency(negAdj);
-
-                // Use calculated total payments only for BG/Beginning Balance types
-                // if (form.type === 'BG' || form.type === 'Beginning Balance') {
-                //     form.amount_paid = formatCurrency(calculatedTotalPayments);
-                // }
-                
+                const summary = detailResponse.data.summary || {};
+                form.pos_adjustment = formatCurrency(summary.pos_adjustment || 0);
+                form.neg_adjustment = formatCurrency(summary.neg_adjustment || 0);
                 if (form.type === 'BG' || form.type === 'Beginning Balance') {
-                     form.amount_paid = formatCurrency(calculatedTotalPayments);
+                    form.amount_paid = formatCurrency(summary.payments_total || 0);
                 } else {
-                     form.amount_paid = formatCurrency(props.selected.amount_paid || 0);
+                    form.amount_paid = formatCurrency(props.selected.amount_paid || 0);
                 }
-
-                // Running Balance Computation
-                let beginningAmount = parseFloat(props.selected.amount || 0);
-
-                if (form.type === 'BG' || form.type === 'Beginning Balance') {
-                    beginningAmount = parseFloat(props.selected.amount || 0) - posAdj + negAdj;
-                    form.amount = formatCurrency(beginningAmount);
-                } else {
-                    beginningAmount = parseFloat(props.selected.amount || 0)
-                     form.amount = formatCurrency(beginningAmount);
-                }
-
-                const overage = parseFloat(props.selected.overage || 0);
-                const shrinkage = parseFloat(props.selected.shrinkage || 0);
-                const returnAmount = parseFloat(props.selected.return || 0);
-                const whtAmount = parseFloat(props.selected.wht_amount || 0);
-                
-                // For Total Payments in calculation:
-                let totalPaymentsVal = 0;
-                if (form.type === 'BG' || form.type === 'Beginning Balance') {
-                    totalPaymentsVal = calculatedTotalPayments;
-                } else {
-                    totalPaymentsVal = parseFloat(props.selected.amount_paid || 0);
-                }
-                
-                // Formula: (Beginning + Pos Adj - Neg Adj - Overage - Shrinkage - Return - WHT)
-                const adjustedAmountVal = beginningAmount - overage - shrinkage - returnAmount - whtAmount + posAdj - negAdj;
-                form.adjusted_amount = formatCurrency(adjustedAmountVal);
-                
-                const runningBalanceVal = adjustedAmountVal - totalPaymentsVal;
-                form.running_balance = formatCurrency(runningBalanceVal);
+                form.amount = formatCurrency(summary.beginning_amount ?? parseFloat(props.selected.amount || 0));
+                form.adjusted_amount = formatCurrency(summary.adjusted_amount ?? 0);
+                form.running_balance = formatCurrency(summary.running_balance ?? 0);
 
                 const response = await axios.get(
                     route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),

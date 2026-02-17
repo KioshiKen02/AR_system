@@ -346,6 +346,12 @@ class CustomerLedgerController extends Controller
         
         $transactions = [];
         $runningBalance = 0;
+        $posAdjSum = 0;
+        $negAdjSum = 0;
+        $paymentsSum = 0;
+        $beginningAmountDisplay = 0;
+        $adjustedAmountVal = 0;
+        $finalRunningBalance = 0;
 
         // 1. Get Beginning Balance / Initial Transaction
         if ($type === 'Beginning Balance' || $type === 'BG') {
@@ -395,7 +401,7 @@ class CustomerLedgerController extends Controller
             $applyTo = 'Other Income';
         }
 
-        $adjustments = Adjustment::where('invoice_no', $invoiceNo)
+            $adjustments = Adjustment::where('invoice_no', $invoiceNo)
             ->where('apply_to', $applyTo)
             ->orderBy('created_at', 'asc')
             ->get();
@@ -409,9 +415,11 @@ class CustomerLedgerController extends Controller
             if ($adj->type === 'Positive') {
                 $debit = $adjAmount;
                 $runningBalance += $adjAmount;
+                $posAdjSum += $adjAmount;
             } elseif ($adj->type === 'Negative') {
                 $credit = $adjAmount; // Negative adjustment reduces the balance, effectively like a credit
                 $runningBalance -= $adjAmount;
+                $negAdjSum += $adjAmount;
             }
 
             $transactions[] = [
@@ -434,6 +442,7 @@ class CustomerLedgerController extends Controller
         foreach ($payments as $payment) {
             $amountPaid = $payment->amount_paid;
             $runningBalance -= $amountPaid;
+            $paymentsSum += $amountPaid;
 
             $transactions[] = [
                 'date' => $payment->payment_date,
@@ -446,11 +455,44 @@ class CustomerLedgerController extends Controller
             ];
         }
         
+        $ledgerRow = CustomerLedger::where('invoice_number', $invoiceNo)
+            ->whereIn('type', ['BG', 'Beginning Balance', $type])
+            ->orderByDesc('id')
+            ->first();
+        $overage = $ledgerRow->overage ?? 0.00;
+        $shrinkage = $ledgerRow->shrinkage ?? 0.00;
+        $returnAmt = $ledgerRow->return ?? 0.00;
+        $whtAmt = \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')
+            ? ($ledgerRow->wht_amount ?? 0.00)
+            : 0.00;
+        if ($type === 'Beginning Balance' || $type === 'BG') {
+            $beginRow = \App\Models\TransactionModels\BeginningBalance::where('beginningbalance_no', $invoiceNo)->first();
+            $baseAmount = $beginRow?->balance_amount ?? 0.00;
+            $beginningAmountDisplay = $baseAmount; // match transaction history initial debit
+        } else {
+            // match initial debit computed for non-BG entries
+            $baseAmount = (($ledgerRow->amount ?? 0.00)
+                - ($ledgerRow->shrinkage ?? 0.00)
+                + ($ledgerRow->overage ?? 0.00)
+                - ($ledgerRow->return ?? 0.00));
+            $beginningAmountDisplay = $baseAmount;
+        }
+        $adjustedAmountVal = $baseAmount - $overage - $shrinkage - $returnAmt - $whtAmt + $posAdjSum - $negAdjSum;
+        $finalRunningBalance = $adjustedAmountVal - (($type === 'Beginning Balance' || $type === 'BG') ? $paymentsSum : ($ledgerRow->amount_paid ?? 0.00));
+        
         // Sort transactions by date if needed, but they are usually added in chronological order of processing logic
         // If strict date sorting is needed, we can collect all and sort.
 
         return response()->json([
-            'data' => $transactions
+            'data' => $transactions,
+            'summary' => [
+                'pos_adjustment' => $posAdjSum,
+                'neg_adjustment' => $negAdjSum,
+                'payments_total' => $paymentsSum,
+                'beginning_amount' => $beginningAmountDisplay,
+                'adjusted_amount' => $adjustedAmountVal,
+                'running_balance' => $finalRunningBalance,
+            ],
         ]);
     }
 
