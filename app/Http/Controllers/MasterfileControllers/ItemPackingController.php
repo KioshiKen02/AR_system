@@ -9,6 +9,8 @@ use App\Models\MasterfileModels\PackingType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ItemPackingController extends Controller
 {
@@ -25,9 +27,8 @@ class ItemPackingController extends Controller
 
     public function store(Request $request)
     {
-        // dd($request->all());
         $validated = $request->validate([
-            'item_id' => ['required', 'integer', Rule::exists('item', 'id')->connection('tenant')],
+            'item_id' => ['required', 'integer'],
             'packings' => ['nullable', 'array'],
             'packings.*.groupcode' => ['required_with:packings', 'string'],
             'packings.*.packing' => ['required_with:packings', 'string'],
@@ -36,15 +37,20 @@ class ItemPackingController extends Controller
             'packings.*.status' => ['required_with:packings', 'string'],
         ]);
 
+        $itemExists = Item::on('tenant')->where('id', $validated['item_id'])->exists();
+        if (!$itemExists) {
+            throw ValidationException::withMessages(['item_id' => 'Selected item does not exist']);
+        }
+
         if (isset($validated['packings'])) {
             $combinations = array_map(function ($packing) {
                 return strtolower(trim($packing['groupcode'] . '|' . $packing['packing']));
             }, $validated['packings']);
 
             if (count($combinations) !== count(array_unique($combinations))) {
-                return back()
-                    ->withErrors(['packings' => 'Duplicate groupcode and packing combination is not allowed'])
-                    ->withInput();
+                throw ValidationException::withMessages([
+                    'packings' => 'Duplicate groupcode and packing combination is not allowed'
+                ]);
             }
         }
 
@@ -84,13 +90,25 @@ class ItemPackingController extends Controller
                 ]);
             }
         });
+        
+        return redirect()->back()->with('success', true);
     }
 
     public function destroy(Request $request, $itemPacking)
     {
         $targetId = $request->route('itemPacking') ?? $itemPacking;
-        $model = ItemPacking::on('tenant')->findOrFail($targetId);
-        $model->delete();
+
+        if (!is_numeric($targetId)) {
+            throw ValidationException::withMessages(['id' => 'Invalid item packing id']);
+        }
+
+        try {
+            $model = ItemPacking::on('tenant')->findOrFail($targetId);
+            $model->delete();
+            return redirect()->back()->with('success', true);
+        } catch (ModelNotFoundException $e) {
+            return redirect()->back()->withErrors(['general' => 'Item packing not found']);
+        }
     }
 
     public function getPackingTypes()

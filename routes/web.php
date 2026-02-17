@@ -87,6 +87,10 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
     Broadcast::routes(['middleware' => ['web', 'auth']]);
 
     Route::middleware('auth')->group(function () {
+        Route::get('/', function () {
+            $tenant = request()->route('tenant') ?? 'arsystem';
+            return redirect()->route('dashboard', ['tenant' => $tenant]);
+        })->name('home');
 
         //Theme
         Route::post('/preferences/theme', [ThemeController::class, 'setTheme'])->name('setTheme');
