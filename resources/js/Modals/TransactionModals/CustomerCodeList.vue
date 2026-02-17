@@ -135,6 +135,8 @@ code, index
 <script setup>
 import { mdiClose, mdiMagnify, mdiNavigationVariantOutline } from "@mdi/js";
 import { nextTick, ref, watch } from "vue";
+import { usePage } from "@inertiajs/vue3";
+import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 
 const props = defineProps({
     show: Boolean,
@@ -150,6 +152,7 @@ const searchQuery = ref("");
 const filteredData = ref([]);
 const searchInput = ref(null);
 let debounceTimeout = null;
+const page = usePage();
 
 watch(
     () => props.show,
@@ -191,7 +194,7 @@ watch(
                 } else {
                     // Fall back to Laravel endpoint if external API fails
                     const localResponse = await axios.get(
-                        route("customers.getAll")
+                        route("customers.getAll", { tenant: page.props.tenant })
                     );
 
                     customerCodeResults.value = localResponse.data

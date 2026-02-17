@@ -578,7 +578,7 @@ class PaymentController extends Controller
             } else {
                 //OLDEST TO NEWEST PAYMENT
                 if ($validated['payment_type'] === '5E - Creditable(WHT)') {
-                    dd('first else is trigger 2');
+                    // dd('first else is trigger 2');
 
                     // Get all customer ledgers ordered by date and ID (oldest first)
                     $ledgers = CustomerLedger::where('customer_code', $validated['customer_code'])

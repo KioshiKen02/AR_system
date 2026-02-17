@@ -238,7 +238,7 @@ class InvoiceController extends Controller
             $validated['freight'] = (float) preg_replace('/[^0-9.]/', '', $validated['freight'] ?? 0);
             $validated['net_total'] = (float) preg_replace('/[^0-9.]/', '', $validated['net_total'] ?? 0);
 
-            Invoice::create([
+            $invoiceData = [
                 'invoice_no' => $invoiceNumber,
                 'payment_no' => $validated['payment_no'],
                 'receipt_date' => $validated['receipt_date'],
@@ -251,12 +251,21 @@ class InvoiceController extends Controller
                 'particular' => $validated['particular'],
                 'reference_no' => $validated['reference_no'],
                 'total_amount' => $validated['total_amount'],
-                'added_vat' => $validated['added_vat'],
-                'deducted_vat' => $validated['deducted_vat'],
-                'freight' => $validated['freight'],
-                'net_total' => (!empty($validated['net_total'])) ? $validated['net_total'] : $validated['total_amount'],
                 'created_by' =>  $request->user()->name,
-            ]);
+            ];
+            if (Schema::connection('tenant')->hasColumn('invoice', 'added_vat')) {
+                $invoiceData['added_vat'] = $validated['added_vat'];
+            }
+            if (Schema::connection('tenant')->hasColumn('invoice', 'deducted_vat')) {
+                $invoiceData['deducted_vat'] = $validated['deducted_vat'];
+            }
+            if (Schema::connection('tenant')->hasColumn('invoice', 'freight')) {
+                $invoiceData['freight'] = $validated['freight'];
+            }
+            if (Schema::connection('tenant')->hasColumn('invoice', 'net_total')) {
+                $invoiceData['net_total'] = (!empty($validated['net_total'])) ? $validated['net_total'] : $validated['total_amount'];
+            }
+            Invoice::create($invoiceData);
 
             CustomerLedger::create([
                 'invoice_number' => $invoiceNumber,
