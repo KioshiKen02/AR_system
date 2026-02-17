@@ -49,15 +49,26 @@ class ItemController extends Controller
             $query->orderByRaw("LTRIM(code) ASC");
         }
 
-        return Inertia::render('Item', [
-            'items' => $query->paginate(10)->withQueryString(),
-            'searchTerm' => $request->search,
-            'filters' => [
-                'code_sort' => $request->code_sort,
-                'type_filters' => $request->type_filters ? (is_array($request->type_filters) ? $request->type_filters : explode(',', $request->type_filters)) : [],
-            ],
-            'broadcastChannel' => 'items',
-        ]);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'items' => $query->paginate(10)->withQueryString(),
+                'searchTerm' => $request->search,
+                'filters' => [
+                    'code_sort' => $request->code_sort,
+                    'type_filters' => $request->type_filters ? (is_array($request->type_filters) ? $request->type_filters : explode(',', $request->type_filters)) : [],
+                ],
+            ]);
+        } else {
+            return Inertia::render('Item', [
+                'items' => $query->paginate(10)->withQueryString(),
+                'searchTerm' => $request->search,
+                'filters' => [
+                    'code_sort' => $request->code_sort,
+                    'type_filters' => $request->type_filters ? (is_array($request->type_filters) ? $request->type_filters : explode(',', $request->type_filters)) : [],
+                ],
+                'broadcastChannel' => 'items',
+            ]);
+        }
     }
 
     public function addItem(Request $request)

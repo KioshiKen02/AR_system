@@ -8,12 +8,15 @@ use App\Models\MasterfileModels\ItemPacking;
 use App\Models\MasterfileModels\PackingType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ItemPackingController extends Controller
 {
 
-    public function show(Item $item)
+    public function show(Request $request, $item)
     {
+        $targetId = $request->route('item') ?? $item;
+        $item = Item::on('tenant')->findOrFail($targetId);
         return response()->json(
             $item->packings()->select('groupcode', 'packing', 'price', 'quantity', 'status')->get()
         );
@@ -24,13 +27,13 @@ class ItemPackingController extends Controller
     {
         // dd($request->all());
         $validated = $request->validate([
-            'item_id' => 'required|integer|exists:item,id',
-            'packings' => 'nullable|array',
-            'packings.*.groupcode' => 'required_with:packings|string',
-            'packings.*.packing' => 'required_with:packings|string',
-            'packings.*.price' => 'required_with:packings|numeric',
-            'packings.*.quantity' => 'required_with:packings|integer',
-            'packings.*.status' => 'required_with:packings|string',
+            'item_id' => ['required', 'integer', Rule::exists('item', 'id')->connection('tenant')],
+            'packings' => ['nullable', 'array'],
+            'packings.*.groupcode' => ['required_with:packings', 'string'],
+            'packings.*.packing' => ['required_with:packings', 'string'],
+            'packings.*.price' => ['required_with:packings', 'numeric'],
+            'packings.*.quantity' => ['required_with:packings', 'integer'],
+            'packings.*.status' => ['required_with:packings', 'string'],
         ]);
 
         if (isset($validated['packings'])) {
@@ -45,17 +48,17 @@ class ItemPackingController extends Controller
             }
         }
 
-        DB::transaction(function () use ($validated, $request) {
+        DB::connection('tenant')->transaction(function () use ($validated, $request) {
             $itemID = $validated['item_id'];
 
             // If packings is empty or not provided, delete existing records
             if (empty($validated['packings'])) {
-                ItemPacking::where('item_id', $itemID)->delete();
+                ItemPacking::on('tenant')->where('item_id', $itemID)->delete();
                 return;
             }
 
             // Delete old entries
-            ItemPacking::where('item_id', $itemID)->delete();
+            ItemPacking::on('tenant')->where('item_id', $itemID)->delete();
 
             // Prepare data for batch insert
             $newPackings = array_map(function ($packing) use ($itemID) {
@@ -72,9 +75,9 @@ class ItemPackingController extends Controller
             }, $validated['packings']);
 
             // Insert all in one go
-            ItemPacking::insert($newPackings);
+            ItemPacking::on('tenant')->insert($newPackings);
 
-            $item = Item::find($validated['item_id']);
+            $item = Item::on('tenant')->find($validated['item_id']);
             if ($item) {
                 $item->update([
                     'created_by' => $request->user()->name,
@@ -83,14 +86,16 @@ class ItemPackingController extends Controller
         });
     }
 
-    public function destroy(ItemPacking $itemPacking)
+    public function destroy(Request $request, $itemPacking)
     {
-        $itemPacking->delete();
+        $targetId = $request->route('itemPacking') ?? $itemPacking;
+        $model = ItemPacking::on('tenant')->findOrFail($targetId);
+        $model->delete();
     }
 
     public function getPackingTypes()
     {
-        $types = PackingType::pluck('packing_type');
+        $types = PackingType::on('tenant')->pluck('packing_type');
         return response()->json($types);
     }
 }

@@ -431,75 +431,36 @@ const form = useForm({
 //PRICE GROUP
 const fetchPriceGroup = async () => {
     try {
-        //DYNAMIC API LINK
-        let baseUrl = "";
-        switch (appName) {
-            case "Bilar Breeder Local":
-                baseUrl = "http://172.16.43.148/centralized_invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=13";
-                break;
-            case "Bilar Breeder":
-                baseUrl = "http://172.16.220.1:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=13";
-                break;
-            case "Gp Jagna":
-                baseUrl = "http://172.16.220.1:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=50";
-                break;
-            case "Ice Plant":
-                baseUrl = "http://172.16.184.49:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=25";
-                break;
-            case "Peanut Kisses":
-                baseUrl = "http://172.16.184.49:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=26";
-                break;
-            case "Cortes Poultry":
-                baseUrl = "http://172.16.192.68:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=12";
-                break;
-            case "Cortes Piggery":
-                baseUrl = "http://172.16.192.68:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=11";
-                break;
-            case "Canhayupon Breeder":
-                baseUrl = "http://172.16.220.223:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=15";
-                break;
-            case "Bilar Hatchery":
-                baseUrl = "http://172.16.219.200:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=14";
-                break;
-            case "Lapsaon Breeder":
-                baseUrl = "http://172.16.220.222:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=16";
-                break;
-            case "Rizal Breeder":
-                baseUrl = "http://172.16.217.11:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=43";
-                break;
-            // ubay server 
-            case "Feedmill":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=19";
-                break;
-            case "Growout":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=20";
-                break;
-            case "Cortes Fertilizer":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=42";
-                break;
-            case "Ubay Fertilizer":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=22";
-                break;
-            case "Piggery Untaga":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=23";
-                break;
-            case "Demo Farm":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=21";
-                break;
-            case "Dressing Plant":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=17";
-                break;
-            case "Farmers Market":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=41";
-                break;
-            case "Meat Processing":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=46";
-                break;
-            case "Rendering":
-                baseUrl = "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=18";
-                break;
-            default:
-                console.error(`Unknown app name: ${appName}`);
+        // Prefer tenant slug instead of appName to select endpoint
+        const tenant = page.props.tenant;
+        const endpoints = {
+            bilarbreeder: "http://172.16.220.1:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=13",
+            gpjagna: "http://172.16.220.1:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=50",
+            iceplant: "http://172.16.184.49:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=25",
+            peanutkisses: "http://172.16.184.49:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=26",
+            cortespoultry: "http://172.16.192.68:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=12",
+            cortespiggery: "http://172.16.192.68:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=11",
+            canhayuponbreeder: "http://172.16.220.223:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=15",
+            bilarhatchery: "http://172.16.219.200:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=14",
+            lapsaonbreeder: "http://172.16.220.222:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=16",
+            rizalbreeder: "http://172.16.217.11:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=43",
+            // Ubay server
+            feedmill: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=19",
+            growout: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=20",
+            mficortesfertilizer: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=42",
+            mfiubayfertilizer: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=22",
+            piggeryuntaga: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=23",
+            demofarm: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=21",
+            dressingplant: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=17",
+            farmersmarket: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=41",
+            meatprocessing: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=46",
+            rendering: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=18",
+        };
+        const baseUrl = endpoints[tenant];
+        if (!baseUrl) {
+            console.warn(`Unknown tenant '${tenant}' cannot fetch price groups`);
+            priceGroupResults.value = [];
+            return;
         }
         const response = await axios.get(
             `${baseUrl}`
