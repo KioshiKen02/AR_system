@@ -453,6 +453,8 @@ import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import { isEmpty } from "lodash";
 import DropdownInput from "../../Pages/Components/DropdownInput.vue";
+import { route } from "../../../../vendor/tightenco/ziggy/src/js";
+import { usePage } from "@inertiajs/vue3";
 
 const props = defineProps({
     customer_code: String,
@@ -462,6 +464,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["close", "submit"]);
+const page = usePage();
 
 const selectedInvoiceNumbers = ref([]);
 const selectedInvoiceType = ref([]);
@@ -503,7 +506,7 @@ watch(
             isLoading.value = true;
 
             const response = await axios.get(
-                route("getInvoiceListForPayment"),
+                route("getInvoiceListForPayment", { tenant: page.props.tenant }),
                 {
                     params: {
                         customer_code: newCode,

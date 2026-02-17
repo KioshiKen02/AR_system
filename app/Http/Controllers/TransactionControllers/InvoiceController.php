@@ -471,15 +471,24 @@ class InvoiceController extends Controller
         $customerCode = $request->input('customer_code');
         $date = $request->input('date');
 
+        Log::info('getInvoiceListForPayment diagnostics', [
+            'tenant_slug' => $request->route('tenant'),
+            'database_default' => config('database.default'),
+            'tenant_configured' => config()->has('database.connections.tenant'),
+            'tenant_database' => config('database.connections.tenant.database') ?? null,
+            'customer_code' => $customerCode,
+            'date' => $date,
+        ]);
+
         // Get all ledger entries for the customer
-        $ledgers = CustomerLedger::where('customer_code', $customerCode)
-            ->select('invoice_number', 'date', 'type', 'amount', 'amount_paid', 'running_balance', 'wht_amount', 'trade_type')
+        $ledgers = CustomerLedger::on('tenant')->where('customer_code', $customerCode)
+            ->select('invoice_number', 'date', 'type', 'amount', 'amount_paid', 'running_balance','trade_type')
             ->where('date', '<=', $date)
             ->orderBy('date')
             ->orderBy('created_at')
             ->get();
 
-        $floatingAmounts = PaymentDetails::where('customer_code', $customerCode)
+        $floatingAmounts = PaymentDetails::on('tenant')->where('customer_code', $customerCode)
             ->where('status', 'Floating')
             ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
             ->groupBy('document_no', 'type')
@@ -494,7 +503,7 @@ class InvoiceController extends Controller
             $whtFloatingAmount = 0;
 
             // Check if invoice exists in payment_details
-            $paymentDetails = PaymentDetails::where('document_no', $ledger->invoice_number)
+            $paymentDetails = PaymentDetails::on('tenant')->where('document_no', $ledger->invoice_number)
                 ->where('type', $ledger->type)
                 ->get();
 
@@ -520,7 +529,7 @@ class InvoiceController extends Controller
                 'amount' => $ledger->amount,
                 'amount_paid' => $ledger->amount_paid,
                 'running_balance' => $ledger->running_balance,
-                'trade_type' => $ledger->trade_type,
+                'trade_type' => $ledger->trade_type ?? null,
                 'pdc_floating_amount' => $pdcFloatingAmount,
                 'has_pdc_floating_payments' => $pdcFloatingAmount > 0,
                 'dc_floating_amount' => $dcFloatingAmount,

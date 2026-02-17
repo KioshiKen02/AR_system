@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MasterfileModels\ChargeInvoiceType;
 use App\Models\MasterfileModels\Item;
 use App\Models\MasterfileModels\ItemPacking;
+use App\Models\AppSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -23,7 +24,7 @@ class ItemController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Item::query();
+        $query = Item::on('tenant')->newQuery();
 
         // Search functionality
         if ($request->search) {
@@ -106,7 +107,7 @@ class ItemController extends Controller
             $fields['item_photo'] = Storage::url($path);
         }
 
-        Item::create($fields);
+        Item::on('tenant')->create($fields);
     }
 
     public function syncItem(Request $request)
@@ -122,7 +123,32 @@ class ItemController extends Controller
 
             //DYNAMIC API LINK
             $user = auth()->user();
-            $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
+            $tenantSlug = request()->route('tenant');
+            $defaultConn = config('database.default');
+            $tenantConnConfigured = !is_null(config('database.connections.tenant'));
+            $tenantDbName = $tenantConnConfigured ? (config('database.connections.tenant.database') ?? null) : null;
+            $targetSetting = AppSetting::on('mysql')
+                ->where('is_active', true)
+                ->where(function ($q) use ($tenantSlug) {
+                    $q->where('base_url', $tenantSlug)
+                      ->orWhereRaw("REPLACE(LOWER(app_name), ' ', '') = ?", [strtolower($tenantSlug)])
+                      ->orWhereRaw("? LIKE CONCAT('%', REPLACE(LOWER(app_name), ' ', ''), '%')", [strtolower($tenantSlug)]);
+                })
+                ->first();
+            $appName = $targetSetting->app_name ?? ($user && $user->appSetting ? $user->appSetting->app_name : config('app.name'));
+            Log::info('syncItem diagnostics', [
+                'tenant_slug' => $tenantSlug,
+                'database_default' => $defaultConn,
+                'tenant_configured' => $tenantConnConfigured,
+                'tenant_database' => $tenantDbName,
+                'user_id' => $user?->id,
+                'app_name' => $appName,
+            ]);
+            Log::info('syncItem endpoint', [
+                'url' => 'http://172.16.18.27/centralized_masterfile/masterfileController/ItemsController/fetchItems?fetchAll=true',
+                'tenant_database' => $tenantDbName,
+                'app_name' => $appName,
+            ]);
             switch ($appName) {
                 case 'Bilar Breeder Local':
                     $filteredApiItems = array_filter($apiItems, function ($item) {
@@ -284,10 +310,17 @@ class ItemController extends Controller
             // });
 
             $syncedIds = [];
-            DB::transaction(function () use ($filteredApiItems, &$syncedIds) {
+            $stats = ['created' => 0, 'updated' => 0, 'deleted' => 0];
+            DB::connection('tenant')->transaction(function () use ($filteredApiItems, &$syncedIds, &$stats) {
                 foreach ($filteredApiItems as $apiItem) {
                     $syncedIds[] = $apiItem['itemcode'];
-                    Item::updateOrCreate(
+                    $existing = Item::on('tenant')->where('code', $apiItem['itemcode'])->first();
+                    if ($existing) {
+                        $stats['updated']++;
+                    } else {
+                        $stats['created']++;
+                    }
+                    Item::on('tenant')->updateOrCreate(
                         ['code' => $apiItem['itemcode']],
                         [
                             'setup_date' => $apiItem['created_at'],
@@ -295,8 +328,9 @@ class ItemController extends Controller
                         ]
                     );
                 }
-                Item::whereNotIn('code', $syncedIds)->delete();
+                $stats['deleted'] = Item::on('tenant')->whereNotIn('code', $syncedIds)->delete();
             });
+            Log::info('syncItem db_write', $stats);
 
             event(new NewCreated('item'));
 

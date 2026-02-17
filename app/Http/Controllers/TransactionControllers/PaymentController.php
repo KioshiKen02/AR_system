@@ -12,6 +12,7 @@ use App\Models\ReportModels\CustomerLedger;
 use App\Models\TransactionModels\Invoice;
 use App\Models\TransactionModels\Payment;
 use App\Models\TransactionModels\PaymentDetails;
+use App\Models\AppSetting;
 use App\Services\CustomerService;
 use App\Services\InvoiceNumberService;
 use App\Services\InvoiceService;
@@ -1250,7 +1251,16 @@ class PaymentController extends Controller
             try {
                 //DYNAMIC API LINK
                 $user = auth()->user();
-                $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
+                $tenantSlug = request()->route('tenant');
+                $targetSetting = AppSetting::on('mysql')
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($tenantSlug) {
+                        $q->where('base_url', $tenantSlug)
+                          ->orWhereRaw("REPLACE(LOWER(app_name), ' ', '') = ?", [strtolower($tenantSlug)])
+                          ->orWhereRaw("? LIKE CONCAT('%', REPLACE(LOWER(app_name), ' ', ''), '%')", [strtolower($tenantSlug)]);
+                    })
+                    ->first();
+                $appName = $targetSetting->app_name ?? ($user && $user->appSetting ? $user->appSetting->app_name : config('app.name'));
                 switch ($appName) {
                     case 'Bilar Breeder Local':
                         $baseUrl = 'http://172.16.43.148/centralized_invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=13';
@@ -1287,43 +1297,44 @@ class PaymentController extends Controller
                         break;
                     // ubay server 
                     case 'Feedmill':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=19';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=19';
                         break;
                     case 'Growout':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=20';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=20';
                         break;
                     case 'Cortes Fertilizer':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=42';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=42';
                         break;
                     case 'Ubay Fertilizer':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=22';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=22';
                         break;
                     case 'Piggery Untaga':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=23';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=23';
                         break;
                     case 'Demo Farm':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=21';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=21';
                         break;
                     case 'Dressing Plant':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=17';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=17';
                         break;
                     case 'Farmers Market':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=41';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=41';
                         break;
                     case 'Meat Processing':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=46';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=46';
                         break;
                     case 'Rendering':
-                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=18';
+                        $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=18';
                         break;
                     default:
                         throw new \Exception("Unknown app name: {$appName}");
                 }
                 $url = $baseUrl;
-                $response = Http::get($url);
+                Log::info('latestPaymentNO endpoint', ['url' => $url, 'app_name' => $appName]);
+                $response = Http::timeout(3)->retry(2, 100)->get($url);
 
                 if ($response->successful()) {
-                    $apiNextNumber = $response->json()['next_payment_no'];
+                    $apiNextNumber = $response->json()['next_payment_no'] ?? 0;
                     $nextNumber = max($localNextNumber, $apiNextNumber);
                 } else {
                     // If API fails, fall back to local number
@@ -1353,9 +1364,17 @@ class PaymentController extends Controller
 
         // Get the latest payment number from external API
         try {
-            //DYNAMIC API LINK
             $user = auth()->user();
-            $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
+            $tenantSlug = request()->route('tenant');
+            $targetSetting = AppSetting::on('mysql')
+                ->where('is_active', true)
+                ->where(function ($q) use ($tenantSlug) {
+                    $q->where('base_url', $tenantSlug)
+                      ->orWhereRaw("REPLACE(LOWER(app_name), ' ', '') = ?", [strtolower($tenantSlug)])
+                      ->orWhereRaw("? LIKE CONCAT('%', REPLACE(LOWER(app_name), ' ', ''), '%')", [strtolower($tenantSlug)]);
+                })
+                ->first();
+            $appName = $targetSetting->app_name ?? ($user && $user->appSetting ? $user->appSetting->app_name : config('app.name'));
             switch ($appName) {
                 case 'Bilar Breeder Local':
                     $baseUrl = 'http://172.16.43.148/centralized_invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=13';
@@ -1392,43 +1411,41 @@ class PaymentController extends Controller
                     break;
                 // ubay server 
                 case 'Feedmill':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=19';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=19';
                     break;
                 case 'Growout':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=20';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=20';
                     break;
                 case 'Cortes Fertilizer':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=42';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=42';
                     break;
                 case 'Ubay Fertilizer':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=22';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=22';
                     break;
                 case 'Piggery Untaga':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=23';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=23';
                     break;
                 case 'Demo Farm':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=21';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=21';
                     break;
                 case 'Dressing Plant':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=17';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=17';
                     break;
                 case 'Farmers Market':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=41';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=41';
                     break;
                 case 'Meat Processing':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=46';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=46';
                     break;
                 case 'Rendering':
-                    $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=18';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=18';
                     break;
                 default:
                     throw new \Exception("Unknown app name: {$appName}");
             }
             $url = $baseUrl;
 
-            $response = Http::timeout(3) // 3 second timeout
-                ->retry(2, 100) // Retry twice with 100ms delay
-                ->get($url);
+            $response = Http::timeout(3)->retry(2, 100)->get($url);
             if ($response->successful()) {
                 $apiData = $response->json();
                 $apiNextNumber = $apiData['next_payment_no'] ?? 0;
