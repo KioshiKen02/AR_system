@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -481,8 +482,12 @@ class InvoiceController extends Controller
         ]);
 
         // Get all ledger entries for the customer
+        $columns = ['invoice_number', 'date', 'type', 'amount', 'amount_paid', 'running_balance', 'trade_type'];
+        if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
+            $columns[] = 'wht_amount';
+        }
         $ledgers = CustomerLedger::on('tenant')->where('customer_code', $customerCode)
-            ->select('invoice_number', 'date', 'type', 'amount', 'amount_paid', 'running_balance','trade_type')
+            ->select($columns)
             ->where('date', '<=', $date)
             ->orderBy('date')
             ->orderBy('created_at')

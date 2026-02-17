@@ -435,7 +435,7 @@
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, usePage } from "@inertiajs/vue3";
 import ManagersKey from "../ManagersKey.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import axios from "axios";
@@ -456,6 +456,8 @@ import usePermissions from "../../Pages/Composables/usePermissions";
 const props = defineProps({
     show: Boolean,
 });
+
+const page = usePage();
 
 const form = useForm({
     payment_no: null,
@@ -590,7 +592,7 @@ const cashinbankResults = ref([]);
 
 const fetchCashinBank = async () => {
     try {
-        const response = await axios.get(route("getCashInBankList"));
+        const response = await axios.get(route("getCashInBankList", { tenant: page.props.tenant }));
         cashinbankResults.value = response.data.map((cib) => ({
             firstData: cib.bank_code,
             secondData: cib.bank_name,
@@ -1252,9 +1254,9 @@ const submit = () => {
         form.errors[key] = "";
     });
 
-    form.transform((data) => submissionData).post(route("addPayment"), {
+    form.transform((data) => submissionData).post(route("addPayment", { tenant: page.props.tenant }), {
         onSuccess: () => {
-            axios.get(route("payment.latest.paymentNumber")).then((res) => {
+            axios.get(route("payment.latest.paymentNumber", { tenant: page.props.tenant })).then((res) => {
                 form.payment_no = res.data.payment_number;
                 if (canPrint("0203-PAYT")) {
                     showDialog.value = true;

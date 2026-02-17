@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
@@ -477,12 +478,14 @@ class PaymentController extends Controller
 
                         $docbalance = max(0, $ledger->running_balance - $totalApplied);
 
-                        // Update ledger
-                        $ledger->update([
+                        $updateData = [
                             'running_balance' => max(0, $ledger->running_balance - $totalApplied),
                             'amount_paid' => $ledger->amount_paid + $totalApplied,
-                            'wht_amount' => $whtApplied
-                        ]);
+                        ];
+                        if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
+                            $updateData['wht_amount'] = $whtApplied;
+                        }
+                        $ledger->update($updateData);
 
                         // Updated document balance after total applied
                         $processedDocuments[] = [
@@ -547,12 +550,14 @@ class PaymentController extends Controller
 
                         $docbalance = max(0, $ledger->running_balance - $totalApplied);
 
-                        // Update ledger
-                        $ledger->update([
+                        $updateData = [
                             'running_balance' => max(0, $ledger->running_balance - $totalApplied),
                             'amount_paid' => $ledger->amount_paid + $totalApplied,
-                            'wht_amount' => $whtApplied
-                        ]);
+                        ];
+                        if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
+                            $updateData['wht_amount'] = $whtApplied;
+                        }
+                        $ledger->update($updateData);
 
                         // Updated document balance after total applied
                         // This load is pass to creating new payment details
@@ -622,12 +627,14 @@ class PaymentController extends Controller
                         $overage_shortage = $ledger->running_balance - ($amountToApply + $whtApplied);
 
 
-                        $ledger->update([
+                        $updateData = [
                             'running_balance' => $docbalance,
                             'amount_paid' => $ledger->amount_paid + $totalApplied,
-                            'wht_amount' => $whtApplied
-
-                        ]);
+                        ];
+                        if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
+                            $updateData['wht_amount'] = $whtApplied;
+                        }
+                        $ledger->update($updateData);
 
                         $processedDocuments[] = [
                             'document_no' => $ledger->invoice_number,
@@ -705,11 +712,14 @@ class PaymentController extends Controller
 
                                 $overage_shortage = $ledger->running_balance - ($amountToApply + $whtApplied);
 
-                                $ledger->update([
+                                $updateData = [
                                     'running_balance' => $docbalance,
                                     'amount_paid' => $ledger->amount_paid + $totalApplied,
-                                    'wht_amount' => $whtApplied
-                                ]);
+                                ];
+                                if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
+                                    $updateData['wht_amount'] = $whtApplied;
+                                }
+                                $ledger->update($updateData);
 
                                 $processedDocuments[] = [
                                     'document_no' => $ledger->invoice_number,
@@ -1077,6 +1087,15 @@ class PaymentController extends Controller
                 ]);
             }
 
+            if (!Schema::connection('tenant')->hasColumn('payment', 'wht_amount')) {
+                unset($dbData['wht_amount']);
+            }
+            if (!Schema::connection('tenant')->hasColumn('payment', 'total_amount_less_wht')) {
+                unset($dbData['total_amount_less_wht']);
+            }
+            if (!Schema::connection('tenant')->hasColumn('payment', 'advpy_amount_paid')) {
+                unset($dbData['advpy_amount_paid']);
+            }
             Payment::create($dbData);
 
             $checkno = null;
@@ -1104,7 +1123,7 @@ class PaymentController extends Controller
                         ? $amountApplied + $whtPerDoc
                         : $amountApplied;
 
-                    PaymentDetails::create([
+                    $detailsData = [
                         'payment_no' => $nextNumber,
                         'check_no' => $checkno,
                         'document_no' => $doc['document_no'],
@@ -1120,12 +1139,15 @@ class PaymentController extends Controller
                         'amount' => $doc['amount'],
                         'balance' => $doc['balance'],
                         'amount_paid' => $finalAmountPaid,
-                        'wht_amount' => $whtPerDoc,
                         'due_date' => $validated['due_date'] ?? null,
                         'status' => $status,
                         'overage_shortage' => $doc['overage_shortage'],
                         'created_by' => $request->user()->name,
-                    ]);
+                    ];
+                    if (Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+                        $detailsData['wht_amount'] = $whtPerDoc;
+                    }
+                    PaymentDetails::create($detailsData);
                 }
             }
             // if you pay cash in invoice module
@@ -1141,7 +1163,7 @@ class PaymentController extends Controller
                         ? $amountApplied + $whtPerDoc
                         : $amountApplied;
 
-                    PaymentDetails::create([
+                    $detailsData = [
                         'payment_no' => $nextNumber,
                         'check_no' => $checkno,
                         'document_no' => $doc['document_no'],
@@ -1157,12 +1179,15 @@ class PaymentController extends Controller
                         'amount' => $doc['amount'],
                         'balance' => $doc['balance'],
                         'amount_paid' => $finalAmountPaid,
-                        'wht_amount' => $whtPerDoc,
                         'due_date' => $validated['due_date'] ?? null,
                         'status' => $status,
                         'overage_shortage' => $doc['overage_shortage'],
                         'created_by' => $request->user()->name,
-                    ]);
+                    ];
+                    if (Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+                        $detailsData['wht_amount'] = $whtPerDoc;
+                    }
+                    PaymentDetails::create($detailsData);
                 }
             }
 

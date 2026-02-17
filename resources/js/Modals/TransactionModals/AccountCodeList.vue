@@ -178,34 +178,67 @@ watch(
                     case "bilar breeder local":
                         baseUrl = "http://172.16.43.148/centralized_invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=13";
                         break;
+                    case "bilarbreederlocal":
+                        baseUrl = "http://172.16.43.148/centralized_invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=13";
+                        break;
                     case "bilar breeder":
+                        baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=13";
+                        break;
+                    case "bilarbreeder":
                         baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=13";
                         break;
                     case "gp jagna":
                         baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50";
                         break;
+                    case "gpjagna":
+                        baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50";
+                        break;
                     case "ice plant":
+                        baseUrl = "http://172.16.184.49:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=25";
+                        break;
+                    case "iceplant":
                         baseUrl = "http://172.16.184.49:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=25";
                         break;
                     case "peanut kisses":
                         baseUrl = "http://172.16.184.49:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=26";
                         break;
+                    case "peanutkisses":
+                        baseUrl = "http://172.16.184.49:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=26";
+                        break;
                     case "cortes poultry":
+                        baseUrl = "http://172.16.192.68:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=12";
+                        break;
+                    case "cortespoultry":
                         baseUrl = "http://172.16.192.68:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=12";
                         break;
                     case "cortes piggery":
                         baseUrl = "http://172.16.192.68:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=11";
                         break;
+                    case "cortespiggery":
+                        baseUrl = "http://172.16.192.68:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=11";
+                        break;
                     case "canhayupon breeder":
+                        baseUrl = "http://172.16.220.223:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=15";
+                        break;
+                    case "canhayuponbreeder":
                         baseUrl = "http://172.16.220.223:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=15";
                         break;
                     case "bilar hatchery":
                         baseUrl = "http://172.16.219.200:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=14";
                         break;
+                    case "bilarhatchery":
+                        baseUrl = "http://172.16.219.200:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=14";
+                        break;
                     case "lapsaon breeder":
                         baseUrl = "http://172.16.220.222:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=16";
                         break;
+                    case "lapsaonbreeder":
+                        baseUrl = "http://172.16.220.222:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=16";
+                        break;
                     case "rizal breeder":
+                        baseUrl = "http://172.16.217.11:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=43";
+                        break;
+                    case "rizalbreeder":
                         baseUrl = "http://172.16.217.11:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=43";
                         break;
                     // ubay server 
@@ -218,22 +251,43 @@ watch(
                     case "cortes fertilizer":
                         baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42";
                         break;
+                    case "mficortesfertilizer":
+                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42";
+                        break;
                     case "ubay fertilizer":
+                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22";
+                        break;
+                    case "mfiubayfertilizer":
                         baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22";
                         break;
                     case "piggery untaga":
                         baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23";
                         break;
+                    case "piggeryuntaga":
+                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23";
+                        break;
                     case "demo farm":
+                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21";
+                        break;
+                    case "demofarm":
                         baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21";
                         break;
                     case "dressing plant":
                         baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17";
                         break;
+                    case "dressingplant":
+                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17";
+                        break;
                     case "farmers market":
                         baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41";
                         break;
+                    case "farmersmarket":
+                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41";
+                        break;
                     case "meat processing":
+                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46";
+                        break;
+                    case "meatprocessing":
                         baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46";
                         break;
                     case "rendering":
