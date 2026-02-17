@@ -36,33 +36,20 @@ class SetTenantDatabase
                  return response()->json(['error' => 'Business Unit (bu_id) not found'], 404);
             }
         } else {
-            // Get all active app settings to match against the slug
-            // In production, this should be cached
-            $allSettings = AppSetting::on('mysql')->where('is_active', true)->get();
+            // Prefer exact base_url (slug) match for active settings, then fallback to normalized app_name matching
+            $tenantSlugNormalized = strtolower($tenantSlug);
+            $targetSetting = AppSetting::on('mysql')
+                ->where('is_active', true)
+                ->where(function ($q) use ($tenantSlugNormalized) {
+                    $q->whereRaw('LOWER(base_url) = ?', [$tenantSlugNormalized])
+                      ->orWhereRaw("REPLACE(LOWER(app_name), ' ', '') = ?", [$tenantSlugNormalized])
+                      ->orWhereRaw("? LIKE CONCAT('%', REPLACE(LOWER(app_name), ' ', ''), '%')", [$tenantSlugNormalized]);
+                })
+                ->first();
 
-            // Find the setting that matches the slug
-            // Matching logic: remove spaces, lowercase, check if slug contains it or vice versa
-            // Or ideally, add a 'slug' column to app_settings.
-            // For now, we try to match normalized names.
-
-            $targetSetting = $allSettings->first(function ($setting) use ($tenantSlug) {
-                // Normalize app name: "Cortes Fertilizer" -> "cortesfertilizer"
-                $normalizedName = strtolower(str_replace(' ', '', $setting->app_name));
-
-                // Direct match
-                if ($normalizedName === strtolower($tenantSlug)) {
-                    return true;
-                }
-
-                // Handle known special cases based on web.php validTenants if needed
-                // e.g. "mficortesfertilizer" vs "cortesfertilizer"
-                // If the route slug contains the normalized name, it's a strong hint (e.g. mficortesfertilizer contains cortesfertilizer)
-                if (str_contains(strtolower($tenantSlug), $normalizedName)) {
-                    return true;
-                }
-
-                return false;
-            });
+            if (!$targetSetting) {
+                return response()->json(['error' => 'Tenant not found'], 404);
+            }
         }
 
         if ($targetSetting) {
@@ -117,7 +104,7 @@ class SetTenantDatabase
                     DB::reconnect('tenant');
                 } else {
                     // User found, Tenant found, but No Access
-                    // abort(403, 'You do not have access to this tenant.');
+                    return response()->json(['error' => 'Forbidden: You do not have access to this tenant.'], 403);
                 }
         }
 

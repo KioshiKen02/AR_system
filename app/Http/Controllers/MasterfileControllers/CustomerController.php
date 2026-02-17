@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\MasterfileControllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
 use App\Models\MasterfileModels\Customer;
 use App\Services\SyncCustomerService;
 use Illuminate\Http\Request;
@@ -71,7 +72,28 @@ class CustomerController extends Controller
             // Fetch data from the API
             //DYNAMIC API LINK
             $user = auth()->user();
-            $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
+            $tenantSlug = request()->route('tenant');
+            $defaultConn = config('database.default');
+            $tenantConnConfigured = !is_null(config('database.connections.tenant'));
+            $tenantDbName = $tenantConnConfigured ? (config('database.connections.tenant.database') ?? null) : null;
+            $targetSetting = AppSetting::on('mysql')
+                ->where('is_active', true)
+                ->where(function ($q) use ($tenantSlug) {
+                    $q->where('base_url', $tenantSlug)
+                      ->orWhereRaw("REPLACE(LOWER(app_name), ' ', '') = ?", [strtolower($tenantSlug)])
+                      ->orWhereRaw("? LIKE CONCAT('%', REPLACE(LOWER(app_name), ' ', ''), '%')", [strtolower($tenantSlug)]);
+                })
+                ->first();
+            $appName = $targetSetting->app_name ?? ($user && $user->appSetting ? $user->appSetting->app_name : config('app.name'));
+            Log::info('syncCustomers diagnostics', [
+                'tenant_slug' => $tenantSlug,
+                'database_default' => $defaultConn,
+                'tenant_configured' => $tenantConnConfigured,
+                'tenant_database' => $tenantDbName,
+                'user_id' => $user?->id,
+                'app_name' => $appName,
+                'has_access' => $user ? ($user->appSettings->contains('id', $targetSetting?->id) || $user->role === 'Admin' || $user->app_setting_id == ($targetSetting->id ?? null)) : true,
+            ]);
             switch ($appName) {
                 case 'Bilar Breeder Local':
                     $baseUrl = 'http://172.16.43.148/centralized_invoicing/masterfileController/CustomerController/fetchCustomers?noSession=true&bu=13';
@@ -142,6 +164,11 @@ class CustomerController extends Controller
             }
             $url = $baseUrl;
 
+            Log::info('syncCustomers endpoint', [
+                'url' => $url,
+                'app_name' => $appName,
+                'tenant_database' => $tenantDbName,
+            ]);
             $response = Http::get($url);
             // dd($response->json()['customers']);
 
@@ -150,14 +177,19 @@ class CustomerController extends Controller
             }
 
             $apiCustomers = $response->json()['customers'] ?? [];
+            Log::info('syncCustomers api_data', [
+                'count' => is_array($apiCustomers) ? count($apiCustomers) : 0,
+                'status' => $response->status(),
+            ]);
 
             $syncedIds = [];
 
-            DB::transaction(function () use ($apiCustomers, &$syncedIds) {
+            $stats = ['created' => 0, 'updated' => 0, 'deleted' => 0];
+            DB::connection('tenant')->transaction(function () use ($apiCustomers, &$syncedIds, &$stats) {
                 foreach ($apiCustomers as $apiCustomer) {
                     $syncedIds[] = $apiCustomer['cus_id'];
 
-                    $existingCustomer = Customer::where('cus_id', $apiCustomer['cus_id'])->first();
+                    $existingCustomer = Customer::on('tenant')->where('cus_id', $apiCustomer['cus_id'])->first();
 
                     $data = [
                         'cus_code' => $apiCustomer['cus_code'],
@@ -185,16 +217,20 @@ class CustomerController extends Controller
                     // Add advance_payment_balance only if the customer is new
                     if (!$existingCustomer) {
                         $data['advanced_payment_balance'] = 0.00;
+                        $stats['created']++;
+                    } else {
+                        $stats['updated']++;
                     }
 
-                    Customer::updateOrCreate(
+                    Customer::on('tenant')->updateOrCreate(
                         ['cus_id' => $apiCustomer['cus_id']],
                         $data
                     );
                 }
                 // Delete local customers not present in the API
-                Customer::whereNotIn('cus_id', $syncedIds)->delete();
+                $stats['deleted'] = Customer::on('tenant')->whereNotIn('cus_id', $syncedIds)->delete();
             });
+            Log::info('syncCustomers db_write', $stats);
 
             // $syncService->sync();
 
