@@ -52,34 +52,34 @@ class SyncAccCodeService
                     break;
                 // ubay server 
                 case 'Feedmill':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=19';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=19';
                     break;
                 case 'Growout':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=20';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=20';
                     break;
                 case 'Cortes Fertilizer':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42';
                     break;
                 case 'Ubay Fertilizer':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22';
                     break;
                 case 'Piggery Untaga':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23';
                     break;
                 case 'Demo Farm':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21';
                     break;
                 case 'Dressing Plant':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17';
                     break;
                 case 'Farmers Market':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41';
                     break;
                 case 'Meat Processing':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46';
                     break;
                 case 'Rendering':
-                    $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=18';
+                    $baseUrl = 'http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=18';
                     break;
                 default:
                     throw new \Exception("Unknown app name: {$appName}");

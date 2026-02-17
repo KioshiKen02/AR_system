@@ -266,34 +266,34 @@ class AdjustmentControllers extends Controller
                         break;
                     // ubay server 
                     case 'Feedmill':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=19';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=19';
                         break;
                     case 'Growout':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=20';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=20';
                         break;
                     case 'Cortes Fertilizer':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=42';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=42';
                         break;
                     case 'Ubay Fertilizer':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=22';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=22';
                         break;
                     case 'Piggery Untaga':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=23';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=23';
                         break;
                     case 'Demo Farm':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=21';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=21';
                         break;
                     case 'Dressing Plant':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=17';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=17';
                         break;
                     case 'Farmers Market':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=41';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=41';
                         break;
                     case 'Meat Processing':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=46';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicingg/sales-invoice/update/adjustment-sales?bu=46';
                         break;
                     case 'Rendering':
-                        $baseUrl = 'http://172.16.105.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=18';
+                        $baseUrl = 'http:// 172.16.18.27/centralized-invoicingg/sales-invoice/update/adjustment-sales?bu=18';
                         break;
                     case 'Ar System':
                         // Fallback or specific logic for Ar System if needed
@@ -305,31 +305,40 @@ class AdjustmentControllers extends Controller
                 
                 if ($baseUrl) {
                     $url = $baseUrl;
-                    // $response = Http::get($url);
-                    $response = Http::withHeaders([
-                        'Accept' => 'application/json',
-                    ])->post($url, [
-                        'adj_sales' => (string) $newAdjustmentAmount,
-                        'tds_no' => $validated['invoice_no'],
-                    ]);
-
-                    // Optional: handle response
-                    if (!$response->successful()) {
-
+                    try {
+                        $response = Http::timeout(3)
+                            ->retry(2, 200)
+                            ->withHeaders([
+                                'Accept' => 'application/json',
+                            ])->post($url, [
+                                'adj_sales' => (string) $newAdjustmentAmount,
+                                'tds_no' => $validated['invoice_no'],
+                            ]);
+                        if (!$response->successful()) {
+                            Log::error('Adjustment Sales API Failed', [
+                                'app_name' => $appName,
+                                'url' => $url,
+                                'status' => $response->status(),
+                                'response_body' => $response->body(),
+                                'response_json' => $response->json(),
+                                'payload' => [
+                                    'adj_sales' => (string) $newAdjustmentAmount,
+                                    'tds_no'    => $validated['invoice_no'],
+                                ],
+                            ]);
+                        }
+                    } catch (\Throwable $e) {
                         Log::error('Adjustment Sales API Failed', [
                             'app_name' => $appName,
                             'url' => $url,
-                            'status' => $response->status(),
-                            'response_body' => $response->body(),
-                            'response_json' => $response->json(),
+                            'status' => null,
+                            'response_body' => null,
+                            'response_json' => null,
                             'payload' => [
                                 'adj_sales' => (string) $newAdjustmentAmount,
                                 'tds_no'    => $validated['invoice_no'],
                             ],
-                        ]);
-
-                        throw ValidationException::withMessages([
-                            'general' => 'Error Please Try Again',
+                            'exception' => $e->getMessage(),
                         ]);
                     }
                 }
