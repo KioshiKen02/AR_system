@@ -206,6 +206,7 @@ import {
     mdiPencilCircle,
 } from "@mdi/js";
 import TextInput from "./Components/TextInput.vue";
+import axios from "axios";
 import ToastAlert from "./Components/ToastAlert.vue";
 import ToastAlertWarning from "./Components/ToastAlertWarning.vue";
 import useTheme from "./Composables/useTheme";
@@ -349,28 +350,45 @@ const userInitials = computed(() => {
     }
 });
 
-const generateManagersKeyCode = () => {
+const generateManagersKeyCode = async () => {
     showToast.value = false;
 
     const randomCode = generateRandomCode();
     managersKeyCode.ungeneratedCode = randomCode;
 
-    managersKeyCode.put(route("generateManagersKeyCode", { tenant: page.props.tenant, id: props.user.id }), {
-        preserveScroll: true,
-        onSuccess: () => {
-            showToast.value = false;
-            managersKeyCode.generatedCode = managersKeyCode.ungeneratedCode;
-            managersKeyCode.ungeneratedCode = "";
-            showSuccessToast("Generated Code Successfully");
-        },
-        onError: (error) => {
-            managersKeyCode.generatedCode = "";
-            managersKeyCode.ungeneratedCode = "";
-            showWToast.value = false;
-            const firstError = Object.values(error)[0];
-            showWarningToast(firstError);
-        },
+    console.log("GenerateManagersKeyCode:start", {
+        tenant: page.props.tenant,
+        userId: props.user.id,
+        code: managersKeyCode.ungeneratedCode,
     });
+    try {
+        console.log("GenerateManagersKeyCode:request-sent");
+        const response = await axios.post(
+            `/${page.props.tenant}/profile-generateManagersKeyCode/${props.user.id}`,
+            {
+                ungeneratedCode: managersKeyCode.ungeneratedCode,
+            }
+        );
+        console.log("GenerateManagersKeyCode:success", response.data);
+        showToast.value = false;
+        managersKeyCode.generatedCode = managersKeyCode.ungeneratedCode;
+        managersKeyCode.ungeneratedCode = "";
+        showSuccessToast("Generated Code Successfully");
+    } catch (error) {
+        console.error("GenerateManagersKeyCode:error", error);
+        managersKeyCode.generatedCode = "";
+        managersKeyCode.ungeneratedCode = "";
+        showWToast.value = false;
+        let firstError = "Error Generating Please Try Again";
+        if (error.response?.data?.errors) {
+            firstError = Object.values(error.response.data.errors)[0];
+        } else if (error.response?.data?.message) {
+            firstError = error.response.data.message;
+        }
+        showWarningToast(firstError);
+    } finally {
+        console.log("GenerateManagersKeyCode:finish");
+    }
 };
 
 const updateUsername = () => {

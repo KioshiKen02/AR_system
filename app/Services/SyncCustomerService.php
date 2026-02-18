@@ -95,11 +95,11 @@ class SyncCustomerService
             $apiCustomers = $response->json()['customers'] ?? [];
             $syncedIds = [];
 
-            DB::transaction(function () use ($apiCustomers, &$syncedIds) {
+            DB::connection('tenant')->transaction(function () use ($apiCustomers, &$syncedIds) {
                 foreach ($apiCustomers as $apiCustomer) {
                     $syncedIds[] = $apiCustomer['cus_id'];
 
-                    $existingCustomer = Customer::where('cus_id', $apiCustomer['cus_id'])->first();
+                    $existingCustomer = Customer::on('tenant')->where('cus_id', $apiCustomer['cus_id'])->first();
 
                     $data = [
                         'cus_code' => $apiCustomer['cus_code'],
@@ -129,14 +129,14 @@ class SyncCustomerService
                         $data['advanced_payment_balance'] = 0.00;
                     }
 
-                    Customer::updateOrCreate(
+                    Customer::on('tenant')->updateOrCreate(
                         ['cus_id' => $apiCustomer['cus_id']],
                         $data
                     );
                 }
 
                 // Delete local customers not present in the API
-                Customer::whereNotIn('cus_id', $syncedIds)->delete();
+                Customer::on('tenant')->whereNotIn('cus_id', $syncedIds)->delete();
             });
 
             return true;

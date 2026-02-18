@@ -95,7 +95,7 @@ class SyncAccCodeService
             $apiAccCodes = $response->json()['gl_account_code'] ?? [];
             $syncedIds = [];
 
-            DB::transaction(function () use ($apiAccCodes, &$syncedIds) {
+            DB::connection('tenant')->transaction(function () use ($apiAccCodes, &$syncedIds) {
                 foreach ($apiAccCodes as $apiAccCode) {
                     $syncedIds[] = $apiAccCode['gl_account_id'];
 
@@ -107,14 +107,14 @@ class SyncAccCodeService
                         'business_unit' => $apiAccCode['business_unit'],
                     ];
 
-                    AccCode::updateOrCreate(
+                    AccCode::on('tenant')->updateOrCreate(
                         ['gl_account_id' => $apiAccCode['gl_account_id']],
                         $data
                     );
                 }
 
                 // Delete local acc code not present in the API
-                AccCode::whereNotIn('gl_account_id', $syncedIds)->delete();
+                AccCode::on('tenant')->whereNotIn('gl_account_id', $syncedIds)->delete();
             });
 
             return true;

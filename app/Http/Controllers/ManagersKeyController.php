@@ -6,6 +6,7 @@ use App\Models\MasterfileModels\Permission;
 use App\Models\MasterfileModels\User;
 use App\Models\TransactionModels\ManagerKeyEntries;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -64,6 +65,19 @@ class ManagersKeyController extends Controller
 
     public function generateManagersKeyCode(Request $request, $id)
     {
+        Log::info('generateManagersKeyCode hit', [
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'tenant' => $request->route('tenant'),
+            'headers' => [
+                'X-Inertia' => $request->header('X-Inertia'),
+                'Accept' => $request->header('Accept'),
+            ],
+        ]);
+        if ($request->isMethod('get')) {
+            $tenant = $request->route('tenant');
+            return redirect()->route('profile', ['tenant' => $tenant]);
+        }
         $validated = $request->validate(
             [
                 'ungeneratedCode' => 'required|string|max:8',
@@ -82,5 +96,15 @@ class ManagersKeyController extends Controller
         $user->update([
             'managers_key_code' => $validated['ungeneratedCode']
         ]);
+
+        if ($request->header('X-Inertia') || $request->expectsJson()) {
+            return response()->json([
+                'successful' => true,
+                'message' => 'Generated Code Successfully',
+            ]);
+        }
+
+        $tenant = $request->route('tenant');
+        return redirect()->route('profile', ['tenant' => $tenant])->with('successful', 'Generated Code Successfully');
     }
 }

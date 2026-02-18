@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CustomerAccountSummary;
 use App\Models\ReportModels\CustomerLedger;
 use App\Models\TransactionModels\PaymentDetails;
+use App\Models\TransactionModels\Payment;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +29,7 @@ class DashboardController extends Controller
         $thirtyDaysAgo = $now->copy()->subDays(30);
 
         $getTotals = function ($startDate = null, $endDate = null) {
-            $query = CustomerLedger::where('amount_paid', '>', 0);
+            $query = CustomerLedger::on('tenant')->where('amount_paid', '>', 0);
 
             if ($startDate && $endDate) {
                 $query->whereBetween('updated_at', [$startDate, $endDate]);
@@ -47,13 +48,52 @@ class DashboardController extends Controller
         $thirtyDayTotals = $getTotals($thirtyDaysAgo, $now);
         $overallTotals = $getTotals();
 
-        $getLatestUpdates = CustomerLedger::where('amount_paid', '>', 0)
+        $getLatestUpdates = CustomerLedger::on('tenant')->where('amount_paid', '>', 0)
             ->select('type', DB::raw('MAX(updated_at) as latest_updated_at'))
             ->groupBy('type')
             ->get()
             ->pluck('latest_updated_at', 'type')
             ->map(fn($date) => Carbon::parse($date)->diffForHumans())
             ->toArray();
+
+        $sumByType = function (string $type, $startDate = null, $endDate = null) {
+            $query = CustomerLedger::on('tenant')->where('type', $type)->where('amount_paid', '>', 0);
+            if ($startDate && $endDate) {
+                $query->whereBetween('updated_at', [$startDate, $endDate]);
+            } elseif ($startDate) {
+                $query->where('updated_at', '>=', $startDate);
+            }
+            return (float) $query->sum('amount_paid');
+        };
+
+        $sumChargePaid = function ($startDate = null, $endDate = null) {
+            $query = PaymentDetails::on('tenant')->where('type', 'Charge Invoice')->where('status', 'Paid');
+            if ($startDate && $endDate) {
+                $query->whereBetween('updated_at', [$startDate, $endDate]);
+            } elseif ($startDate) {
+                $query->where('updated_at', '>=', $startDate);
+            }
+            return (float) $query->sum('amount_paid');
+        };
+
+        $sumPayments = function ($startDate = null, $endDate = null) {
+            $query = Payment::on('tenant')->where('amount_paid', '>', 0);
+            if ($startDate && $endDate) {
+                $query->whereBetween('updated_at', [$startDate, $endDate]);
+            } elseif ($startDate) {
+                $query->where('updated_at', '>=', $startDate);
+            }
+            return (float) $query->sum('amount_paid');
+        };
+
+        $paymentLatestUpdate = Payment::on('tenant')->where('amount_paid', '>', 0)
+            ->max('updated_at');
+
+        $charge7 = $sumByType('Charge Invoice', $sevenDaysAgo, $now) ?: $sumChargePaid($sevenDaysAgo, $now);
+        $charge30 = $sumByType('Charge Invoice', $thirtyDaysAgo, $now) ?: $sumChargePaid($thirtyDaysAgo, $now);
+        $chargeOverall = $sumByType('Charge Invoice') ?: $sumChargePaid();
+        $chargeLatestRaw = CustomerLedger::on('tenant')->where('type', 'Charge Invoice')->where('amount_paid', '>', 0)->max('updated_at')
+            ?: PaymentDetails::on('tenant')->where('type', 'Charge Invoice')->where('status', 'Cleared')->max('updated_at');
 
         return [
             'sales_invoice' => [
@@ -63,16 +103,16 @@ class DashboardController extends Controller
                 'last_updated' => $getLatestUpdates['Sales Invoice'] ?? null,
             ],
             'charge_invoice' => [
-                'last_7_days' => $sevenDayTotals['Charge Invoice'] ?? 0,
-                'last_30_days' => $thirtyDayTotals['Charge Invoice'] ?? 0,
-                'overall' => $overallTotals['Charge Invoice'] ?? 0,
-                'last_updated' => $getLatestUpdates['Charge Invoice'] ?? null,
+                'last_7_days' => $charge7,
+                'last_30_days' => $charge30,
+                'overall' => $chargeOverall,
+                'last_updated' => $chargeLatestRaw ? Carbon::parse($chargeLatestRaw)->diffForHumans() : ($getLatestUpdates['Charge Invoice'] ?? null),
             ],
             'payment' => [
-                'last_7_days' => $sevenDayTotals['Payment'] ?? 0,
-                'last_30_days' => $thirtyDayTotals['Payment'] ?? 0,
-                'overall' => $overallTotals['Payment'] ?? 0,
-                'last_updated' => $getLatestUpdates['Payment'] ?? null,
+                'last_7_days' => $sumPayments($sevenDaysAgo, $now),
+                'last_30_days' => $sumPayments($thirtyDaysAgo, $now),
+                'overall' => $sumPayments(),
+                'last_updated' => $paymentLatestUpdate ? Carbon::parse($paymentLatestUpdate)->diffForHumans() : null,
             ],
             'bg' => [
                 'last_7_days' => $sevenDayTotals['BG'] ?? 0,

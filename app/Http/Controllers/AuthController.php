@@ -65,16 +65,6 @@ class AuthController extends Controller
 
 
                 $request->session()->regenerate();
-                $synced = $syncService->sync();
-                $syncedAccCode = $syncAccCodeService->sync();
-
-                if (!$synced && !$syncedAccCode) {
-                    session()->flash('warning', 'Login successful, but customer and acc code sync failed.');
-                } else if ($synced && !$syncedAccCode) {
-                    session()->flash('warning', 'Login successful, but acc code sync failed.');
-                } else if (!$synced && $syncedAccCode) {
-                    session()->flash('warning', 'Login successful, but customer sync failed.');
-                }
 
                 // Check if user has multiple app settings
                 $user = Auth::user();
@@ -90,7 +80,34 @@ class AuthController extends Controller
                 }
                 
                 if ($targetSetting && $targetSetting->is_active) {
-                    
+                    \Illuminate\Support\Facades\Config::set('database.connections.tenant', [
+                        'driver'    => $targetSetting->db_driver ?? 'mysql',
+                        'host'      => $targetSetting->db_host,
+                        'port'      => $targetSetting->db_port,
+                        'database'  => $targetSetting->db_database,
+                        'username'  => $targetSetting->db_username,
+                        'password'  => $targetSetting->db_password,
+                        'charset'   => 'utf8mb4',
+                        'collation' => 'utf8mb4_unicode_ci',
+                        'prefix'    => '',
+                        'strict'    => true,
+                        'engine'    => null,
+                    ]);
+                    \Illuminate\Support\Facades\Config::set('database.default', 'tenant');
+                    \Illuminate\Support\Facades\DB::purge('tenant');
+                    \Illuminate\Support\Facades\DB::reconnect('tenant');
+
+                    $synced = $syncService->sync();
+                    $syncedAccCode = $syncAccCodeService->sync();
+
+                    if (!$synced && !$syncedAccCode) {
+                        session()->flash('warning', 'Login successful, but customer and acc code sync failed.');
+                    } else if ($synced && !$syncedAccCode) {
+                        session()->flash('warning', 'Login successful, but acc code sync failed.');
+                    } else if (!$synced && $syncedAccCode) {
+                        session()->flash('warning', 'Login successful, but customer sync failed.');
+                    }
+
                     $redirectUrl = $targetSetting->base_url . '/dashboard';
                 } else {
                     // Fallback to static config if no dynamic setting found

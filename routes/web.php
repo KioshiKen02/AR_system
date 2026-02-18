@@ -82,7 +82,7 @@ Route::get('/', function () {
     return redirect()->route('landing', ['tenant' => 'arsystem']); // Default redirect
 });
 
-Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
+Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http\Middleware\SetTenantDatabase::class])->group(function () {
 
     Broadcast::routes(['middleware' => ['web', 'auth']]);
 
@@ -298,7 +298,11 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
         Route::post('/preview-wht-cleared', [PDFGeneratorController::class, 'previewWhtCleared'])->name('previewWhtCleared');
         //ROUTE FOR PDF MANAGERKEY**********************************************************************************************************************************************
         Route::post('/validate-manager-key', [ManagersKeyController::class, 'validateManagerKey'])->name('validateManagerKey');
-        Route::put('/profile-generateManagersKeyCode/{id}', [ManagersKeyController::class, 'generateManagersKeyCode'])->name('generateManagersKeyCode');
+        Route::post('/profile-generateManagersKeyCode/{id}', [ManagersKeyController::class, 'generateManagersKeyCode'])->name('generateManagersKeyCode');
+        Route::get('/profile-generateManagersKeyCode/{id}', function () {
+            $tenant = request()->route('tenant') ?? 'arsystem';
+            return redirect()->route('profile', ['tenant' => $tenant]);
+        });
 
         //Exporttogl
         Route::post('/export-to-gl', [ExportToGLController::class, 'export'])->name('generateTextFile');
@@ -385,6 +389,11 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->group(function () {
     })->name('session.expired');
 
     Route::fallback(function () {
+        \Illuminate\Support\Facades\Log::warning('Fallback PageNotFound invoked', [
+            'method' => request()->method(),
+            'path' => request()->path(),
+            'tenant' => request()->route('tenant'),
+        ]);
         return Inertia::render('PageNotFound');
     })->name('404');
 
