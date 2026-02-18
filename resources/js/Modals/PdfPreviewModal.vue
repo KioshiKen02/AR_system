@@ -183,11 +183,6 @@ const showSuccessToast = (message) => {
 };
 
 const closeModal = async () => {
-    if (channelInstance) {
-        window.Echo.leave(channel.value);
-        channelInstance = null;
-    }
-
     await deletePdf();
 
     loading.value = false;
@@ -207,14 +202,13 @@ const startPdfGeneration = async () => {
         loading.value = true;
         error.value = null;
         progress.value = 0;
-        
         const isExcel = props.formData.file_type === 'Excel';
         progressMessage.value = isExcel ? "Starting Excel generation..." : "Starting PDF generation...";
 
-        // Start listening immediately to capture synchronous events if dispatchSync is used
-        if (userId.value) {
-            channel.value = `transaction-pdf-generation.${userId.value}`;
-            setupWebSocketListener();
+        if (isExcel) {
+            error.value = "Excel export is currently unavailable because real-time processing is disabled.";
+            loading.value = false;
+            return;
         }
 
         const response = await axios.post(route(props.apiEndpoint, { tenant: page.props.tenant }), {
@@ -226,18 +220,9 @@ const startPdfGeneration = async () => {
              throw new Error("Session expired or invalid request. Please refresh the page and try again.");
         }
 
-        // Check if URL is provided directly in response (Synchronous mode)
         if (response.data.url) {
             loading.value = false;
-            // The controller returns: $prefix . Storage::url("temp/{$filename}")
-            // Example: http://localhost:8000/storage/temp/file.pdf
-            
-            // Just use the URL for display
             pdfUrl.value = response.data.url;
-            
-            // Extract the path for deletion if needed (though typically handled by server cleanup)
-            // If response.data.url is "http://localhost/storage/temp/file.pdf"
-            // We want to store it for potential cleanup if your logic requires it.
             pathDelete.value = response.data.url; 
 
             progress.value = 100;
@@ -245,18 +230,9 @@ const startPdfGeneration = async () => {
             return;
         }
 
-        if (response.data.channel && response.data.channel !== channel.value) {
-            channel.value = response.data.channel;
-            setupWebSocketListener();
-
-            // Fallback: If WebSocket doesn't respond in 10 seconds, try polling or show error
-            setTimeout(() => {
-                if (progress.value === 0 && loading.value) {
-                    console.warn("WebSocket inactive, falling back to manual refresh or check.");
-                    // Optional: You could implement a polling mechanism here if you have an API for it
-                    // For now, we just inform the user if it's taking too long without updates
-                }
-            }, 10000);
+        if (response.data.channel && !response.data.url) {
+            error.value = "Server did not return a download URL. Please contact support.";
+            loading.value = false;
         }
     } catch (err) {
         console.error("Error starting PDF generation:", err);
@@ -275,168 +251,6 @@ const startPdfGeneration = async () => {
     }
 };
 
-
-const setupWebSocketListener = () => {
-    if (!channel.value) {
-        error.value = "No channel provided by server";
-        return;
-    }
-
-    if (channelInstance) {
-        echo.leave(channel.value);
-        channelInstance = null;
-    }
-
-    // console.log("Connecting to channel:", channel.value);
-
-    if (channel.value.startsWith("transaction-pdf-generation.")) {
-        channelInstance = window.Echo.private(channel.value)
-            .listen("TransactionPdfGenerationProgress", (data) => {
-                // console.log('first listen',data);
-                progress.value = data.progress;
-                progressMessage.value = data.message;
-                error.value = null;
-            })
-            .listen("TransactionPdfGenerated", (data) => {
-                // console.log('second listen', data);
-                loading.value = false;
-                if (!data.path) {
-                    error.value = "No PDF path provided.";
-                    return;
-                }
-                pathDelete.value = data.path;
-                fetch(data.path)
-                    .then((res) => {
-                        if (!res.ok) throw new Error("PDF fetch failed");
-                        return res.blob();
-                    })
-                    .then((blob) => {
-                        pdfUrl.value = URL.createObjectURL(blob);
-                    })
-                    .catch((err) => {
-                        console.error("PDF fetch error:", err);
-                        error.value = "Failed to load PDF.";
-                    });
-            })
-            .listen("TransactionPdfGenerationError", (errorData) => {
-                console.error("Generation error:", errorData);
-                error.value = errorData.message || "PDF generation failed";
-                loading.value = false;
-            })
-            .error((err) => {
-                console.error("WebSocket error:", err);
-                error.value = "Connection lost. Please retry.";
-                loading.value = false;
-            });
-    } else {
-        channelInstance = window.Echo.private(channel.value)
-            .listen("PdfGenerationProgress", (data) => {
-                // console.log('first else listen', data);
-                progress.value = data.progress;
-                progressMessage.value = data.message;
-                error.value = null;
-            })
-            .listen("PdfGenerated", async (data) => {
-                // loading.value = false; // Moved down
-
-                try {
-                    // Check if dataUrl is inside excelData (as sent by backend)
-                    if (data.excelData && data.excelData.dataUrl) {
-                        try {
-                            const response = await fetch(data.excelData.dataUrl);
-                            if (!response.ok) throw new Error('Failed to fetch data');
-                            data.excelData = await response.json();
-                        } catch (err) {
-                            console.error("Error fetching Excel data:", err);
-                            error.value = "Failed to download report data.";
-                            loading.value = false;
-                            return;
-                        }
-                    } else if (data.dataUrl) {
-                        try {
-                            const response = await fetch(data.dataUrl);
-                            if (!response.ok) throw new Error('Failed to fetch data');
-                            data.excelData = await response.json();
-                        } catch (err) {
-                            console.error("Error fetching Excel data:", err);
-                            error.value = "Failed to download report data.";
-                            loading.value = false;
-                            return;
-                        }
-                    }
-
-                    loading.value = false;
-
-                    if (data.excelData) {
-                        if (data.excelData.reportType === 'invoiceprooflist') {
-                            await generateInvoiceProoflistExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'invoicesummary') {
-                            await generateInvoiceSummaryExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'adjustmentprooflist') {
-                            await generateAdjustmentProoflistExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'paymentprooflist_detailed') {
-                            await generatePaymentProoflistDetailedExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'paymentprooflist_summary') {
-                            await generatePaymentProoflistSummaryExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'pdcdcreport') {
-                            await generatePdcDcReportExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'customeraragingreport_ar' || data.excelData.reportType === 'customeraragingreport_pdc_dc') {
-                            await generateCustomerArAgingExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'begbalprooflistreport') {
-                            await generateBegBalProoflistExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'salesperitemreport') {
-                            await generateSalesPerItemExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'overageshortagereport') {
-                            await generateOverageShortageExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'statementofaccountreport') {
-                            await generateStatementOfAccountExcelFile(data.excelData);
-                        } else if (data.excelData.reportType === 'statementofaccountsummaryreport') {
-                            await generateStatementOfAccountSummaryExcelFile(data.excelData);
-                        } else {
-                            await generateAROutstandingExcelFile(data.excelData);
-                        }
-                        emit("closeSuccess");
-                        closeModal();
-                    } else if (data.path) {
-                        if (!data.path) {
-                            error.value = "No PDF path provided.";
-                            return;
-                        }
-                        pathDelete.value = data.path;
-                        fetch(data.path)
-                            .then((res) => {
-                                if (!res.ok)
-                                    throw new Error("PDF fetch failed");
-                                return res.blob();
-                            })
-                            .then((blob) => {
-                                pdfUrl.value = URL.createObjectURL(blob);
-                            })
-                            .catch((err) => {
-                                console.error("PDF fetch error:", err);
-                                error.value = "Failed to load PDF.";
-                            });
-                    } else {
-                        error.value = "No data or path provided.";
-                        return;
-                    }
-                } catch (err) {
-                    console.error("Excel generation error:", err);
-                    error.value = "Failed to generate Excel file.";
-                }
-            })
-            .listen("PdfGenerationError", (errorData) => {
-                console.error("Generation error:", errorData);
-                error.value = errorData.message || "PDF generation failed";
-                loading.value = false;
-            })
-            .error((err) => {
-                console.error("WebSocket error:", err);
-                error.value = "Connection lost. Please retry.";
-                loading.value = false;
-            });
-    }
-};
 
 const generateInvoiceProoflistExcelFile = async (excelData) => {
     try {

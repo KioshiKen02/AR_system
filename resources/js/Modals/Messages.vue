@@ -458,112 +458,7 @@ const clearSearch = () => {
     });
 };
 
-// Initialize Laravel Echo
-const initializeEcho = () => {
-    if (window.Echo) {
-        echo = window.Echo;
-    } else {
-        echo = new Echo({
-            broadcaster: "reverb",
-            key: import.meta.env.VITE_REVERB_APP_KEY,
-            wsHost: import.meta.env.VITE_REVERB_HOST,
-            wsPort: import.meta.env.VITE_REVERB_PORT || 8081, // Must match REVERB_PORT in .env
-            forceTLS: false,
-            enabledTransports: ["ws", "wss"],
-            authEndpoint: `/${page.props.tenant}/broadcasting/auth`,
-        });
-    }
-
-    // Create the private channel for the current user
-    const userChannel = echo.private(`user.${currentUser.value.id}`);
-
-    // Listen for new messages
-    userChannel.listen(".MessageSent", (e) => {
-        // Always add the message if it involves the current user
-        const isRelevantMessage =
-            e.message.sender_id === currentUser.value.id ||
-            e.message.receiver_id === currentUser.value.id;
-
-        if (!isRelevantMessage) return;
-
-        // If we're currently chatting with the other user, add to current conversation
-        const otherUserId =
-            e.message.sender_id === currentUser.value.id
-                ? e.message.receiver_id
-                : e.message.sender_id;
-
-        if (selectedUser.value && selectedUser.value.id === otherUserId) {
-            // Check if message already exists to prevent duplicates
-            const messageExists = messages.value.some(
-                (msg) => msg.id === e.message.id
-            );
-            if (!messageExists) {
-                messages.value.push(e.message);
-                nextTick(() => {
-                    scrollToBottom();
-                    // Mark as read if we received the message (not sent it)
-                    if (e.message.sender_id !== currentUser.value.id) {
-                        markMessagesAsRead();
-                    }
-                });
-            }
-        }
-
-        // Update unread count if message is from someone else and we're not chatting with them
-        if (e.message.sender_id !== currentUser.value.id) {
-            const userIndex = users.value.findIndex(
-                (u) => u.id === e.message.sender_id
-            );
-            if (
-                userIndex !== -1 &&
-                selectedUser.value?.id === e.message.sender_id
-            ) {
-                // users.value[userIndex].unread_count =
-                //     (users.value[userIndex].unread_count || 0) + 1;
-                selectedUser.value.unread_count = 0;
-            }
-        }
-    });
-
-    // Listen for message read receipts
-    userChannel.listen(".MessageRead", (e) => {
-        // Update read status for messages in current conversation
-        if (
-            selectedUser.value &&
-            e.conversation_user_id === selectedUser.value.id
-        ) {
-            messages.value.forEach((message) => {
-                if (
-                    message.sender_id === currentUser.value.id &&
-                    message.receiver_id === selectedUser.value.id
-                ) {
-                    message.read_at = e.read_at;
-                }
-            });
-        }
-    });
-
-    // Listen for typing indicators via whisper
-    userChannel.listenForWhisper("typing", (e) => {
-        if (selectedUser.value && e.user.id === selectedUser.value.id) {
-            if (e.typing) {
-                userTyping.value = e.user;
-                isTyping.value = true;
-                nextTick(() => scrollToBottom());
-
-                clearTimeout(typingTimer);
-                typingTimer = setTimeout(() => {
-                    isTyping.value = false;
-                    userTyping.value = null;
-                }, 3000);
-            } else {
-                isTyping.value = false;
-                userTyping.value = null;
-                clearTimeout(typingTimer);
-            }
-        }
-    });
-};
+const initializeEcho = () => {};
 
 // Fetch users
 const fetchUsers = async () => {
@@ -813,7 +708,6 @@ const closeModal = () => {
 onMounted(() => {
     users.value = props.users;
     // fetchUsers();
-    initializeEcho();
 });
 
 onUnmounted(() => { });

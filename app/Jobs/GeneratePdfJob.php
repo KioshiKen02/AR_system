@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use NumberFormatter;
 
-class GeneratePdfJob implements ShouldQueue
+class GeneratePdfJob
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 

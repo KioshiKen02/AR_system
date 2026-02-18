@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use NumberFormatter;
 
-class GenerateTransactionPDFJob implements ShouldQueue
+class GenerateTransactionPDFJob
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 

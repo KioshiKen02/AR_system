@@ -84,7 +84,7 @@ class ExportToGLController extends Controller
                 }
             }
 
-            GenerateTextFile::dispatch(
+            GenerateTextFile::dispatchSync(
                 $validated,
                 $request->user()->id,
                 $channel,
@@ -92,10 +92,8 @@ class ExportToGLController extends Controller
             );
 
             return response()->json([
-                'channel' => 'textfile-generation.' . $request->user()->id,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'TextFile generation has started',
+                'success' => true,
+                'message' => 'Successfully Generate Report Export File.',
             ]);
         } catch (ValidationException $e) {
             return response()->json([

@@ -356,26 +356,18 @@ const generateManagersKeyCode = async () => {
     const randomCode = generateRandomCode();
     managersKeyCode.ungeneratedCode = randomCode;
 
-    console.log("GenerateManagersKeyCode:start", {
-        tenant: page.props.tenant,
-        userId: props.user.id,
-        code: managersKeyCode.ungeneratedCode,
-    });
     try {
-        console.log("GenerateManagersKeyCode:request-sent");
         const response = await axios.post(
             `/${page.props.tenant}/profile-generateManagersKeyCode/${props.user.id}`,
             {
                 ungeneratedCode: managersKeyCode.ungeneratedCode,
             }
         );
-        console.log("GenerateManagersKeyCode:success", response.data);
         showToast.value = false;
         managersKeyCode.generatedCode = managersKeyCode.ungeneratedCode;
         managersKeyCode.ungeneratedCode = "";
         showSuccessToast("Generated Code Successfully");
     } catch (error) {
-        console.error("GenerateManagersKeyCode:error", error);
         managersKeyCode.generatedCode = "";
         managersKeyCode.ungeneratedCode = "";
         showWToast.value = false;
@@ -386,8 +378,6 @@ const generateManagersKeyCode = async () => {
             firstError = error.response.data.message;
         }
         showWarningToast(firstError);
-    } finally {
-        console.log("GenerateManagersKeyCode:finish");
     }
 };
 

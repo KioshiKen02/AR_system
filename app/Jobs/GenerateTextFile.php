@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-class GenerateTextFile implements ShouldQueue
+class GenerateTextFile
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 

@@ -733,29 +733,9 @@ const handleClickOutside = (event) => {
 
 onMounted(() => {
     document.addEventListener("click", handleClickOutside);
-
-    try {
-        window.Echo.channel(props.broadcastChannel)
-            .listen(".check_clearing.created", () => {
-                if (!showModal.value) {
-                    router.reload({
-                        preserveState: true,
-                        only: ["check_clearings"],
-                        onFinish: () => {},
-                    });
-                }
-            })
-            .error((error) => {
-                console.error("Echo error:", error);
-            });
-    } catch (error) {
-        console.error("Error initializing Echo:", error);
-    }
 });
 
 onUnmounted(() => {
     document.removeEventListener("click", handleClickOutside);
-
-    window.Echo.leaveChannel(props.broadcastChannel);
 });
 </script>

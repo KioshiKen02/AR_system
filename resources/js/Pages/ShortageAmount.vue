@@ -385,27 +385,7 @@ watch(search, (q) => {
     performSearch(q);
 });
 
-onMounted(() => {
-    try {
-        window.Echo.channel(props.broadcastChannel)
-            .listen(".shortage_amount.created", () => {
-                if (!showModal.value && !showEditModal.value) {
-                    router.reload({
-                        preserveState: true,
-                        only: ["shortage_amounts"],
-                        onFinish: () => {},
-                    });
-                }
-            })
-            .error((error) => {
-                console.error("Echo error:", error);
-            });
-    } catch (error) {
-        console.error("Error initializing Echo:", error);
-    }
-});
+onMounted(() => {});
 
-onUnmounted(() => {
-    window.Echo.leaveChannel(props.broadcastChannel);
-});
+onUnmounted(() => {});
 </script>

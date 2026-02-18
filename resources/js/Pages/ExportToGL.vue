@@ -268,11 +268,8 @@ const loading = ref(false);
 const progress = ref(0);
 const progressMessage = ref("Starting file generation...");
 const error = ref(null);
-const channel = ref(null);
-let echo = null;
 const userId = ref(null);
 const page = usePage();
-let channelInstance = null;
 const pathDelete = ref(null);
 
 const showToast = ref(false);
@@ -311,61 +308,6 @@ const showWarningToast = (message) => {
         showToast.value = false;
         toastTimeout = null;
     }, 3000);
-};
-
-const setupWebSocketListener = () => {
-    if (!channel.value) {
-        error.value = "No channel provided by server";
-        loading.value = false;
-        return;
-    }
-
-    if (channelInstance) {
-        echo.leave(channel.value);
-        channelInstance = null;
-    }
-
-    const cleanup = async () => {
-        loading.value = false;
-        progress.value = 0;
-        progressMessage.value = "Ready for new export";
-        if (channelInstance) {
-            window.Echo.leave(channel.value);
-            channelInstance = null;
-        }
-        form.reset();
-    };
-
-    // console.log("Connecting to channel:", channel.value);
-
-    channelInstance = window.Echo.private(channel.value)
-        .listen("ExportTextFileGenerationProgress", (data) => {
-            progress.value = data.progress;
-            progressMessage.value = data.message;
-            error.value = null;
-        })
-        .listen("ExportTextFileGenerated", (data) => {
-            if (data.path) {
-                const link = document.createElement("a");
-                link.href = data.path;
-                link.download = data.filename;
-
-                document.body.appendChild(link);
-
-                link.click();
-
-                document.body.removeChild(link);
-            }
-
-            showSuccessToast("File Export Successful");
-
-            cleanup();
-        })
-        .error((err) => {
-            console.error("WebSocket error:", err);
-            error.value = "Connection lost. Please retry.";
-            loading.value = false;
-        });
 };
 
 const submit = async () => {
@@ -411,25 +353,21 @@ const generateExport = async () => {
             {}
         );
 
-        loading.value = true;
-        error.value = null;
-        progress.value = 0;
-
         if (response.data.success === false) {
             showWarningToast(
                 response.data.message ||
                 "No data found for the selected date range"
             );
-            loading.value = false;
             return; // stop here
         }
 
-        if (response.data.channel) {
-            channel.value = response.data.channel;
-            setupWebSocketListener();
-        } else {
-            throw new Error("Failed to start TextFile generation");
-        }
+        loading.value = false;
+        progress.value = 100;
+        progressMessage.value = "Text File Generated Successfully";
+        showSuccessToast(
+            response.data.message || "TextFile generation has completed successfully."
+        );
+        form.reset();
     } catch (err) {
         // console.error("Error starting TextFile generation:", err);
         if (err.response?.status === 422 && err.response?.data?.errors) {
@@ -487,11 +425,5 @@ const deletePdf = async () => {
 
 onMounted(() => {
     userId.value = page.props.auth.user.id || null;
-});
-
-onUnmounted(() => {
-    if (echo) {
-        echo.leave(channel.value);
-    }
 });
 </script>

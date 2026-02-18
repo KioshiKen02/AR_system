@@ -656,34 +656,12 @@ async function fetchNotifications() {
     unreadCount.value = data.unread_count;
 }
 
-const setupWebSocketListener = () => {
-    channelInstance = window.Echo.private(
-        `notification-update.${props.auth.user.id}`
-    )
-        .listen("NotificationEvent", (data) => {
-            fetchNotifications();
-            if (channelInstance) {
-                window.Echo.leave(channel.value);
-                channelInstance = null;
-            }
-        })
-        .error((err) => {
-            console.error("WebSocket error:", err);
-            error.value = "Connection lost. Please retry.";
-            loading.value = false;
-        });
-};
 onMounted(() => {
     fetchNotifications();
-    setupWebSocketListener();
-});
-onUnmounted(() => {
-    window.Echo.leaveChannel("notifs");
 });
 
 //message
 const users = ref([]);
-const echo = window.Echo;
 const currentUser = page.props.auth.user;
 
 const totalUnreadCount = computed(() => {
@@ -702,68 +680,12 @@ const fetchUsers = async () => {
     }
 };
 
-if (window.echoSubscribed === undefined) {
-    window.echoSubscribed = false;
-}
-
 const showMessageModal = () => {
     showMessages.value = true;
 };
 
 onMounted(async () => {
     await fetchUsers();
-    if (window.echoSubscribed) {
-        return;
-    }
-
-    window.echoSubscribed = true;
-
-    echo.join("users")
-        .here((onlineUsers) => {
-            onlineUsers.forEach((onlineUser) => {
-                const userIndex = users.value.findIndex(
-                    (u) => u.id === onlineUser.id
-                );
-                if (userIndex !== -1) {
-                    users.value[userIndex].is_online = true;
-                }
-            });
-        })
-        .joining((user) => {
-            const userIndex = users.value.findIndex((u) => u.id === user.id);
-            if (userIndex !== -1) {
-                users.value[userIndex].is_online = true;
-            }
-        })
-        .leaving((user) => {
-            const userIndex = users.value.findIndex((u) => u.id === user.id);
-            if (userIndex !== -1) {
-                users.value[userIndex].is_online = false;
-                users.value[userIndex].last_seen = new Date().toISOString();
-            }
-        });
-
-    // Private channel for messages
-    echo.private(`user.${currentUser.id}`).listen(".MessageSent", (e) => {
-        if (
-            e.message.sender_id !== currentUser.id &&
-            e.message.receiver_id === currentUser.id
-        ) {
-            const senderIndex = users.value.findIndex(
-                (u) => u.id === e.message.sender_id
-            );
-
-            if (senderIndex !== -1) {
-                // Initialize unread_count if it doesn't exist
-                if (typeof users.value[senderIndex].unread_count !== "number") {
-                    users.value[senderIndex].unread_count = 0;
-                }
-
-                // Increment unread count
-                users.value[senderIndex].unread_count += 1;
-            }
-        }
-    });
 });
 
 const isLoggingOut = ref(false);
@@ -784,6 +706,10 @@ const markUserOffline = () => {
 // Runs when Vue layout unmounts (SPA navigation away)
 onUnmounted(() => {
     if (!window.echoSubscribed) return;
+
+    if (!echo || !echo.leave) {
+        return;
+    }
 
     try {
         echo.leave(`user.${currentUser.id}`);

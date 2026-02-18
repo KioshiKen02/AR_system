@@ -564,29 +564,9 @@ const handleClickOutside = (event) => {
 
 onMounted(() => {
     document.addEventListener("click", handleClickOutside);
-
-    try {
-        window.Echo.channel(props.broadcastChannel)
-            .listen(".adjustment_reason_setup.created", () => {
-                if (!showModal.value && !showEditModal.value) {
-                    router.reload({
-                        preserveState: true,
-                        only: ["adjustment_reason_setups"],
-                        onFinish: () => { },
-                    });
-                }
-            })
-            .error((error) => {
-                console.error("Echo error:", error);
-            });
-    } catch (error) {
-        console.error("Error initializing Echo:", error);
-    }
 });
 
 onUnmounted(() => {
     document.removeEventListener("click", handleClickOutside);
-
-    window.Echo.leaveChannel(props.broadcastChannel);
 });
 </script>
