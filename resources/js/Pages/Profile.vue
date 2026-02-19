@@ -352,25 +352,22 @@ const userInitials = computed(() => {
 
 const generateManagersKeyCode = async () => {
     showToast.value = false;
+    managersKeyCode.processing = true;
 
     const randomCode = generateRandomCode();
     managersKeyCode.ungeneratedCode = randomCode;
 
     try {
-        const response = await axios.post(
-            `/${page.props.tenant}/profile-generateManagersKeyCode/${props.user.id}`,
-            {
-                ungeneratedCode: managersKeyCode.ungeneratedCode,
-            }
+        await axios.post(
+            route("generateManagersKeyCode", { tenant: page.props.tenant, id: props.user.id }),
+            { ungeneratedCode: managersKeyCode.ungeneratedCode }
         );
-        showToast.value = false;
         managersKeyCode.generatedCode = managersKeyCode.ungeneratedCode;
         managersKeyCode.ungeneratedCode = "";
         showSuccessToast("Generated Code Successfully");
     } catch (error) {
         managersKeyCode.generatedCode = "";
         managersKeyCode.ungeneratedCode = "";
-        showWToast.value = false;
         let firstError = "Error Generating Please Try Again";
         if (error.response?.data?.errors) {
             firstError = Object.values(error.response.data.errors)[0];
@@ -378,6 +375,8 @@ const generateManagersKeyCode = async () => {
             firstError = error.response.data.message;
         }
         showWarningToast(firstError);
+    } finally {
+        managersKeyCode.processing = false;
     }
 };
 

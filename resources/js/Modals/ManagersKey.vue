@@ -84,12 +84,14 @@ import ToastAlertWarning from "../Pages/Components/ToastAlertWarning.vue";
 import axios from "axios";
 import TextInput from "../Pages/Components/TextInput.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
+import { usePage } from "@inertiajs/vue3";
 
 const props = defineProps({
     show: Boolean,
 });
 
 const emit = defineEmits(["success", "cancel"]);
+const page = usePage();
 
 const managerUsernameInput = ref("");
 const managerPasswordInput = ref("");
@@ -127,9 +129,12 @@ const confirm = async (choice) => {
 
         try {
             if (managersKeyCode.value !== "") {
-                const response = await axios.post(route("validateManagerKey"), {
-                    managerskeycode: managersKeyCode.value,
-                });
+                const response = await axios.post(
+                    route("validateManagerKey", { tenant: page.props.tenant }),
+                    {
+                        managerskeycode: managersKeyCode.value,
+                    }
+                );
 
                 if (response.data.authorized) {
                     emit("success", {
@@ -143,7 +148,6 @@ const confirm = async (choice) => {
                 showWarningToast("Please Enter Manager's Key Code");
             }
         } catch (error) {
-            //console.log(error);
             showWarningToast("Error Please Try Again");
         }
         form.processing = false;
