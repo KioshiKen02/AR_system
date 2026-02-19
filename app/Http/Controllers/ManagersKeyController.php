@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\MasterfileModels\Permission;
 use App\Models\MasterfileModels\User;
+use App\Models\MasterfileModels\TenantUser;
 use App\Models\TransactionModels\ManagerKeyEntries;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -18,48 +21,59 @@ class ManagersKeyController extends Controller
         $validated = $request->validate([
             'managerskeycode' => ['required', 'string'],
         ]);
-        // $request->validate([
-        //     'username' => ['required', 'string'],
-        //     'password' => ['required', 'string'],
-        // ]);
 
-        $user = User::where('managers_key_code', $validated['managerskeycode'])  // or 'username' if that's your field
+        $code = trim($validated['managerskeycode']);
+
+        $mainUser = User::on('mysql')
+            ->where('managers_key_code', $code)
             ->first();
 
-        if ($user && $validated['managerskeycode'] === $user->managers_key_code) {
-            // Check for SUPER role in permissions
-            $hasSuperPermission = Permission::where('user_id', $user->id)
+        if ($mainUser) {
+            $permissionUserId = $mainUser->id;
+
+            if (config('database.default') === 'tenant') {
+                $tenantUser = TenantUser::on('tenant')
+                    ->where('employee_id', $mainUser->employee_id)
+                    ->orWhere('username', $mainUser->username)
+                    ->first();
+
+                if ($tenantUser) {
+                    $permissionUserId = $tenantUser->id;
+                }
+            }
+
+            $hasSuperPermission = Permission::where('user_id', $permissionUserId)
                 ->where('role_id', 'MANAGERKEY')
                 ->where('can_insert', 1)
                 ->exists();
 
             if ($hasSuperPermission) {
-                // Log the user who entered the manager key successfully
                 ManagerKeyEntries::create([
-                    'user_id' => $user->id,  // Store the user ID
-                    'user_name' => $user->name,  // Store the user ID
-                    'entered_at' => now(),   // Store the current timestamp
+                    'user_id' => $mainUser->id,
+                    'user_name' => $mainUser->name,
+                    'entered_at' => now(),
                 ]);
-                $user->update([
-                    'managers_key_code' => null
+
+                $mainUser->update([
+                    'managers_key_code' => null,
                 ]);
+
                 return response()->json([
                     'authorized' => true,
-                    'user_name' => $user->name,
-                    'message' => 'Access granted.'
-                ]);
-            } else {
-                return response()->json([
-                    'authorized' => false,
-                    'message' => 'User does not have full SUPER permissions.'
+                    'user_name' => $mainUser->name,
+                    'message' => 'Access granted.',
                 ]);
             }
-        }
 
+            return response()->json([
+                'authorized' => false,
+                'message' => 'User does not have full SUPER permissions.',
+            ]);
+        }
 
         return response()->json([
             'authorized' => false,
-            'message' => 'Invalid or Expired Managers Key Code'
+            'message' => 'Invalid or Expired Managers Key Code',
         ]);
     }
 
@@ -69,42 +83,90 @@ class ManagersKeyController extends Controller
             'method' => $request->method(),
             'path' => $request->path(),
             'tenant' => $request->route('tenant'),
-            'headers' => [
-                'X-Inertia' => $request->header('X-Inertia'),
-                'Accept' => $request->header('Accept'),
-            ],
+            'route_params' => $request->route() ? $request->route()->parameters() : [],
         ]);
+
         if ($request->isMethod('get')) {
             $tenant = $request->route('tenant');
             return redirect()->route('profile', ['tenant' => $tenant]);
         }
-        $validated = $request->validate(
-            [
+
+        try {
+            $validated = $request->validate([
                 'ungeneratedCode' => 'required|string|max:8',
-            ],
-        );
-
-        if (User::where('managers_key_code', $validated['ungeneratedCode'])->exists()) {
-            throw ValidationException::withMessages([
-                'general' => 'Error Generating Please Try Again',
             ]);
-        }
 
-        $user = User::findOrFail($id);
-
-        // Update the user's record
-        $user->update([
-            'managers_key_code' => $validated['ungeneratedCode']
-        ]);
-
-        if ($request->header('X-Inertia') || $request->expectsJson()) {
-            return response()->json([
-                'successful' => true,
-                'message' => 'Generated Code Successfully',
+            Log::info('manager_key.validated_input', [
+                'raw_input' => $request->all(),
+                'validated' => $validated,
             ]);
-        }
 
-        $tenant = $request->route('tenant');
-        return redirect()->route('profile', ['tenant' => $tenant])->with('successful', 'Generated Code Successfully');
+            $code = $validated['ungeneratedCode'];
+
+            // Resolve the correct user id, similar to other controllers in tenant routes
+            $targetId = $request->route('id') ?? $id;
+            if (!is_numeric($targetId)) {
+                $params = $request->route() ? array_values($request->route()->parameters()) : [];
+                if (count($params) >= 2) {
+                    $targetId = $params[1];
+                }
+            }
+
+            Log::info('manager_key.target_user', [
+                'original_id' => $id,
+                'resolved_id' => $targetId,
+            ]);
+
+            if (User::on('mysql')->where('managers_key_code', $code)->exists()) {
+                Log::warning('manager_key.duplicate_code', [
+                    'code' => $code,
+                ]);
+
+                throw ValidationException::withMessages([
+                    'general' => 'Error Generating Please Try Again',
+                ]);
+            }
+
+            $user = User::on('mysql')->findOrFail($targetId);
+            $user->managers_key_code = $code;
+            $user->save();
+            $user->refresh();
+
+            Log::info('manager_key.update_main_only', [
+                'user_id' => $user->id,
+                'code' => $user->managers_key_code,
+            ]);
+
+            if ($request->header('X-Inertia') || $request->expectsJson()) {
+                return response()->json([
+                    'successful' => true,
+                    'message' => 'Generated Code Successfully',
+                ]);
+            }
+
+            $tenant = $request->route('tenant');
+            return redirect()->route('profile', ['tenant' => $tenant])->with('successful', 'Generated Code Successfully');
+        } catch (ValidationException $e) {
+            Log::warning('manager_key.validation_failed', [
+                'errors' => $e->errors(),
+            ]);
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('manager_key.update_failed', [
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            if ($request->header('X-Inertia') || $request->expectsJson()) {
+                return response()->json([
+                    'successful' => false,
+                    'message' => 'Failed to save Managers Key Code. Please contact support.',
+                ], 500);
+            }
+
+            $tenant = $request->route('tenant');
+            return redirect()->route('profile', ['tenant' => $tenant])
+                ->with('warning', 'Failed to save Managers Key Code. Please contact support.');
+        }
     }
 }

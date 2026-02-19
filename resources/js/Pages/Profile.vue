@@ -370,7 +370,8 @@ const generateManagersKeyCode = async () => {
         managersKeyCode.ungeneratedCode = "";
         let firstError = "Error Generating Please Try Again";
         if (error.response?.data?.errors) {
-            firstError = Object.values(error.response.data.errors)[0];
+            const raw = Object.values(error.response.data.errors)[0];
+            firstError = Array.isArray(raw) ? raw[0] : raw;
         } else if (error.response?.data?.message) {
             firstError = error.response.data.message;
         }
