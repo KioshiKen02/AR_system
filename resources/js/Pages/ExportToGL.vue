@@ -2,47 +2,6 @@
     <div>
         <ToastAlertWarning :show="showToast" :message="toastMessage" />
         <ToastAlert :show="showSToast" :message="toastSMessage" />
-        <!-- Loading state with progress -->
-        <div v-if="loading"
-            class="fixed inset-0 bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div
-                class="w-full max-w-md bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-2xl shadow-xl overflow-hidden transition-all duration-300">
-                <div class="p-6 space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-[var(--color-text-primary])]">
-                            {{ progressMessage }}
-                        </h3>
-                        <span class="text-lg font-medium text-[var(--color-primary)]">
-                            {{ progress }}%
-                        </span>
-                    </div>
-
-                    <!-- Animated progress bar -->
-                    <div class="relative h-2.5 bg-[var(--color-bg-primary)] rounded-full overflow-hidden">
-                        <div class="absolute top-0 left-0 h-full bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-hover)] rounded-full transition-all duration-500 ease-out"
-                            :style="{ width: progress + '%' }">
-                            <div class="absolute inset-0 opacity-30 animate-pulse"></div>
-                        </div>
-                    </div>
-
-                    <!-- Animated dots for visual interest -->
-                    <div class="flex justify-center space-x-1.5 pt-1">
-                        <div v-for="i in 3" :key="i"
-                            class="w-2 h-2 bg-[var(--color-primary)] rounded-full animate-bounce"
-                            :style="`animation-delay: ${i * 0.15}s`"></div>
-                    </div>
-
-                    <p class="text-center text-sm text-[var(--color-text-secondary)] font-medium">
-                        Generating Text File...
-                    </p>
-                </div>
-
-                <!-- Subtle animated border at bottom -->
-                <div
-                    class="h-1 bg-gradient-to-r from-transparent via-[var(--color-primary)] to-transparent animate-[pulse_2s_infinite]">
-                </div>
-            </div>
-        </div>
         <!-- Export Type Selection Modal -->
         <div v-if="showExportTypeModal"
             class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]">
@@ -263,10 +222,6 @@ const form = useForm({
 const showExportTypeModal = ref(false);
 
 const submitType = ref(null);
-
-const loading = ref(false);
-const progress = ref(0);
-const progressMessage = ref("Starting file generation...");
 const error = ref(null);
 const userId = ref(null);
 const page = usePage();
@@ -345,8 +300,6 @@ const generateExport = async () => {
     }
 
     try {
-        progressMessage.value = "Starting Text File Generation...";
-
         const response = await axios.post(
             route("generateTextFile", { tenant: page.props.tenant }),
             form.data(),
@@ -361,9 +314,6 @@ const generateExport = async () => {
             return; // stop here
         }
 
-        loading.value = false;
-        progress.value = 100;
-        progressMessage.value = "Text File Generated Successfully";
         showSuccessToast(
             response.data.message || "TextFile generation has completed successfully."
         );
@@ -389,7 +339,6 @@ const generateExport = async () => {
             showWarningToast(error.value);
         }
 
-        loading.value = false;
     }
 };
 

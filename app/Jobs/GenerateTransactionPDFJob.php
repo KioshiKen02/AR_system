@@ -66,17 +66,6 @@ class GenerateTransactionPDFJob
 
     protected function updateProgress(int $progress, string $message)
     {
-        try {
-            broadcast(new TransactionPdfGenerationProgress(
-                $this->userId,
-                $progress,
-                $message,
-                $this->channel
-            ));
-            //  Log::info("Progress updated: {$progress}% - {$message} - {$this->userId}");
-        } catch (\Exception $e) {
-            Log::error("Progress update failed: " . $e->getMessage());
-        }
     }
 
     protected function invoiceTransaction()
@@ -157,13 +146,6 @@ class GenerateTransactionPDFJob
         $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new TransactionPdfGenerated(
-            $this->userId,
-            $this->filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function invoiceCashTransaction()
@@ -248,13 +230,6 @@ class GenerateTransactionPDFJob
         $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new TransactionPdfGenerated(
-            $this->userId,
-            $this->filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function adjustmentTransaction()
@@ -320,13 +295,6 @@ class GenerateTransactionPDFJob
         $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new TransactionPdfGenerated(
-            $this->userId,
-            $this->filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function paymentTransaction()
@@ -411,13 +379,6 @@ class GenerateTransactionPDFJob
         $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new TransactionPdfGenerated(
-            $this->userId,
-            $this->filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function checkClearedTransaction()
@@ -488,13 +449,6 @@ class GenerateTransactionPDFJob
         $publicUrl = $prefix . Storage::url("temp/{$this->filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new TransactionPdfGenerated(
-            $this->userId,
-            $this->filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function whtClearedTransaction()

@@ -168,17 +168,6 @@ class GeneratePdfJob
 
     protected function updateProgress(int $progress, string $message)
     {
-        try {
-            broadcast(new PdfGenerationProgress(
-                $this->userId,
-                $progress,
-                $message,
-                $this->channel
-            ));
-            // Log::info("Progress updated: {$progress}% - {$message}");
-        } catch (\Exception $e) {
-            Log::error("Progress update failed: " . $e->getMessage());
-        }
     }
 
 
@@ -309,69 +298,15 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Report Ready!');
 
-        // Clear memory before broadcasting
         unset($pdf, $data, $groupedData);
         if (function_exists('gc_collect_cycles')) {
             gc_collect_cycles();
-        }
-
-        try {
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
-        } catch (\Exception $e) {
-            Log::error("Broadcast failed: " . $e->getMessage());
         }
     }
 
     protected function broadcastData(array $data, ?string $pdfUrl = null)
     {
         $this->updateProgress(100, 'Report Ready!');
-
-        try {
-            // If PDF URL is provided, we broadcast the PdfGenerated event
-            if ($pdfUrl) {
-                broadcast(new PdfGenerated(
-                    $this->userId,
-                    $this->filename,
-                    $pdfUrl,
-                    $this->channel
-                ));
-                return;
-            }
-
-            // Otherwise, we proceed with Excel data broadcasting logic (if used elsewhere)
-            // Save data to a temporary JSON file to avoid Pusher payload limits
-            $filename = 'excel_data_' . Str::random(40) . '.json';
-            Storage::disk('public')->put("temp/{$filename}", json_encode($data));
-            $url = Storage::url("temp/{$filename}");
-            
-            // Fix URL if it's missing the domain (common in some setups)
-            if (!Str::startsWith($url, ['http://', 'https://'])) {
-                $url = config('app.url') . $url;
-            }
-
-            // Clear huge data from memory before broadcasting
-            unset($data);
-            if (function_exists('gc_collect_cycles')) {
-                gc_collect_cycles();
-            }
-
-            broadcast(new PdfGenerated(
-                $this->userId,
-                '',
-                '',
-                $this->channel,
-                ['dataUrl' => $url] // Send URL instead of raw data
-            ));
-        } catch (\Exception $e) {
-            Log::error('Failed to save Excel data to file: ' . $e->getMessage());
-            // Do NOT fallback to broadcasting raw data if it's huge
-            // $this->broadcastData($data); 
-        }
     }
 
     protected function generateInvoiceProoflistDataForExcel()
@@ -592,21 +527,9 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Report Ready!');
 
-        // Clear memory before broadcasting
         unset($pdf, $data, $flatInvoices);
         if (function_exists('gc_collect_cycles')) {
             gc_collect_cycles();
-        }
-
-        try {
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
-        } catch (\Exception $e) {
-            Log::error("Broadcast failed: " . $e->getMessage());
         }
     }
 
@@ -808,21 +731,9 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Report Ready!');
 
-        // Clear memory before broadcasting
         unset($pdf, $data, $groupedData);
         if (function_exists('gc_collect_cycles')) {
             gc_collect_cycles();
-        }
-
-        try {
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
-        } catch (\Exception $e) {
-            Log::error("Broadcast failed: " . $e->getMessage());
         }
     }
 
@@ -1108,13 +1019,6 @@ class GeneratePdfJob
             $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
             $this->updateProgress(100, 'Report Ready!');
-
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
         } else {
             $formattedPayments = collect();
 
@@ -1195,13 +1099,6 @@ class GeneratePdfJob
             $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
             $this->updateProgress(100, 'Report Ready!');
-
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
         }
     }
 
@@ -1570,17 +1467,6 @@ class GeneratePdfJob
         $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        try {
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
-        } catch (\Exception $e) {
-            Log::error("Broadcast failed: " . $e->getMessage());
-        }
     }
 
     protected function generatePdcDcReportDataForExcel()
@@ -2225,13 +2111,6 @@ class GeneratePdfJob
             $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
             $this->updateProgress(100, 'Report Ready!');
-
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
         } else {
             $query = PaymentDetails::where('payment_type', 'Check')
                 ->orderBy('customer_code')
@@ -2433,13 +2312,6 @@ class GeneratePdfJob
             $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
             $this->updateProgress(100, 'Report Ready!');
-
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
         }
     }
 
@@ -2578,17 +2450,6 @@ class GeneratePdfJob
         $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        try {
-            broadcast(new PdfGenerated(
-                $this->userId,
-                $filename,
-                $publicUrl,
-                $this->channel
-            ));
-        } catch (\Exception $e) {
-            Log::error("Broadcast failed: " . $e->getMessage());
-        }
     }
 
     protected function generateArOutstandingBalanceAOReport()
@@ -2783,13 +2644,6 @@ class GeneratePdfJob
         $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new PdfGenerated(
-            $this->userId,
-            $filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function generateArOutstandingBalanceDRReport()
@@ -2979,13 +2833,6 @@ class GeneratePdfJob
         $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new PdfGenerated(
-            $this->userId,
-            $filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function generateArOutstandingBalanceAODataForExcel()
@@ -3500,13 +3347,6 @@ class GeneratePdfJob
         $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new PdfGenerated(
-            $this->userId,
-            $filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function generateOverageShortageReportDataForExcel()
@@ -3822,13 +3662,6 @@ class GeneratePdfJob
         $publicUrl = $prefix . Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new PdfGenerated(
-            $this->userId,
-            $filename,
-            $publicUrl,
-            $this->channel
-        ));
     }
 
     protected function generateStatementOfAccountReportDataForExcel()

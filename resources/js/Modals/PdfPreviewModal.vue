@@ -2,46 +2,17 @@
     <div class="fixed inset-0 z-60 flex items-center justify-center">
         <ToastAlert :show="showToast" :message="toastMessage" />
         <ToastAlertWarning :show="showWToast" :message="toastWMessage" />
-        <!-- Modal container -->
         <div class="relative w-full h-full p-4">
-            <!-- Loading state with progress -->
             <div v-if="loading"
                 class="fixed inset-0 bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                 <div
                     class="w-full max-w-md bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-2xl shadow-xl overflow-hidden transition-all duration-300">
                     <div class="p-6 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-lg font-semibold text-[var(--color-text-primary])]">
-                                {{ progressMessage }}
+                        <div class="flex items-center justify-center">
+                            <h3 class="text-lg font-semibold text-[var(--color-text-primary)]">
+                                {{ formData.file_type === 'Excel' ? 'Generating your Excel document...' : 'Generating your PDF document...' }}
                             </h3>
-                            <span class="text-lg font-medium text-[var(--color-primary)]">
-                                {{ progress }}%
-                            </span>
                         </div>
-
-                        <!-- Animated progress bar -->
-                        <div class="relative h-2.5 bg-[var(--color-bg-primary)] rounded-full overflow-hidden">
-                            <div class="absolute top-0 left-0 h-full bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-hover)] rounded-full transition-all duration-500 ease-out"
-                                :style="{ width: progress + '%' }">
-                                <div class="absolute inset-0 opacity-30 animate-pulse"></div>
-                            </div>
-                        </div>
-
-                        <!-- Animated dots for visual interest -->
-                        <div class="flex justify-center space-x-1.5 pt-1">
-                            <div v-for="i in 3" :key="i"
-                                class="w-2 h-2 bg-[var(--color-primary)] rounded-full animate-bounce"
-                                :style="`animation-delay: ${i * 0.15}s`"></div>
-                        </div>
-
-                        <p class="text-center text-sm text-[var(--color-text-secondary)] font-medium">
-                            {{ formData.file_type === 'Excel' ? 'Generating your Excel document...' : 'Generating your PDF document...' }}
-                        </p>
-                    </div>
-
-                    <!-- Subtle animated border at bottom -->
-                    <div
-                        class="h-1 bg-gradient-to-r from-transparent via-[var(--color-primary)] to-transparent animate-[pulse_2s_infinite]">
                     </div>
                 </div>
             </div>
@@ -134,8 +105,6 @@ const emit = defineEmits(["close", "closeSuccess"]);
 const pdfUrl = ref(null);
 const loading = ref(false);
 const error = ref(null);
-const progress = ref(0);
-const progressMessage = ref("Starting generation...");
 const channel = ref(null);
 let echo = null;
 const userId = ref(null);
@@ -187,8 +156,6 @@ const closeModal = async () => {
 
     loading.value = false;
     error.value = null;
-    progress.value = 0;
-    progressMessage.value = "Starting generation...";
     emit("close");
 };
 
@@ -201,9 +168,7 @@ const startPdfGeneration = async () => {
     try {
         loading.value = true;
         error.value = null;
-        progress.value = 0;
         const isExcel = props.formData.file_type === 'Excel';
-        progressMessage.value = isExcel ? "Starting Excel generation..." : "Starting PDF generation...";
 
         if (isExcel) {
             error.value = "Excel export is currently unavailable because real-time processing is disabled.";
@@ -225,8 +190,6 @@ const startPdfGeneration = async () => {
             pdfUrl.value = response.data.url;
             pathDelete.value = response.data.url; 
 
-            progress.value = 100;
-            progressMessage.value = "Report Ready!";
             return;
         }
 
