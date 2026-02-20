@@ -205,11 +205,13 @@ class GeneratePdfJob
         $groupedData = [];
         $grandTotalAR = 0;
         $grandTotalCash = 0;
+        $grandTotalVat = 0;
 
         $query->chunkById(500, function ($invoicesChunk) use (
             &$groupedData,
             &$grandTotalAR,
             &$grandTotalCash,
+            &$grandTotalVat,
             &$processedRows,
             $totalRows,
             &$lastProgress
@@ -223,7 +225,8 @@ class GeneratePdfJob
                         'customer_name' => $invoice->name,
                         'invoices' => [],
                         'customer_cash_total' => 0,
-                        'customer_ar_total' => 0
+                        'customer_ar_total' => 0,
+                        'customer_vat_total' => 0,
                     ];
                 }
 
@@ -232,8 +235,21 @@ class GeneratePdfJob
                     'item_name' => $item->item_name,
                 ])->toArray();
 
-                $cashAmount = $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0;
-                $arAmount = $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0;
+                $baseAmount = (float)($invoice->total_amount ?? 0);
+                $vatAmount = ((float)($invoice->added_vat ?? 0)) - ((float)($invoice->deducted_vat ?? 0));
+                $documentTotal = $baseAmount + $vatAmount;
+
+                if ($invoice->payment_mode === 'Cash') {
+                    $cashAmount = $baseAmount;
+                    $arAmount = 0;
+                    $documentCashTotal = $documentTotal;
+                    $documentArTotal = 0;
+                } else {
+                    $cashAmount = 0;
+                    $arAmount = $baseAmount;
+                    $documentCashTotal = 0;
+                    $documentArTotal = $documentTotal;
+                }
 
                 $groupedData[$customerCode]['invoices'][] = [
                     'invoice_no' => $invoice->invoice_no,
@@ -245,13 +261,18 @@ class GeneratePdfJob
                     'items' => $items,
                     'cash_amount' => $cashAmount,
                     'ar_amount' => $arAmount,
+                    'vat_amount' => $vatAmount,
+                    'document_cash_total' => $documentCashTotal,
+                    'document_ar_total' => $documentArTotal,
                 ];
 
                 $groupedData[$customerCode]['customer_cash_total'] += $cashAmount;
                 $groupedData[$customerCode]['customer_ar_total'] += $arAmount;
+                $groupedData[$customerCode]['customer_vat_total'] += $vatAmount;
 
                 $grandTotalCash += $cashAmount;
                 $grandTotalAR += $arAmount;
+                $grandTotalVat += $vatAmount;
 
                 $processedRows++;
                 $progress = intval(($processedRows / $totalRows) * 100);
@@ -276,6 +297,7 @@ class GeneratePdfJob
             'preparedBy' => $this->preparedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
+            'grandTotalVat' => $grandTotalVat,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
         ];
 
@@ -342,11 +364,13 @@ class GeneratePdfJob
         $groupedData = [];
         $grandTotalAR = 0;
         $grandTotalCash = 0;
+        $grandTotalVat = 0;
 
         $query->chunkById(500, function ($invoicesChunk) use (
             &$groupedData,
             &$grandTotalAR,
             &$grandTotalCash,
+            &$grandTotalVat,
             &$processedRows,
             $totalRows,
             &$lastProgress
@@ -360,7 +384,8 @@ class GeneratePdfJob
                         'customer_name' => $invoice->name,
                         'invoices' => [],
                         'customer_cash_total' => 0,
-                        'customer_ar_total' => 0
+                        'customer_ar_total' => 0,
+                        'customer_vat_total' => 0,
                     ];
                 }
 
@@ -369,8 +394,21 @@ class GeneratePdfJob
                     'item_name' => $item->item_name,
                 ])->toArray();
 
-                $cashAmount = $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0;
-                $arAmount = $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0;
+                $baseAmount = (float)($invoice->total_amount ?? 0);
+                $vatAmount = ((float)($invoice->added_vat ?? 0)) - ((float)($invoice->deducted_vat ?? 0));
+                $documentTotal = $baseAmount + $vatAmount;
+
+                if ($invoice->payment_mode === 'Cash') {
+                    $cashAmount = $baseAmount;
+                    $arAmount = 0;
+                    $documentCashTotal = $documentTotal;
+                    $documentArTotal = 0;
+                } else {
+                    $cashAmount = 0;
+                    $arAmount = $baseAmount;
+                    $documentCashTotal = 0;
+                    $documentArTotal = $documentTotal;
+                }
 
                 $groupedData[$customerCode]['invoices'][] = [
                     'invoice_no' => $invoice->invoice_no,
@@ -382,13 +420,18 @@ class GeneratePdfJob
                     'items' => $items,
                     'cash_amount' => $cashAmount,
                     'ar_amount' => $arAmount,
+                    'vat_amount' => $vatAmount,
+                    'document_cash_total' => $documentCashTotal,
+                    'document_ar_total' => $documentArTotal,
                 ];
 
                 $groupedData[$customerCode]['customer_cash_total'] += $cashAmount;
                 $groupedData[$customerCode]['customer_ar_total'] += $arAmount;
+                $groupedData[$customerCode]['customer_vat_total'] += $vatAmount;
 
                 $grandTotalCash += $cashAmount;
                 $grandTotalAR += $arAmount;
+                $grandTotalVat += $vatAmount;
 
                 $processedRows++;
                 $progress = intval(($processedRows / $totalRows) * 100);
@@ -414,6 +457,7 @@ class GeneratePdfJob
             'preparedBy' => $this->preparedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
+            'grandTotalVat' => $grandTotalVat,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];

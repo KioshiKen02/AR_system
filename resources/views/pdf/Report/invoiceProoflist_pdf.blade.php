@@ -113,6 +113,10 @@
             font-weight: bold;
         }
 
+        .invoice-block {
+            page-break-inside: avoid;
+        }
+
         .grand-table {
             width: 100%;
             border-collapse: collapse;
@@ -193,19 +197,19 @@
             </tr>
         </table>
 
-        <table class="table">
-            <thead>
-                <tr>
-                    <th class="col-trans-no">TRANS. NO.</th>
-                    <th class="col-date">{{ $date_type === 'Transaction' ? 'TRANS.' : 'RECEIPT' }} DATE</th>
-                    <th class="col-ref">REF NO.</th>
-                    <th class="col-item">ITEM CODE & NAME</th>
-                    <th class="col-cash">CASH AMOUNT</th>
-                    <th class="col-ar">AR AMOUNT</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($group['invoices'] as $invoice)
+        @foreach ($group['invoices'] as $invoice)
+            <table class="table invoice-block">
+                <thead>
+                    <tr>
+                        <th class="col-trans-no">TRANS. NO.</th>
+                        <th class="col-date">{{ $date_type === 'Transaction' ? 'TRANS.' : 'RECEIPT' }} DATE</th>
+                        <th class="col-ref">REF NO.</th>
+                        <th class="col-item">ITEM CODE & NAME</th>
+                        <th class="col-cash">CASH AMOUNT</th>
+                        <th class="col-ar">AR AMOUNT</th>
+                    </tr>
+                </thead>
+                <tbody>
                     @foreach ($invoice['items'] as $index => $item)
                         <tr>
                             @if ($index === 0)
@@ -230,34 +234,52 @@
                             @endif
                         </tr>
                     @endforeach
-
                     <tr class="particular">
                         <td colspan="3"></td>
                         <td>Particular: {{ $invoice['particular'] }}</td>
                         <td colspan="2"></td>
                     </tr>
                     <tr class="totals">
-                        <td colspan="4">Document Total : </td>
-                        <td class="col-cash">{{ number_format($invoice['cash_amount'], 2) }}</td>
-                        <td class="col-ar">{{ number_format($invoice['ar_amount'], 2) }}</td>
+                        <td colspan="4">VAT :</td>
+                        <td class="col-cash"></td>
+                        <td class="col-ar">{{ number_format($invoice['vat_amount'] ?? 0, 2) }}</td>
                     </tr>
-                @endforeach
+                    <tr class="totals" style="border-top: 1px solid black;">
+                        <td colspan="4">Document Total : </td>
+                        <td class="col-cash">{{ number_format($invoice['document_cash_total'] ?? 0, 2) }}</td>
+                        <td class="col-ar">{{ number_format($invoice['document_ar_total'] ?? 0, 2) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        @endforeach
 
+        <table class="table">
+            <tbody>
                 {{-- Subtotal row for this customer --}}
                 <tr class="totals" style="border-top: 1px solid black;">
+                    <td colspan="6"></td>
+                </tr>
+                <tr class="totals">
+                    <td colspan="4">VAT Sub Total : </td>
+                    <td class="col-cash"></td>
+                    <td class="col-ar">{{ number_format($group['customer_vat_total'] ?? 0, 2) }}</td>
+                </tr>
+                <tr class="totals">
                     <td colspan="4">Sub Total : </td>
                     <td class="col-cash">{{ number_format($group['customer_cash_total'], 2) }}</td>
                     <td class="col-ar">{{ number_format($group['customer_ar_total'], 2) }}</td>
-                </tr>
+                </tr>  
             </tbody>
         </table>
     @endforeach
     <table class="grand-table">
         <tbody>
-            <tr class="totals">
+            <tr class="totals" style="border-top: 1px solid black;">
                 <td colspan="4">Grand Total: </td>
-                <td class="col-ar">{{ number_format($grandTotalCash, 2) }}</td>
-                <td class="col-ar">{{ number_format($grandTotalAR, 2) }}</td>
+                <td class="col-cash"></td>
+                <td class="col-ar">
+                    {{ number_format(($grandTotalCash + $grandTotalAR + $grandTotalVat), 2) }}
+                </td>
             </tr>
         </tbody>
     </table>

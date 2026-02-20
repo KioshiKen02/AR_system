@@ -263,6 +263,7 @@ const generateInvoiceProoflistExcelFile = async (excelData) => {
                 "ITEMS",
                 "CASH AMOUNT",
                 "AR AMOUNT",
+                "VAT",
             ];
 
             const headerRow = worksheet.getRow(currentRow);
@@ -301,6 +302,7 @@ const generateInvoiceProoflistExcelFile = async (excelData) => {
                 
                 dataRow.getCell(6).value = parseFloat(invoice.cash_amount) || 0;
                 dataRow.getCell(7).value = parseFloat(invoice.ar_amount) || 0;
+                dataRow.getCell(8).value = parseFloat(invoice.vat_amount ?? 0) || 0;
 
                 // Format cells
                 dataRow.getCell(1).alignment = { horizontal: "center" };
@@ -314,6 +316,8 @@ const generateInvoiceProoflistExcelFile = async (excelData) => {
                 dataRow.getCell(6).alignment = { horizontal: "right" };
                 dataRow.getCell(7).numFmt = "#,##0.00";
                 dataRow.getCell(7).alignment = { horizontal: "right" };
+                dataRow.getCell(8).numFmt = "#,##0.00";
+                dataRow.getCell(8).alignment = { horizontal: "right" };
 
                 // Borders
                 dataRow.eachCell((cell) => {
@@ -333,11 +337,12 @@ const generateInvoiceProoflistExcelFile = async (excelData) => {
             subtotalRow.getCell(5).value = "Sub Total :";
             subtotalRow.getCell(6).value = parseFloat(group.customer_cash_total) || 0;
             subtotalRow.getCell(7).value = parseFloat(group.customer_ar_total) || 0;
+            subtotalRow.getCell(8).value = parseFloat(group.customer_vat_total ?? 0) || 0;
 
             subtotalRow.getCell(5).font = { bold: true };
             subtotalRow.getCell(5).alignment = { horizontal: "right" };
             
-            [6, 7].forEach(col => {
+            [6, 7, 8].forEach(col => {
                 subtotalRow.getCell(col).font = { bold: true };
                 subtotalRow.getCell(col).numFmt = "#,##0.00";
                 subtotalRow.getCell(col).alignment = { horizontal: "right" };
@@ -355,11 +360,12 @@ const generateInvoiceProoflistExcelFile = async (excelData) => {
         totalRow.getCell(5).value = "Grand Total :";
         totalRow.getCell(6).value = parseFloat(excelData.grandTotalCash) || 0;
         totalRow.getCell(7).value = parseFloat(excelData.grandTotalAR) || 0;
+        totalRow.getCell(8).value = parseFloat(excelData.grandTotalVat ?? 0) || 0;
 
         totalRow.getCell(5).font = { bold: true, size: 12 };
         totalRow.getCell(5).alignment = { horizontal: "right" };
         
-        [6, 7].forEach(col => {
+        [6, 7, 8].forEach(col => {
             totalRow.getCell(col).font = { bold: true, size: 12 };
             totalRow.getCell(col).numFmt = "#,##0.00";
             totalRow.getCell(col).alignment = { horizontal: "right" };
