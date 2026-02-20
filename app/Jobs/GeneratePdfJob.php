@@ -2482,7 +2482,7 @@ class GeneratePdfJob
 
             $conditions = [];
             foreach ($typeMappings as $option => $type) {
-                if ($request->customerOptions[$option] ?? false) {
+                if (($this->validatedData['customerOptions'][$option] ?? false) === true) {
                     $conditions[] = ['cus_type', '=', $type];
                 }
             }
@@ -2499,6 +2499,14 @@ class GeneratePdfJob
             $query->where('customer_code', $this->validatedData['customer_code']);
         }
 
+        $invoiceNumbers = (clone $query)->pluck('invoice_number')->unique();
+
+        $adjustmentsGrouped = Adjustment::whereIn('invoice_no', $invoiceNumbers)
+            ->selectRaw("invoice_no, apply_to, SUM(CASE WHEN type='Positive' THEN amount WHEN type='Negative' THEN -amount ELSE 0 END) as total_adjustment")
+            ->groupBy('invoice_no', 'apply_to')
+            ->get()
+            ->groupBy(['invoice_no', 'apply_to']);
+
         $totalRows = (clone $query)->count();
         $processedRows = 0;
         $lastProgress = 1;
@@ -2506,15 +2514,14 @@ class GeneratePdfJob
         $groupedData = [];
         $customerOverallAmountTotal = 0;
         $customerCodes = [];
+        $runningBalances = [];
 
-        // First pass to collect all customer codes
         $query->chunkById(500, function ($chunk) use (&$customerCodes) {
             $chunk->each(function ($item) use (&$customerCodes) {
                 $customerCodes[$item->customer_code] = $item->customer_name;
             });
         });
 
-        // Preload all floating PDC/DC and WHT amounts for these customers
         $floatingAmounts = [];
         if (!empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
@@ -2539,7 +2546,6 @@ class GeneratePdfJob
             }
         }
 
-        // Process data in chunks
         $query->chunkById(500, function ($outstandingBalancesChunk) use (
             &$groupedData,
             &$customerOverallAmountTotal,
@@ -2547,7 +2553,9 @@ class GeneratePdfJob
             $customerCodes,
             &$processedRows,
             $totalRows,
-            &$lastProgress
+            &$lastProgress,
+            $adjustmentsGrouped,
+            &$runningBalances
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
                 return $item->customer_code . '|' . $item->customer_name;
@@ -2556,7 +2564,6 @@ class GeneratePdfJob
             foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
 
-                // Find or create customer data
                 $customerIndex = collect($groupedData)->search(
                     fn($customer) => $customer['customer_code'] === $customerCode
                 );
@@ -2577,8 +2584,45 @@ class GeneratePdfJob
                     $overage = $outstandingBalance->overage ?? 0;
                     $shrinkage_overage = $overage - $shrinkage;
 
-                    $arNetAmount = $outstandingBalance->running_balance;
-                    $customerData['customerAmountTotal'] += $arNetAmount;
+                    $val = function ($v) {
+                        return (float) str_replace(',', '', (string)($v ?? 0));
+                    };
+
+                    $balanceKey = $customerCode;
+                    if (!isset($runningBalances[$balanceKey])) {
+                        $runningBalances[$balanceKey] = 0;
+                    }
+
+                    $amount = $val($outstandingBalance->amount);
+                    $shrinkageVal = $val($outstandingBalance->shrinkage);
+                    $overageVal = $val($outstandingBalance->overage);
+                    $returnVal = $val($outstandingBalance->return);
+
+                    $applyTo = $outstandingBalance->type;
+                    if ($outstandingBalance->type === 'BG') {
+                        $applyTo = 'Beginning Balance';
+                    } elseif ($outstandingBalance->type === 'Charge Invoice') {
+                        $applyTo = 'Other Income';
+                    }
+
+                    $adjustedAmount = $adjustmentsGrouped
+                        ->get($outstandingBalance->invoice_number, collect())
+                        ->get($applyTo, collect())
+                        ->first()
+                        ->total_adjustment ?? 0;
+
+                    $grossDebit = $amount - $shrinkageVal + $overageVal - $returnVal;
+
+                    if ($outstandingBalance->type === 'BG' || $outstandingBalance->type === 'Beginning Balance') {
+                        $netDebit = $grossDebit;
+                    } else {
+                        $netDebit = $grossDebit + $adjustedAmount;
+                    }
+
+                    $credit = $val($outstandingBalance->amount_paid);
+
+                    $runningBalances[$balanceKey] += $netDebit - $credit;
+                    $arNetAmount = $runningBalances[$balanceKey];
 
                     $customerData['outstandingBalances'][] = [
                         'document_no' => $outstandingBalance->invoice_number,
@@ -2603,7 +2647,8 @@ class GeneratePdfJob
                     }
                 }
 
-                // Update or add customer data
+                $customerData['customerAmountTotal'] = $runningBalances[$customerCode] ?? 0;
+
                 if ($customerIndex !== false) {
                     $groupedData[$customerIndex] = $customerData;
                 } else {
@@ -2612,7 +2657,6 @@ class GeneratePdfJob
             }
         });
 
-        // Calculate overall total
         $customerOverallAmountTotal = collect($groupedData)->sum('customerAmountTotal');
 
         $this->updateProgress(98, 'Generating Report...');
@@ -2629,7 +2673,7 @@ class GeneratePdfJob
         $pdf = Pdf::loadView('pdf.Report.arOutstandingBalanceAO_pdf', $data)
             ->setPaper('A4', 'landscape')
             ->setOptions([
-                'margin_top' => 10,    // in mm
+                'margin_top' => 10,
                 'margin_right' => 10,
                 'margin_bottom' => 10,
                 'margin_left' => 10,
@@ -2677,7 +2721,7 @@ class GeneratePdfJob
 
             $conditions = [];
             foreach ($typeMappings as $option => $type) {
-                if ($request->customerOptions[$option] ?? false) {
+                if (($this->validatedData['customerOptions'][$option] ?? false) === true) {
                     $conditions[] = ['cus_type', '=', $type];
                 }
             }
@@ -2865,7 +2909,7 @@ class GeneratePdfJob
 
             $conditions = [];
             foreach ($typeMappings as $option => $type) {
-                if ($request->customerOptions[$option] ?? false) {
+                if (($this->validatedData['customerOptions'][$option] ?? false) === true) {
                     $conditions[] = ['cus_type', '=', $type];
                 }
             }
@@ -2882,6 +2926,14 @@ class GeneratePdfJob
             $query->where('customer_code', $this->validatedData['customer_code']);
         }
 
+        $invoiceNumbers = (clone $query)->pluck('invoice_number')->unique();
+
+        $adjustmentsGrouped = Adjustment::whereIn('invoice_no', $invoiceNumbers)
+            ->selectRaw("invoice_no, apply_to, SUM(CASE WHEN type='Positive' THEN amount WHEN type='Negative' THEN -amount ELSE 0 END) as total_adjustment")
+            ->groupBy('invoice_no', 'apply_to')
+            ->get()
+            ->groupBy(['invoice_no', 'apply_to']);
+
         $totalRows = (clone $query)->count();
         $processedRows = 0;
         $lastProgress = 1;
@@ -2889,15 +2941,14 @@ class GeneratePdfJob
         $groupedData = [];
         $customerOverallAmountTotal = 0;
         $customerCodes = [];
+        $runningBalances = [];
 
-        // First pass to collect all customer codes
         $query->chunkById(500, function ($chunk) use (&$customerCodes) {
             $chunk->each(function ($item) use (&$customerCodes) {
                 $customerCodes[$item->customer_code] = $item->customer_name;
             });
         });
 
-        // Preload all floating PDC/DC and WHT amounts for these customers
         $floatingAmounts = [];
         if (!empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
@@ -2922,7 +2973,6 @@ class GeneratePdfJob
             }
         }
 
-        // Process data in chunks
         $query->chunkById(500, function ($outstandingBalancesChunk) use (
             &$groupedData,
             &$customerOverallAmountTotal,
@@ -2930,7 +2980,9 @@ class GeneratePdfJob
             $customerCodes,
             &$processedRows,
             $totalRows,
-            &$lastProgress
+            &$lastProgress,
+            $adjustmentsGrouped,
+            &$runningBalances
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
                 return $item->customer_code . '|' . $item->customer_name;
@@ -2939,7 +2991,6 @@ class GeneratePdfJob
             foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
 
-                // Find or create customer data
                 $customerIndex = collect($groupedData)->search(
                     fn($customer) => $customer['customer_code'] === $customerCode
                 );
@@ -2960,8 +3011,45 @@ class GeneratePdfJob
                     $overage = $outstandingBalance->overage ?? 0;
                     $shrinkage_overage = $overage - $shrinkage;
 
-                    $arNetAmount = $outstandingBalance->running_balance;
-                    $customerData['customerAmountTotal'] += $arNetAmount;
+                    $val = function ($v) {
+                        return (float) str_replace(',', '', (string)($v ?? 0));
+                    };
+
+                    $balanceKey = $customerCode;
+                    if (!isset($runningBalances[$balanceKey])) {
+                        $runningBalances[$balanceKey] = 0;
+                    }
+
+                    $amount = $val($outstandingBalance->amount);
+                    $shrinkageVal = $val($outstandingBalance->shrinkage);
+                    $overageVal = $val($outstandingBalance->overage);
+                    $returnVal = $val($outstandingBalance->return);
+
+                    $applyTo = $outstandingBalance->type;
+                    if ($outstandingBalance->type === 'BG') {
+                        $applyTo = 'Beginning Balance';
+                    } elseif ($outstandingBalance->type === 'Charge Invoice') {
+                        $applyTo = 'Other Income';
+                    }
+
+                    $adjustedAmount = $adjustmentsGrouped
+                        ->get($outstandingBalance->invoice_number, collect())
+                        ->get($applyTo, collect())
+                        ->first()
+                        ->total_adjustment ?? 0;
+
+                    $grossDebit = $amount - $shrinkageVal + $overageVal - $returnVal;
+
+                    if ($outstandingBalance->type === 'BG' || $outstandingBalance->type === 'Beginning Balance') {
+                        $netDebit = $grossDebit;
+                    } else {
+                        $netDebit = $grossDebit + $adjustedAmount;
+                    }
+
+                    $credit = $val($outstandingBalance->amount_paid);
+
+                    $runningBalances[$balanceKey] += $netDebit - $credit;
+                    $arNetAmount = $runningBalances[$balanceKey];
 
                     $customerData['outstandingBalances'][] = [
                         'document_no' => $outstandingBalance->invoice_number,
@@ -2986,7 +3074,8 @@ class GeneratePdfJob
                     }
                 }
 
-                // Update or add customer data
+                $customerData['customerAmountTotal'] = $runningBalances[$customerCode] ?? 0;
+
                 if ($customerIndex !== false) {
                     $groupedData[$customerIndex] = $customerData;
                 } else {
@@ -2995,14 +3084,12 @@ class GeneratePdfJob
             }
         });
 
-        // Calculate overall total
         $customerOverallAmountTotal = collect($groupedData)->sum('customerAmountTotal');
 
         $this->updateProgress(99, 'Preparing Excel Data...');
 
         $formattedAsOfDate = date('m/d/Y', strtotime($this->validatedData['as_of_date']));
 
-        // Send data to frontend instead of generating file
         $excelData = [
             'dateRange' => "$formattedAsOfDate",
             'currency' => 'PHP',
@@ -3046,7 +3133,7 @@ class GeneratePdfJob
 
             $conditions = [];
             foreach ($typeMappings as $option => $type) {
-                if ($request->customerOptions[$option] ?? false) {
+                if (($this->validatedData['customerOptions'][$option] ?? false) === true) {
                     $conditions[] = ['cus_type', '=', $type];
                 }
             }
