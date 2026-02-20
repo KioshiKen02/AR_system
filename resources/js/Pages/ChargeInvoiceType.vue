@@ -409,25 +409,29 @@ watch(search, (q) => {
 
 onMounted(() => {
     try {
-        window.Echo.channel(props.broadcastChannel)
-            .listen(".charge_invoice_type.created", () => {
-                if (!showModal.value && !showEditModal.value) {
-                    router.reload({
-                        preserveState: true,
-                        only: ["charge_invoice_types"],
-                        onFinish: () => {},
-                    });
-                }
-            })
-            .error((error) => {
-                console.error("Echo error:", error);
-            });
+        if (window.Echo && window.Echo.channel) {
+            window.Echo.channel(props.broadcastChannel)
+                .listen(".charge_invoice_type.created", () => {
+                    if (!showModal.value && !showEditModal.value) {
+                        router.reload({
+                            preserveState: true,
+                            only: ["charge_invoice_types"],
+                            onFinish: () => {},
+                        });
+                    }
+                })
+                .error((error) => {
+                    console.error("Echo error:", error);
+                });
+        }
     } catch (error) {
         console.error("Error initializing Echo:", error);
     }
 });
 
 onUnmounted(() => {
-    window.Echo.leaveChannel(props.broadcastChannel);
+    if (window.Echo && window.Echo.leaveChannel) {
+        window.Echo.leaveChannel(props.broadcastChannel);
+    }
 });
 </script>

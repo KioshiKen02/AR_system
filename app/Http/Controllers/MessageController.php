@@ -215,9 +215,6 @@ class MessageController extends Controller
             'created_at' => $message->created_at->toISOString(),
         ];
 
-        // Broadcast to receiver
-        broadcast(new MessageSent($message))->toOthers();
-
         return response()->json(['message' => $formattedMessage]);
     }
 
@@ -235,11 +232,6 @@ class MessageController extends Controller
             ->where('receiver_id', $currentUserId)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
-
-        // Broadcast read status to sender
-        if ($updatedCount > 0) {
-            broadcast(new MessageRead($currentUser, $user->id));
-        }
 
         return response()->json([
             'success' => true,

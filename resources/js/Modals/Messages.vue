@@ -663,18 +663,24 @@ let typingTimeout = null;
 const handleTyping = () => {
     if (!selectedUser.value) return;
 
-    // Send typing event
-    echo.private(`user.${selectedUser.value.id}`).whisper("typing", {
+    const echoInstance = window.Echo || window.echo;
+    if (!echoInstance || !echoInstance.private) {
+        return;
+    }
+
+    echoInstance.private(`user.${selectedUser.value.id}`).whisper("typing", {
         user: currentUser.value,
         typing: true,
     });
 
-    // Clear previous timeout
     clearTimeout(typingTimeout);
 
-    // Stop typing after 1 second of no input
     typingTimeout = setTimeout(() => {
-        echo.private(`user.${selectedUser.value.id}`).whisper("typing", {
+        const echoInner = window.Echo || window.echo;
+        if (!echoInner || !echoInner.private) {
+            return;
+        }
+        echoInner.private(`user.${selectedUser.value.id}`).whisper("typing", {
             user: currentUser.value,
             typing: false,
         });
