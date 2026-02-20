@@ -42,6 +42,7 @@
                                     'Sales Invoice',
                                     'Other Income',
                                     'Payment',
+                                    'Beginning Balance',
                                 ]"
                                 placeholder="Click to Select"
                                 :message="form.errors.type"

@@ -72,7 +72,7 @@ class AdjustmentReasonSetupController extends Controller
             'acc_code' => ['required', 'string'],
             'type' => [
                 'required',
-                'in:Sales Invoice,Other Income,Payment'
+                'in:Sales Invoice,Other Income,Payment,Beginning Balance'
             ],
             'status' => ['required', 'in:Active,Inactive'],
         ]);
@@ -96,7 +96,7 @@ class AdjustmentReasonSetupController extends Controller
             'acc_code' => ['required', 'string'],
             'type' => [
                 'required',
-                'in:Sales Invoice,Other Income,Payment'
+                'in:Sales Invoice,Other Income,Payment,Beginning Balance'
             ],
             'status' => ['required', 'in:Active,Inactive'],
         ]);

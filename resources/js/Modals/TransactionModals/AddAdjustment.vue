@@ -91,7 +91,7 @@
                             :default-placeholder="'Click to Select'" :modified-placeholder="'Select Apply To First'"
                             selectable="yes" />
                         <TextInput label="Balance" v-model="bal" type="text" readonly :message="form.errors.balance" />
-                        <DropdownInput label="Adjustment Reason" v-model="form.adjustment_reason"
+                        <DropdownInputObject label="Adjustment Reason" v-model="form.adjustment_reason"
                             :options="adjustmentreasonOptions" :message="form.errors.adjustment_reason"
                             :disabled="!form.invoice_no" placeholder="Click to Select"
                             disabledPlaceholder="Select Document No First" />
@@ -147,6 +147,7 @@ import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import DocumentNumberListADJ from "./DocumentNumberListADJ.vue";
 import CustomerListModal from "./CustomerListModal.vue";
 import DropdownInput from "../../Pages/Components/DropdownInput.vue";
+import DropdownInputObject from "../../Pages/Components/DropdownInputObject.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 import PdfPreviewModal from "../PdfPreviewModal.vue";
 import DatePicker from "../../Pages/Components/DatePicker.vue";
@@ -168,6 +169,7 @@ const form = useForm({
     apply_to: null,
     invoice_no: null,
     balance: null,
+    adjustment_code: null,
     adjustment_reason: null,
     particulars: null,
     amount: null,
@@ -343,7 +345,11 @@ watch(
                             },
                         }
                     );
-                    adjustmentreasonOptions.value = response.data;
+                    adjustmentreasonOptions.value = response.data.map((item) => ({
+                        label: item.reason_name,
+                        value: item.reason_name,
+                        acc_code: item.acc_code,
+                    }));
                 } catch (error) {
                     console.error(
                         "Failed to fetch adjustmen reason setup:",
@@ -360,7 +366,11 @@ watch(
                             },
                         }
                     );
-                    adjustmentreasonOptions.value = response.data;
+                    adjustmentreasonOptions.value = response.data.map((item) => ({
+                        label: item.reason_name,
+                        value: item.reason_name,
+                        acc_code: item.acc_code,
+                    }));
                 } catch (error) {
                     console.error(
                         "Failed to fetch adjustment reason setup:",
@@ -377,7 +387,11 @@ watch(
                             },
                         }
                     );
-                    adjustmentreasonOptions.value = response.data;
+                    adjustmentreasonOptions.value = response.data.map((item) => ({
+                        label: item.reason_name,
+                        value: item.reason_name,
+                        acc_code: item.acc_code,
+                    }));
                 }
                 catch (error) {
                     console.error(
@@ -410,9 +424,25 @@ watch(
     async (newVal, oldVal) => {
         if (newVal && newVal !== oldVal) {
             form.adjustment_reason = "";
+            form.adjustment_code = "";
             form.particulars = "";
             form.amount = "";
         }
+    }
+);
+
+watch(
+    () => form.adjustment_reason,
+    (newVal) => {
+        if (!newVal) {
+            form.adjustment_code = "";
+            return;
+        }
+
+        const selected = adjustmentreasonOptions.value.find(
+            (opt) => opt.value === newVal
+        );
+        form.adjustment_code = selected ? selected.acc_code : "";
     }
 );
 

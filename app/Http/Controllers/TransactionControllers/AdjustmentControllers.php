@@ -107,6 +107,7 @@ class AdjustmentControllers extends Controller
                 'invoice_no' => ['required', 'string'],
                 'balance' => ['required', 'numeric'],
                 'adjustment_reason' => ['required', 'string'],
+                'adjustment_code' => ['nullable', 'string'],
                 'particulars' => ['required', 'string'],
                 'amount' => [
                     'required',
@@ -381,7 +382,10 @@ class AdjustmentControllers extends Controller
     {
         $apply_to = $request->input('apply_to');
 
-        $types = AdjustmentReasonSetup::where('type', $apply_to)->pluck('reason_name');
-        return response()->json($types);
+        $reasons = AdjustmentReasonSetup::where('type', $apply_to)
+            ->where('status', 'Active')
+            ->get(['reason_name', 'acc_code']);
+
+        return response()->json($reasons);
     }
 }

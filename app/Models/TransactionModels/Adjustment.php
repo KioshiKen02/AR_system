@@ -20,6 +20,7 @@ class Adjustment extends Model
         'name',
         'type',
         'apply_to',
+        'adjustment_code',
         'invoice_no',
         'balance',
         'adjustment_reason',
