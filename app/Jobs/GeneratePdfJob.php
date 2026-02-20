@@ -4080,7 +4080,7 @@ class GeneratePdfJob
             ? 'StatementOfAccount'
             : 'StatementOfAccountDFC';
 
-        $filename = $soafilename . 'Report_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? $soafilename . 'Report_' . time() . '_' . Str::random(6) . '.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
