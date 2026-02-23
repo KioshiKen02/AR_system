@@ -49,6 +49,7 @@ import LottieAnimation from "./Components/LottieAnimation.vue";
 import Farmhouse from "@/Animation/Farmhouse.json";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import useTheme from "./Composables/useTheme";
+import { route } from "../../../vendor/tightenco/ziggy/src/js";
 
 defineOptions({
     layout: false,

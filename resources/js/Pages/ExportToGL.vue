@@ -48,6 +48,27 @@
                         class="w-8 h-8 text-[var(--color-primary)]" />
                     Export To GL (Nav Feedmill)
                 </h3>
+                <div
+                    v-if="isGenerating || generationStatus"
+                    class="mb-4 p-3 rounded-lg bg-[var(--color-bg-secondary)]/40 border border-[var(--color-border)]/40 flex items-center gap-3 transition-all">
+                    <div
+                        class="w-5 h-5 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+                    <div class="flex flex-col">
+                        <span class="text-sm font-medium text-[var(--color-text-primary)]">
+                            {{ generationStatus || "Preparing to generate report..." }}
+                        </span>
+                        <div v-if="generationProgress !== null" class="mt-1 w-full h-1.5 rounded-full bg-[var(--color-bg-secondary)] overflow-hidden">
+                            <div
+                                class="h-full bg-[var(--color-primary)] transition-[width] duration-300"
+                                :style="{ width: `${generationProgress}%` }" />
+                        </div>
+                    </div>
+                    <span
+                        v-if="generationProgress !== null"
+                        class="ml-auto text-xs font-semibold text-[var(--color-text-secondary)] min-w-[3rem] text-right">
+                        {{ generationProgress }}%
+                    </span>
+                </div>
                 <form @submit.prevent="submit">
                     <div class="p-5 rounded-lg transition-all">
                         <div class="flex flex-col gap-10">
@@ -175,7 +196,7 @@
                             <div class="w-full flex justify-center items-center gap-4">
                                 <button v-if="canUpdate('0404-EXPRTGL')" type="submit" @click="submitType = 'untag'"
                                     class="submitButton w-full !flex !justify-center !items-center"
-                                    :disabled="form.processing">
+                                    :disabled="form.processing || isGenerating">
                                     <span>{{
                                         form.processing
                                             ? "Untagging Text File..."
@@ -184,10 +205,10 @@
                                 </button>
                                 <button type="submit" @click="submitType = 'generate'"
                                     class="submitButton w-full !flex !justify-center !items-center"
-                                    :disabled="form.processing">
+                                    :disabled="form.processing || isGenerating">
                                     <span>{{
-                                        form.processing
-                                            ? "Generating Text File..."
+                                        isGenerating
+                                            ? "Generating your report..."
                                             : "Generate Selected Export Type"
                                     }}</span>
                                 </button>
@@ -205,7 +226,7 @@ import { useForm, usePage } from "@inertiajs/vue3";
 import { mdiInvoiceTextSendOutline } from "@mdi/js";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import ToastAlertWarning from "./Components/ToastAlertWarning.vue";
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, onUnmounted as vueOnUnmounted, ref } from "vue";
 import DatePicker from "./Components/DatePicker.vue";
 import ToastAlert from "./Components/ToastAlert.vue";
 import usePermissions from "./Composables/usePermissions";
@@ -226,6 +247,10 @@ const error = ref(null);
 const userId = ref(null);
 const page = usePage();
 const pathDelete = ref(null);
+
+const isGenerating = ref(false);
+const generationProgress = ref(null);
+const generationStatus = ref("");
 
 const showToast = ref(false);
 const toastMessage = ref("");
@@ -289,6 +314,10 @@ const handleExportChoice = (format) => {
 };
 
 const generateExport = async () => {
+    if (isGenerating.value) {
+        return;
+    }
+
     if (!form.export_type || !form.start_date || !form.end_date) {
         showWarningToast("Please Fill In All Required Fields");
         return;
@@ -298,6 +327,35 @@ const generateExport = async () => {
         showWarningToast("End Date Must Be After Start Date");
         return;
     }
+
+    isGenerating.value = true;
+    generationProgress.value = 1;
+    generationStatus.value = "Preparing to generate report...";
+
+    const channelName = `textfile-generation.${userId.value}`;
+
+    let echoChannel = null;
+    try {
+        if (window.Echo && window.Echo.private) {
+            echoChannel = window.Echo.private(channelName)
+                .listen(".App\\Events\\ExportTextFileGenerationProgress", (event) => {
+                    if (typeof event.progress === "number") {
+                        generationProgress.value = Math.min(
+                            100,
+                            Math.max(0, event.progress)
+                        );
+                    }
+                    if (event.message) {
+                        generationStatus.value = event.message;
+                    }
+                })
+                .listen(".App\\Events\\ExportTextFileGenerated", () => {
+                    generationProgress.value = 100;
+                    generationStatus.value = "Report ready!";
+                })
+                .error(() => {});
+        }
+    } catch (e) {}
 
     try {
         const response = await axios.post(
@@ -311,15 +369,14 @@ const generateExport = async () => {
                 response.data.message ||
                 "No data found for the selected date range"
             );
-            return; // stop here
+            return;
         }
 
         showSuccessToast(
-            response.data.message || "TextFile generation has completed successfully."
+            "Report ready!"
         );
         form.reset();
     } catch (err) {
-        // console.error("Error starting TextFile generation:", err);
         if (err.response?.status === 422 && err.response?.data?.errors) {
             const validationErrors = err.response.data.errors;
 
@@ -332,13 +389,27 @@ const generateExport = async () => {
                 );
             }
         } else {
-            error.value =
+            const message =
                 err.response?.data?.message ||
                 err.message ||
                 "Failed to start TextFile generation";
-            showWarningToast(error.value);
+            error.value = message;
+            showWarningToast(message);
         }
 
+    } finally {
+        isGenerating.value = false;
+
+        if (echoChannel && window.Echo && window.Echo.leave) {
+            try {
+                window.Echo.leave(channelName);
+            } catch (e) {}
+        }
+
+        setTimeout(() => {
+            generationProgress.value = null;
+            generationStatus.value = "";
+        }, 1500);
     }
 };
 
@@ -374,5 +445,14 @@ const deletePdf = async () => {
 
 onMounted(() => {
     userId.value = page.props.auth.user.id || null;
+});
+
+onUnmounted(() => {
+    const channelName = `textfile-generation.${userId.value}`;
+    if (window.Echo && window.Echo.leave) {
+        try {
+            window.Echo.leave(channelName);
+        } catch (e) {}
+    }
 });
 </script>

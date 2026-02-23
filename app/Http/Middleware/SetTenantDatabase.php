@@ -18,6 +18,13 @@ class SetTenantDatabase
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->routeIs('session.expired')
+            || $request->routeIs('login')
+            || $request->routeIs('landing')
+            || $request->routeIs('authLogin')) {
+            return $next($request);
+        }
+
         $tenantSlug = $request->route('tenant');
         $buId = $request->input('bu_id');
 
