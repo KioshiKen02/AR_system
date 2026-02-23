@@ -2,6 +2,120 @@
     <div>
         <ToastAlertWarning :show="showToast" :message="toastMessage" />
         <ToastAlert :show="showSToast" :message="toastSMessage" />
+        <Transition name="fade-overlay">
+            <div
+                v-if="exportStatus !== 'idle'"
+                class="fixed inset-0 z-[10000] flex items-center justify-center"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="export-loading-title"
+                aria-describedby="export-loading-description"
+            >
+                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                <div
+                    class="relative z-10 w-full max-w-sm mx-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-6 shadow-2xl flex flex-col items-center text-center"
+                >
+                    <div class="mb-4 flex items-center justify-center">
+                        <div
+                            v-if="exportStatus === 'loading'"
+                            class="w-10 h-10 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin"
+                            aria-hidden="true"
+                        />
+                        <div
+                            v-else-if="exportStatus === 'success'"
+                            class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500"
+                            aria-hidden="true"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none">
+                                <path
+                                    d="M9 12.5l2 2 4-4"
+                                    stroke="currentColor"
+                                    stroke-width="1.8"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                                <circle
+                                    cx="12"
+                                    cy="12"
+                                    r="8"
+                                    stroke="currentColor"
+                                    stroke-width="1.4"
+                                />
+                            </svg>
+                        </div>
+                        <div
+                            v-else-if="exportStatus === 'error'"
+                            class="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500"
+                            aria-hidden="true"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none">
+                                <path
+                                    d="M12 8v5"
+                                    stroke="currentColor"
+                                    stroke-width="1.8"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                                <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+                                <circle
+                                    cx="12"
+                                    cy="12"
+                                    r="8"
+                                    stroke="currentColor"
+                                    stroke-width="1.4"
+                                />
+                            </svg>
+                        </div>
+                    </div>
+                    <h2
+                        id="export-loading-title"
+                        class="text-lg font-semibold text-[var(--color-text-primary)]"
+                    >
+                        <span v-if="exportStatus === 'loading'">
+                            Generating your export file...
+                        </span>
+                        <span v-else-if="exportStatus === 'success'">
+                            Export complete
+                        </span>
+                        <span v-else-if="exportStatus === 'error'">
+                            Export failed
+                        </span>
+                    </h2>
+                    <p
+                        id="export-loading-description"
+                        class="mt-2 text-sm text-[var(--color-text-secondary)]"
+                    >
+                        <span v-if="exportStatus === 'loading'">
+                            {{ generationStatus || "We are generating your export file. This can take several minutes for larger date ranges. Please keep this window open." }}
+                        </span>
+                        <span v-else-if="exportStatus === 'success'">
+                            Your export file is successfully generate.
+                        </span>
+                        <span v-else-if="exportStatus === 'error'">
+                            {{ error || "Something went wrong while generating your export file. Please try again." }}
+                        </span>
+                    </p>
+                    <div class="mt-6 flex flex-col gap-3 w-full">
+                        <button
+                            v-if="exportStatus === 'loading'"
+                            type="button"
+                            class="w-full inline-flex items-center justify-center rounded-xl border border-[var(--color-border)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] transition-colors"
+                            @click="cancelExport"
+                        >
+                            Cancel export
+                        </button>
+                        <button
+                            v-else
+                            type="button"
+                            class="w-full inline-flex items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] hover:border-[var(--color-primary)] transition-colors"
+                            @click="closeExportOverlay"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Transition>
         <!-- Export Type Selection Modal -->
         <div v-if="showExportTypeModal"
             class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]">
@@ -55,166 +169,185 @@
                         class="w-5 h-5 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
                     <div class="flex flex-col">
                         <span class="text-sm font-medium text-[var(--color-text-primary)]">
-                            {{ generationStatus || "Preparing to generate report..." }}
+                            {{ generationStatus || "Generating your export file. This can take several minutes depending on the data size." }}
                         </span>
-                        <div v-if="generationProgress !== null" class="mt-1 w-full h-1.5 rounded-full bg-[var(--color-bg-secondary)] overflow-hidden">
-                            <div
-                                class="h-full bg-[var(--color-primary)] transition-[width] duration-300"
-                                :style="{ width: `${generationProgress}%` }" />
-                        </div>
                     </div>
-                    <span
-                        v-if="generationProgress !== null"
-                        class="ml-auto text-xs font-semibold text-[var(--color-text-secondary)] min-w-[3rem] text-right">
-                        {{ generationProgress }}%
-                    </span>
                 </div>
                 <form @submit.prevent="submit">
-                    <div class="p-5 rounded-lg transition-all">
-                        <div class="flex flex-col gap-10">
-                            <div>
-                                <label class="block text-md font-bold">Please Select Export Type Below</label>
-                                <div class="w-full flex gap-4 mt-4">
-                                    <!-- Other Income Option -->
-                                    <label class="w-full inline-flex items-center cursor-pointer group">
-                                        <input type="radio" v-model="form.export_type" value="Other Income"
-                                            class="hidden peer" />
-                                        <div class="w-full relative flex items-center justify-center p-2">
-                                            <!-- Hover circle -->
-                                            <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
-                                                :class="{
-                                                    'opacity-100':
-                                                        form.export_type ===
-                                                        'Other Income',
-                                                }"></div>
-                                            <!-- Radio button -->
-                                            <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
-                                                :class="{
-                                                    'border-[var(--color-border)]':
-                                                        form.export_type ===
-                                                        'Other Income',
-                                                }">
-                                                <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                    <fieldset :disabled="exportStatus === 'loading'" :aria-busy="exportStatus === 'loading'">
+                        <div class="p-5 rounded-lg transition-all">
+                            <div class="flex flex-col gap-10">
+                                <div>
+                                    <label class="block text-md font-bold">Please Select Export Type Below</label>
+                                    <div class="w-full flex gap-4 mt-4">
+                                        <!-- Other Income Option -->
+                                        <label class="w-full inline-flex items-center cursor-pointer group">
+                                            <input
+                                                type="radio"
+                                                v-model="form.export_type"
+                                                value="Other Income"
+                                                class="hidden peer"
+                                            />
+                                            <div class="w-full relative flex items-center justify-center p-2">
+                                                <!-- Hover circle -->
+                                                <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
                                                     :class="{
                                                         'opacity-100':
                                                             form.export_type ===
                                                             'Other Income',
-                                                        'opacity-0':
-                                                            form.export_type !==
+                                                    }"></div>
+                                                <!-- Radio button -->
+                                                <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
+                                                    :class="{
+                                                        'border-[var(--color-border)]':
+                                                            form.export_type ===
                                                             'Other Income',
-                                                    }"></div>
+                                                    }">
+                                                    <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                                        :class="{
+                                                            'opacity-100':
+                                                                form.export_type ===
+                                                                'Other Income',
+                                                            'opacity-0':
+                                                                form.export_type !==
+                                                                'Other Income',
+                                                        }"></div>
+                                                </div>
+                                                <span class="text-sm font-medium z-10">Other Income/Charge
+                                                    Invoice</span>
                                             </div>
-                                            <span class="text-sm font-medium z-10">Other Income/Charge
-                                                Invoice</span>
-                                        </div>
-                                    </label>
+                                        </label>
 
-                                    <!-- Adjustment Option -->
-                                    <label class="w-full inline-flex items-center cursor-pointer group">
-                                        <input type="radio" v-model="form.export_type" value="Adjustment"
-                                            class="hidden peer" />
-                                        <div class="w-full relative flex items-center justify-center p-2">
-                                            <!-- Hover circle -->
-                                            <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
-                                                :class="{
-                                                    'opacity-100':
-                                                        form.export_type ===
-                                                        'Adjustment',
-                                                }"></div>
-                                            <!-- Radio button -->
-                                            <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
-                                                :class="{
-                                                    'border-[var(--color-border)]':
-                                                        form.export_type ===
-                                                        'Adjustment',
-                                                }">
-                                                <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                        <!-- Adjustment Option -->
+                                        <label class="w-full inline-flex items-center cursor-pointer group">
+                                            <input
+                                                type="radio"
+                                                v-model="form.export_type"
+                                                value="Adjustment"
+                                                class="hidden peer"
+                                            />
+                                            <div class="w-full relative flex items-center justify-center p-2">
+                                                <!-- Hover circle -->
+                                                <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
                                                     :class="{
                                                         'opacity-100':
                                                             form.export_type ===
                                                             'Adjustment',
-                                                        'opacity-0':
-                                                            form.export_type !==
-                                                            'Adjustment',
                                                     }"></div>
+                                                <!-- Radio button -->
+                                                <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
+                                                    :class="{
+                                                        'border-[var(--color-border)]':
+                                                            form.export_type ===
+                                                            'Adjustment',
+                                                    }">
+                                                    <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                                        :class="{
+                                                            'opacity-100':
+                                                                form.export_type ===
+                                                                'Adjustment',
+                                                            'opacity-0':
+                                                                form.export_type !==
+                                                                'Adjustment',
+                                                        }"></div>
+                                                </div>
+                                                <span class="text-sm font-medium z-10">Adjustment</span>
                                             </div>
-                                            <span class="text-sm font-medium z-10">Adjustment</span>
-                                        </div>
-                                    </label>
+                                        </label>
 
-                                    <!-- Payment Option -->
-                                    <label class="w-full inline-flex items-center cursor-pointer group">
-                                        <input type="radio" v-model="form.export_type" value="Payment"
-                                            class="hidden peer" />
-                                        <div class="w-full relative flex items-center justify-center p-2">
-                                            <!-- Hover circle -->
-                                            <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
-                                                :class="{
-                                                    'opacity-100':
-                                                        form.export_type ===
-                                                        'Payment',
-                                                }"></div>
-                                            <!-- Radio button -->
-                                            <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
-                                                :class="{
-                                                    'border-[var(--color-border)]':
-                                                        form.export_type ===
-                                                        'Payment',
-                                                }">
-                                                <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                        <!-- Payment Option -->
+                                        <label class="w-full inline-flex items-center cursor-pointer group">
+                                            <input
+                                                type="radio"
+                                                v-model="form.export_type"
+                                                value="Payment"
+                                                class="hidden peer"
+                                            />
+                                            <div class="w-full relative flex items-center justify-center p-2">
+                                                <!-- Hover circle -->
+                                                <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
                                                     :class="{
                                                         'opacity-100':
                                                             form.export_type ===
                                                             'Payment',
-                                                        'opacity-0':
-                                                            form.export_type !==
-                                                            'Payment',
                                                     }"></div>
+                                                <!-- Radio button -->
+                                                <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
+                                                    :class="{
+                                                        'border-[var(--color-border)]':
+                                                            form.export_type ===
+                                                            'Payment',
+                                                    }">
+                                                    <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                                        :class="{
+                                                            'opacity-100':
+                                                                form.export_type ===
+                                                                'Payment',
+                                                            'opacity-0':
+                                                                form.export_type !==
+                                                                'Payment',
+                                                        }"></div>
+                                                </div>
+                                                <span class="text-sm font-medium z-10">Payment</span>
                                             </div>
-                                            <span class="text-sm font-medium z-10">Payment</span>
-                                        </div>
-                                    </label>
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="space-y-1">
-                                    <label
-                                        class="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Start
-                                        Date</label>
-                                    <DatePicker v-model="form.start_date" placeholder="Select Date" format="MM-DD-YYYY"
-                                        :message="form.errors.start_date" />
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="space-y-1">
+                                        <label
+                                            class="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Start
+                                            Date</label>
+                                        <DatePicker
+                                            v-model="form.start_date"
+                                            placeholder="Select Date"
+                                            format="MM-DD-YYYY"
+                                            :message="form.errors.start_date"
+                                        />
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">End
+                                            Date</label>
+                                        <DatePicker
+                                            v-model="form.end_date"
+                                            placeholder="Select Date"
+                                            format="MM-DD-YYYY"
+                                            :message="form.errors.end_date"
+                                        />
+                                    </div>
                                 </div>
-                                <div class="space-y-1">
-                                    <label class="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">End
-                                        Date</label>
-                                    <DatePicker v-model="form.end_date" placeholder="Select Date" format="MM-DD-YYYY"
-                                        :message="form.errors.end_date" />
-                                </div>
-                            </div>
 
-                            <div class="w-full flex justify-center items-center gap-4">
-                                <button v-if="canUpdate('0404-EXPRTGL')" type="submit" @click="submitType = 'untag'"
-                                    class="submitButton w-full !flex !justify-center !items-center"
-                                    :disabled="form.processing || isGenerating">
-                                    <span>{{
-                                        form.processing
-                                            ? "Untagging Text File..."
-                                            : "Untag Selected Export Type"
-                                    }}</span>
-                                </button>
-                                <button type="submit" @click="submitType = 'generate'"
-                                    class="submitButton w-full !flex !justify-center !items-center"
-                                    :disabled="form.processing || isGenerating">
-                                    <span>{{
-                                        isGenerating
-                                            ? "Generating your report..."
-                                            : "Generate Selected Export Type"
-                                    }}</span>
-                                </button>
+                                <div class="w-full flex justify-center items-center gap-4">
+                                    <button
+                                        v-if="canUpdate('0404-EXPRTGL')"
+                                        type="submit"
+                                        @click="submitType = 'untag'"
+                                        class="submitButton w-full !flex !justify-center !items-center"
+                                        :disabled="form.processing || isGenerating"
+                                    >
+                                        <span>{{
+                                            form.processing
+                                                ? "Untagging Text File..."
+                                                : "Untag Selected Export Type"
+                                        }}</span>
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        @click="submitType = 'generate'"
+                                        class="submitButton w-full !flex !justify-center !items-center"
+                                        :disabled="form.processing || isGenerating"
+                                    >
+                                        <span>{{
+                                            isGenerating
+                                                ? "Generating your report..."
+                                                : "Generate Selected Export Type"
+                                        }}</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </fieldset>
                 </form>
             </div>
         </div>
@@ -226,7 +359,7 @@ import { useForm, usePage } from "@inertiajs/vue3";
 import { mdiInvoiceTextSendOutline } from "@mdi/js";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import ToastAlertWarning from "./Components/ToastAlertWarning.vue";
-import { onMounted, onUnmounted, onUnmounted as vueOnUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import DatePicker from "./Components/DatePicker.vue";
 import ToastAlert from "./Components/ToastAlert.vue";
 import usePermissions from "./Composables/usePermissions";
@@ -249,6 +382,8 @@ const page = usePage();
 const pathDelete = ref(null);
 
 const isGenerating = ref(false);
+const exportStatus = ref("idle");
+const exportAbortController = ref(null);
 const generationProgress = ref(null);
 const generationStatus = ref("");
 
@@ -314,7 +449,7 @@ const handleExportChoice = (format) => {
 };
 
 const generateExport = async () => {
-    if (isGenerating.value) {
+    if (exportStatus.value === "loading" || isGenerating.value) {
         return;
     }
 
@@ -328,6 +463,7 @@ const generateExport = async () => {
         return;
     }
 
+    exportStatus.value = "loading";
     isGenerating.value = true;
     generationProgress.value = 1;
     generationStatus.value = "Preparing to generate report...";
@@ -358,25 +494,48 @@ const generateExport = async () => {
     } catch (e) {}
 
     try {
+        if (exportAbortController.value) {
+            exportAbortController.value.abort();
+        }
+        exportAbortController.value = new AbortController();
+
         const response = await axios.post(
             route("generateTextFile", { tenant: page.props.tenant }),
             form.data(),
-            {}
+            {
+                signal: exportAbortController.value.signal,
+            }
         );
 
         if (response.data.success === false) {
-            showWarningToast(
+            const message =
                 response.data.message ||
-                "No data found for the selected date range"
+                "No data found for the selected date range";
+            error.value = message;
+            generationStatus.value = message;
+            exportStatus.value = "error";
+            showWarningToast(
+                message
             );
             return;
         }
 
+        exportStatus.value = "success";
         showSuccessToast(
             "Report ready!"
         );
         form.reset();
     } catch (err) {
+        if (err?.code === "ERR_CANCELED") {
+            exportStatus.value = "idle";
+            isGenerating.value = false;
+            generationProgress.value = null;
+            generationStatus.value = "";
+            return;
+        }
+
+        exportStatus.value = "error";
+
         if (err.response?.status === 422 && err.response?.data?.errors) {
             const validationErrors = err.response.data.errors;
 
@@ -400,6 +559,10 @@ const generateExport = async () => {
     } finally {
         isGenerating.value = false;
 
+        if (exportAbortController.value) {
+            exportAbortController.value = null;
+        }
+
         if (echoChannel && window.Echo && window.Echo.leave) {
             try {
                 window.Echo.leave(channelName);
@@ -411,6 +574,25 @@ const generateExport = async () => {
             generationStatus.value = "";
         }, 1500);
     }
+};
+
+const cancelExport = () => {
+    if (exportStatus.value !== "loading") {
+        return;
+    }
+
+    if (exportAbortController.value) {
+        exportAbortController.value.abort();
+    }
+
+    showWarningToast("Export cancelled");
+};
+
+const closeExportOverlay = () => {
+    exportStatus.value = "idle";
+    generationProgress.value = null;
+    generationStatus.value = "";
+    error.value = null;
 };
 
 const untagExport = () => {
@@ -448,6 +630,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    if (exportAbortController.value) {
+        exportAbortController.value.abort();
+    }
+
     const channelName = `textfile-generation.${userId.value}`;
     if (window.Echo && window.Echo.leave) {
         try {
@@ -456,3 +642,16 @@ onUnmounted(() => {
     }
 });
 </script>
+
+<style scoped>
+.fade-overlay-enter-active,
+.fade-overlay-leave-active {
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.fade-overlay-enter-from,
+.fade-overlay-leave-to {
+    opacity: 0;
+    transform: scale(0.98);
+}
+</style>
