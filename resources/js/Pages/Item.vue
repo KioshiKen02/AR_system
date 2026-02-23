@@ -255,7 +255,7 @@
                                         : '/storage/images/addItem.png'
                                     " />
                         </td>
-                        <td class="px-3 py-2 font-medium">{{ item.name }}</td>
+                        <td class="px-3 py-2 font-medium uppercase">{{ item.name }}</td>
                         <td class="px-3 py-2 font-medium">
                             {{ item.description }}
                         </td>

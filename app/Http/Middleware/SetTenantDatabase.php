@@ -21,10 +21,6 @@ class SetTenantDatabase
         $tenantSlug = $request->route('tenant');
         $buId = $request->input('bu_id');
 
-        if ($tenantSlug && strtolower($tenantSlug) === 'arsystem') {
-            return $next($request);
-        }
-
         // If no tenant in route and no bu_id in request, proceed without switching (uses default mysql)
         if (!$tenantSlug && !$buId) {
             return $next($request);
@@ -93,7 +89,6 @@ class SetTenantDatabase
             }
 
             if ($hasAccess) {
-                    // Configure the tenant connection
                     Config::set('database.connections.tenant', [
                         'driver'    => $targetSetting->db_driver ?? 'mysql',
                         'host'      => $targetSetting->db_host,
@@ -108,10 +103,9 @@ class SetTenantDatabase
                         'engine'    => null,
                     ]);
 
-                    // Set it as the default connection
                     Config::set('database.default', 'tenant');
+                    Config::set('tenant.current_app_setting_id', $targetSetting->id);
 
-                    // Purge and reconnect to ensure the new configuration is used
                     DB::purge('tenant');
                     DB::reconnect('tenant');
                 } else {

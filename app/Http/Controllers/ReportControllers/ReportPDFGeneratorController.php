@@ -23,6 +23,16 @@ use Illuminate\Support\Str;
 
 class ReportPDFGeneratorController extends Controller
 {
+    protected function resolveAppSettingId(Request $request): ?int
+    {
+        $tenantAppSettingId = config('tenant.current_app_setting_id');
+
+        if ($tenantAppSettingId) {
+            return $tenantAppSettingId;
+        }
+
+        return $request->user()->app_setting_id;
+    }
 
     public function invoiceReport(Request $request)
     {
@@ -77,7 +87,7 @@ class ReportPDFGeneratorController extends Controller
             Log::info('InvoiceReport Request:', [
                 'user_id' => $request->user()->id,
                 'file_type' => $validated['file_type'] ?? 'null',
-                'app_setting_id' => $request->user()->app_setting_id
+                'app_setting_id' => $this->resolveAppSettingId($request)
             ]);
 
             // Generate a unique channel for this PDF generation
@@ -92,7 +102,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'invoiceprooflist',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -113,7 +123,7 @@ class ReportPDFGeneratorController extends Controller
                         strtoupper($request->user()->name),
                         'invoiceprooflist',
                         $filename,
-                        $request->user()->app_setting_id
+                        $this->resolveAppSettingId($request)
                     );
                 } catch (\Exception $e) {
                     Log::error('PDF Generation Failed: ' . $e->getMessage());
@@ -189,7 +199,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'invoicesummary',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -201,7 +211,6 @@ class ReportPDFGeneratorController extends Controller
             } else {
                 $filename = 'InvoiceSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                // Dispatch the job with all required data
                 GeneratePdfJob::dispatchSync(
                     $validated,
                     $request->user()->id,
@@ -209,7 +218,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'invoicesummary',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 $prefix = trim(config('app.url'), '/');
@@ -277,7 +286,6 @@ class ReportPDFGeneratorController extends Controller
         }
 
         if ($validated['processtype'] === 'axios') {
-            // Generate a unique channel for this PDF generation
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
@@ -288,7 +296,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'adjustmentprooflist',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -300,7 +308,6 @@ class ReportPDFGeneratorController extends Controller
             } else {
                 $filename = 'AdjustmentProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                // Dispatch the job with all required data
                 GeneratePdfJob::dispatchSync(
                     $validated,
                     $request->user()->id,
@@ -308,7 +315,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'adjustmentprooflist',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 $prefix = trim(config('app.url'), '/');
@@ -438,7 +445,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'paymentreport',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -460,7 +467,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'paymentreport',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 $prefix = trim(config('app.url'), '/');
@@ -539,7 +546,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'pdcdcreport',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -558,7 +565,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'pdcdcreport',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 $prefix = trim(config('app.url'), '/');
@@ -597,7 +604,7 @@ class ReportPDFGeneratorController extends Controller
         $formattedAsOfDate = date('m/d/Y', strtotime($validated['as_of_date']));
 
         if ($validated['reporttype'] === 'AR') {
-            $query = CustomerLedger::orderBy('customer_code')
+            $query = CustomerLedger::on('tenant')->orderBy('customer_code')
                 ->orderBy('invoice_number')
                 ->where(function ($q) {
                     $q->whereNull('si_payment_type')
@@ -628,7 +635,7 @@ class ReportPDFGeneratorController extends Controller
                         strtoupper($request->user()->name),
                         'customeraragingreport',
                         null,
-                        $request->user()->app_setting_id
+                        $this->resolveAppSettingId($request)
                     );
 
                     return response()->json([
@@ -647,7 +654,7 @@ class ReportPDFGeneratorController extends Controller
                         strtoupper($request->user()->name),
                         'customeraragingreport',
                         $filename,
-                        $request->user()->app_setting_id
+                        $this->resolveAppSettingId($request)
                     );
 
                     return response()->json([
@@ -687,7 +694,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'customeraragingreport',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 $prefix = trim(config('app.url'), '/');
@@ -796,7 +803,7 @@ class ReportPDFGeneratorController extends Controller
 
         $formattedAsOfDate = date('m/d/Y', strtotime($validated['as_of_date']));
 
-        $query = CustomerLedger::orderBy('customer_code')
+        $query = CustomerLedger::on('tenant')->orderBy('customer_code')
             ->orderBy('invoice_number')
             ->where('date', '<=', $validated['as_of_date'])
             ->where(function ($q) {
@@ -857,7 +864,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'aroutstandingbalanceaoreport',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 $prefix = trim(config('app.url'), '/');
@@ -878,7 +885,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'aroutstandingbalanceaoreport',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -932,7 +939,7 @@ class ReportPDFGeneratorController extends Controller
         $formattedStartDate = date('m/d/Y', strtotime($validated['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($validated['end_date']));
 
-        $query = CustomerLedger::orderBy('customer_code')
+        $query = CustomerLedger::on('tenant')->orderBy('customer_code')
             ->orderBy('invoice_number')
             ->whereBetween('date', [$validated['start_date'], $validated['end_date']])
             ->where(function ($q) {
@@ -1013,7 +1020,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'aroutstandingbalancedrreport',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -1089,15 +1096,15 @@ class ReportPDFGeneratorController extends Controller
             } else {
                 $filename = 'SalesPerItemReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-                GeneratePdfJob::dispatchSync(
-                    $validated,
-                    $request->user()->id,
-                    $channel,
-                    strtoupper($request->user()->name),
-                    'salesperitemreport',
-                    $filename,
-                    $request->user()->app_setting_id
-                );
+                    GeneratePdfJob::dispatchSync(
+                        $validated,
+                        $request->user()->id,
+                        $channel,
+                        strtoupper($request->user()->name),
+                        'salesperitemreport',
+                        $filename,
+                        $this->resolveAppSettingId($request)
+                    );
 
                 return response()->json([
                     'channel' => $channel,
@@ -1207,7 +1214,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'overageshortagereport',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -1226,7 +1233,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'overageshortagereport',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -1274,7 +1281,7 @@ class ReportPDFGeneratorController extends Controller
         $formattedStatementDate = date('F j, Y', strtotime($validated['statement_date']));
 
         // Base query for adjustments
-        $query = CustomerLedger::orderBy('customer_code')
+        $query = CustomerLedger::on('tenant')->orderBy('customer_code')
             ->orderBy('invoice_number')
             ->where('type', $validated['type']);
 
@@ -1307,7 +1314,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'statementofaccountreport',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -1329,7 +1336,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'statementofaccountreport',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 $prefix = trim(config('app.url'), '/');
@@ -1385,7 +1392,7 @@ class ReportPDFGeneratorController extends Controller
         $formattedStartDate = date('m/d/Y', strtotime($validated['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($validated['end_date']));
 
-        $query = CustomerLedger::orderBy('customer_code')
+        $query = CustomerLedger::on('tenant')->orderBy('customer_code')
             ->orderBy('invoice_number');
 
         $query->where(function ($q) {
@@ -1427,7 +1434,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'statementofaccountsummaryreport',
                     null,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
@@ -1446,7 +1453,7 @@ class ReportPDFGeneratorController extends Controller
                     strtoupper($request->user()->name),
                     'statementofaccountsummaryreport',
                     $filename,
-                    $request->user()->app_setting_id
+                    $this->resolveAppSettingId($request)
                 );
 
                 return response()->json([
