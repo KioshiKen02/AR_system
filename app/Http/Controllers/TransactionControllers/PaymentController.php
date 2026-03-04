@@ -1489,17 +1489,17 @@ class PaymentController extends Controller
     {
         try {
             $validated = $request->validate([
-                'payment_no' => ['required', 'string'], // Payment number
-                'receipt_date' => ['required', 'date', 'before_or_equal:today'], // Receipt Date
-                'transaction_date' => ['required', 'date', 'before_or_equal:today'], // Transaction Date
-                'customer_code' => ['required', 'string'], // Customer Code
-                'name' => ['required', 'string'], // Custome Name
-                'payment_type' => ['required', 'in:5A - Cash,5B - Journal Voucher,5C - Online Deposit,5D - Check,5E - Creditable(WHT)'], // Payment Type EX: 5A - Cash,
-                'type' => ['required', 'in:Sales Invoice,Charge Invoice,Payment,BG'], // Value must be Sales Invoice always
-                'document_no' => ['required', 'string'], //Document No (Sales Invoice No)
-                'document_date' => ['required', 'date'], //Document Date (Sales Invoice Receipt Date)
+                'payment_no' => ['required', 'string'],
+                'receipt_date' => ['required', 'date', 'before_or_equal:today'],
+                'transaction_date' => ['required', 'date', 'before_or_equal:today'],
+                'customer_code' => ['required', 'string'],
+                'name' => ['required', 'string'],
+                'payment_type' => ['required', 'in:5A - Cash,5B - Journal Voucher,5C - Online Deposit,5D - Check,5E - Creditable(WHT)'],
+                'type' => ['required', 'in:Sales Invoice,Charge Invoice,Payment,BG'],
+                'document_no' => ['required', 'string'],
+                'document_date' => ['required', 'date'],
                 'advpy_amount_paid' => ['required', 'numeric'],
-                'total_amount' => ['required', 'string'], //Total AMount TO be Paid
+                'total_amount' => ['required', 'string'],
                 'amount_paid' => [
                     'required',
                     'numeric',
@@ -1509,15 +1509,18 @@ class PaymentController extends Controller
                             $fail('Amount Should Not Be Greater Than Available Balance');
                         }
                     },
-                ], //AMOUNT PAID
-                'created_by' => ['required', 'string'], //Surname, First Name (User) 
+                ],
+                'wht_amount' => [
+                    'nullable',
+                    'numeric',
+                    'between:0,9999999999999.99',
+                ],
+                'created_by' => ['required', 'string'],
             ]);
 
             $pyNo = DB::transaction(function () use ($validated, $request, $paymentNumberService) {
-
                 $nextNumber = $paymentNumberService->generate();
 
-                // Validate the payment number is unique (just in case)
                 if (Payment::where('payment_no', $nextNumber)->where('type', $validated['type'])->exists()) {
                     throw ValidationException::withMessages([
                         'general' => 'Duplicate payment number generated. Please retry.',
@@ -1526,9 +1529,14 @@ class PaymentController extends Controller
 
                 $validated['payment_no'] = $nextNumber;
                 $validated['total_amount'] = (float)preg_replace('/[^0-9.]/', '', $validated['total_amount']);
-                Payment::create($validated);
 
-                PaymentDetails::create([
+                if (array_key_exists('wht_amount', $validated) && $validated['wht_amount'] !== null) {
+                    $validated['wht_amount'] = (float)$validated['wht_amount'];
+                }
+
+                $payment = Payment::create($validated);
+
+                $paymentDetailsData = [
                     'payment_no' => $nextNumber,
                     'document_no' => $validated['document_no'],
                     'document_date' => $validated['document_date'],
@@ -1546,9 +1554,19 @@ class PaymentController extends Controller
                     'status' => 'Paid',
                     'overage_shortage' => 0,
                     'created_by' => $validated['created_by'],
-                ]);
+                ];
 
-                return $nextNumber;
+                if (array_key_exists('wht_amount', $validated) && $validated['wht_amount'] !== null) {
+                    $paymentDetailsData['wht_amount'] = $validated['wht_amount'];
+                }
+
+                $paymentDetails = PaymentDetails::create($paymentDetailsData);
+
+                return [
+                    'payment_no' => $nextNumber,
+                    'payment' => $payment,
+                    'payment_details' => $paymentDetails,
+                ];
             });
 
             event(new NewCreated('payment'));
@@ -1558,8 +1576,10 @@ class PaymentController extends Controller
                 'success' => true,
                 'message' => 'Payment recorded successfully.',
                 'data' => [
-                    'payment_no' => $pyNo
-                ]
+                    'payment_no' => $pyNo['payment_no'],
+                    'payment' => $pyNo['payment'],
+                    'payment_details' => $pyNo['payment_details'],
+                ],
             ], 201);
         } catch (ValidationException $e) {
             return response()->json([
@@ -1570,7 +1590,7 @@ class PaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'An unexpected error occurred.',
-                'error' => $e->getMessage(), // Optional: for debugging only
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

@@ -113,7 +113,18 @@ Records a new payment transaction.
     {
         "payment_no": "PAY-001",
         "receipt_date": "2023-10-27",
-        ...
+        "transaction_date": "2023-10-27",
+        "customer_code": "CUST001",
+        "name": "Customer Name",
+        "payment_type": "5A - Cash",
+        "type": "Sales Invoice",
+        "document_no": "INV-001",
+        "document_date": "2023-10-27",
+        "advpy_amount_paid": 0,
+        "total_amount": "1000.00",
+        "amount_paid": 1000.00,
+        "wht_amount": 50.00,
+        "created_by": "Surname, First Name"
     }
     ```
 *   **Example:**

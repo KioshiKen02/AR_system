@@ -2,115 +2,63 @@
 
 namespace App\Services;
 
+use App\Models\Sequence;
 use App\Models\TransactionModels\Payment;
+use App\Models\TransactionModels\PaymentDetails;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
+use Exception;
 
 class PaymentNumberService
 {
-    protected const DEFAULT_START_NUMBER = 26000001;
-
+    /**
+     * Generate the next payment number using the sequence table.
+     *
+     * @return int
+     * @throws Exception
+     */
     public function generate(): int
     {
-        $latest = Payment::withTrashed()
-            ->lockForUpdate()
-            ->orderByDesc('payment_no')
-            ->first();
+        return DB::connection('tenant')->transaction(function () {
+            // Lock the sequence row for 'payment_no'
+            $sequence = Sequence::where('for_column', 'payment_no')
+                ->lockForUpdate()
+                ->first();
 
-        $localNumber = $latest ? $latest->payment_no + 1 : self::DEFAULT_START_NUMBER;
+            if (!$sequence) {
+                throw new Exception("Sequence record for 'payment_no' not found.");
+            }
 
-        try {
-            $apiNumber = $this->fetchFromApi();
-            return max($localNumber, $apiNumber);
-        } catch (\Exception $e) {
-            return $localNumber;
-        }
-    }
+            $currentYear = (int) date('Y');
+            $yearPrefix = date('y');
+            
+            // Check if year has changed
+            if ((int)$sequence->year !== $currentYear) {
+                $number = 1;
+                $sequence->year = $currentYear;
+            } else {
+                $number = (int) $sequence->number;
+            }
 
-    protected function fetchFromApi(): int
-    {
-        //DYNAMIC API LINK
-        $user = auth()->user();
-        $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
+            // Generate sequence and ensure uniqueness
+            do {
+                $generatedSequence = (int) ($yearPrefix . str_pad($number, $sequence->lpad, $sequence->pad_string, STR_PAD_LEFT));
+                
+                // Check against the Payment table to avoid duplicates
+                $existsInPayment = Payment::on('tenant')->withTrashed()->where('payment_no', $generatedSequence)->exists();
+                $existsInDetails = PaymentDetails::on('tenant')->where('payment_no', $generatedSequence)->exists();
 
-        switch ($appName) {
-            case 'Bilar Breeder Local':
-                $baseUrl = 'http://172.16.43.148/centralized_invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=13';
-                break;
-            case 'Bilar Breeder':
-                $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=13';
-                break;
-            case 'Gp Jagna':
-                $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=50';
-                break;
-            case 'Ice Plant':
-                $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=25';
-                break;
-            case 'Peanut Kisses':
-                $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=26';
-                break;
-            case 'Cortes Poultry':
-                $baseUrl = 'http://172.16.192.68:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=12';
-                break;
-            case 'Cortes Piggery':
-                $baseUrl = 'http://172.16.192.68:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=11';
-                break;
-            case 'Canhayupon Breeder':
-                $baseUrl = 'http://172.16.220.223:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=15';
-                break;
-            case 'Bilar Hatchery':
-                $baseUrl = 'http://172.16.219.200:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=14';
-                break;
-            case 'Lapsaon Breeder':
-                $baseUrl = 'http://172.16.220.222:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=16';
-                break;
-            case 'Rizal Breeder':
-                $baseUrl = 'http://172.16.217.11:81/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=43';
-                break;
-            // ubay server 
-            case 'Feedmill':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=19';
-                break;
-            case 'Growout':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=20';
-                break;
-            case 'Cortes Fertilizer':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=42';
-                break;
-            case 'Ubay Fertilizer':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=22';
-                break;
-            case 'Piggery Untaga':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=23';
-                break;
-            case 'Demo Farm':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=21';
-                break;
-            case 'Dressing Plant':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=17';
-                break;
-            case 'Farmers Market':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=41';
-                break;
-            case 'Meat Processing':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=46';
-                break;
-            case 'Rendering':
-                $baseUrl = 'http://172.16.18.27/centralized-invoicing/transactionController/SalesInvoiceController/getLatestPaymentNo?noSession=true&bu=18';
-                break;
-            default:
-                throw new \Exception("Unknown app name: {$appName}");
-        }
-        $url = $baseUrl;
+                $exists = $existsInPayment || $existsInDetails;
+                
+                if ($exists) {
+                    $number++;
+                }
+            } while ($exists);
 
-        $response = Http::timeout(3)
-            ->retry(2, 100)
-            ->get($url);
+            // Update sequence with the next available number
+            $sequence->number = $number + 1;
+            $sequence->save();
 
-        if ($response->successful()) {
-            return (int)($response->json()['next_payment_no'] ?? 0);
-        }
-
-        throw new \Exception('Payment API request failed');
+            return $generatedSequence;
+        });
     }
 }
