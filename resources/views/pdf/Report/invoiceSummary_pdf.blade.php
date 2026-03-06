@@ -100,23 +100,33 @@
             text-align: left;
         }
 
-        .col-cash {
-            width: 12%;
+        .col-vat {
+            width: 15%;
             text-align: right;
         }
 
-        .col-ar {
-            width: 12%;
-            text-align: right;
-        }
-
-        .col-cash-h {
-            width: 12%;
+        .col-vat-h {
+            width: 15%;
             text-align: center;
         }
 
+        .col-base {
+            width: 15%;
+            text-align: right;
+        }
+
+        .col-base-h {
+            width: 15%;
+            text-align: center;
+        }
+
+        .col-ar {
+            width: 15%;
+            text-align: right;
+        }
+
         .col-ar-h {
-            width: 12%;
+            width: 15%;
             text-align: center;
         }
 
@@ -201,8 +211,9 @@
                 <th class="col-name">CUSTOMER NAME</th>
                 <th class="col-ref">REF NO.</th>
                 <th class="col-item">ITEM CODE & NAME</th>
-                <th class="col-cash-h">CASH AMOUNT</th>
-                <th class="col-ar-h">AR AMOUNT</th>
+                <th class="col-base-h">BASE AMOUNT</th>
+                <th class="col-vat-h">VAT AMOUNT</th>
+                <th class="col-ar-h">AR NET AMOUNT</th>
             </tr>
         </thead>
         <tbody>
@@ -225,12 +236,15 @@
                         <td class="col-item" style="vertical-align: top;">{{ $item['item_code'] }} -
                             {{ $item['item_name'] }}</td>
                         @if ($index === 0)
-                            <td class="col-cash" style="vertical-align: bottom;"
+                            <td class="col-base" style="vertical-align: bottom;"
                                 rowspan="{{ count($invoice['items']) }}">
-                                {{ number_format($invoice['cash_amount'], 2) }}</td>
+                                {{ number_format($invoice['base_amount'] ?? 0, 2) }}</td>
+                            <td class="col-vat" style="vertical-align: bottom;"
+                                rowspan="{{ count($invoice['items']) }}">
+                                {{ number_format($invoice['vat_amount'] ?? 0, 2) }}</td>
                             <td class="col-ar" style="vertical-align: bottom;"
                                 rowspan="{{ count($invoice['items']) }}">
-                                {{ number_format($invoice['ar_amount'], 2) }}</td>
+                                {{ number_format($invoice['ar_net_amount'] ?? 0, 2) }}</td>
                         @endif
                     </tr>
                 @endforeach
@@ -245,7 +259,8 @@
                 <td class="col-name"></td>
                 <td class="col-ref"></td>
                 <td class="col-item"></td>
-                <td class="col-cash">{{ number_format($grandTotalCash, 2) }}</td>
+                <td class="col-base">{{ number_format($grandTotalBase ?? 0, 2) }}</td>
+                <td class="col-vat">{{ number_format($grandTotalVat ?? 0, 2) }}</td>
                 <td class="col-ar">{{ number_format($grandTotalAR, 2) }}</td>
             </tr>
         </tbody>

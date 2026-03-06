@@ -593,7 +593,6 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
             "ITEMS",
             "BASE AMOUNT",
             "VAT AMOUNT",
-            "CASH NET AMOUNT",
             "AR NET AMOUNT",
         ];
 
@@ -635,8 +634,7 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
             
             dataRow.getCell(8).value = parseFloat(invoice.base_amount) || 0;
             dataRow.getCell(9).value = parseFloat(invoice.vat_amount) || 0;
-            dataRow.getCell(10).value = parseFloat(invoice.cash_net_amount) || 0;
-            dataRow.getCell(11).value = parseFloat(invoice.ar_net_amount) || 0;
+            dataRow.getCell(10).value = parseFloat(invoice.ar_net_amount) || 0;
 
             // Format cells
             dataRow.getCell(1).alignment = { horizontal: "center" };
@@ -648,7 +646,7 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
             dataRow.getCell(6).alignment = { horizontal: "left" };
             dataRow.getCell(7).alignment = { horizontal: "left", wrapText: true };
             
-            [8, 9, 10, 11].forEach(col => {
+            [8, 9, 10].forEach(col => {
                 dataRow.getCell(col).numFmt = "#,##0.00";
                 dataRow.getCell(col).alignment = { horizontal: "right" };
             });
@@ -671,8 +669,7 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
         totalRow.getCell(7).value = "Grand Total :";
         totalRow.getCell(8).value = parseFloat(excelData.grandTotalBase) || 0;
         totalRow.getCell(9).value = parseFloat(excelData.grandTotalVat) || 0;
-        totalRow.getCell(10).value = parseFloat(excelData.grandTotalCash) || 0;
-        totalRow.getCell(11).value = parseFloat(excelData.grandTotalAR) || 0;
+        totalRow.getCell(10).value = parseFloat(excelData.grandTotalAR) || 0;
 
         totalRow.getCell(7).font = { bold: true, size: 12 };
         totalRow.getCell(7).alignment = { horizontal: "right" };
@@ -809,7 +806,6 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
             { width: 40 }, // Items
             { width: 15 }, // Base
             { width: 15 }, // VAT
-            { width: 18 }, // Cash Net
             { width: 18 }, // AR Net
         ];
 
