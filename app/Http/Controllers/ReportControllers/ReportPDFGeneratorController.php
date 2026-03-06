@@ -94,8 +94,9 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                Log::info('Dispatching InvoiceProoflist to Queue (Excel)');
-                GeneratePdfJob::dispatchSync(
+                Log::info('Generating InvoiceProoflist Excel Data');
+                
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -104,12 +105,15 @@ class ReportPDFGeneratorController extends Controller
                     null,
                     $this->resolveAppSettingId($request)
                 );
+                
+                $excelData = $job->generateInvoiceProoflistDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $filename = 'InvoiceProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
@@ -192,7 +196,7 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                GeneratePdfJob::dispatchSync(
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -201,12 +205,15 @@ class ReportPDFGeneratorController extends Controller
                     null,
                     $this->resolveAppSettingId($request)
                 );
+                
+                $excelData = $job->generateInvoiceSummaryDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $filename = 'InvoiceSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
@@ -289,7 +296,7 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                GeneratePdfJob::dispatchSync(
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -298,12 +305,15 @@ class ReportPDFGeneratorController extends Controller
                     null,
                     $this->resolveAppSettingId($request)
                 );
+                
+                $excelData = $job->generateAdjustmentProoflistDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $filename = 'AdjustmentProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
@@ -438,7 +448,7 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
             
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                GeneratePdfJob::dispatchSync(
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -447,12 +457,15 @@ class ReportPDFGeneratorController extends Controller
                     null,
                     $this->resolveAppSettingId($request)
                 );
+                
+                $excelData = $job->generatePaymentReportDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $filenamePrefix = ($validated['paymentProoflistType'] ?? '') === 'Detailed' 
@@ -539,7 +552,7 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                GeneratePdfJob::dispatchSync(
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -548,12 +561,15 @@ class ReportPDFGeneratorController extends Controller
                     null,
                     $this->resolveAppSettingId($request)
                 );
+                
+                $excelData = $job->generatePdcDcReportDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $filename = 'CustomerPdcDcReport_' . time() . '_' . Str::random(6) . '.pdf';
@@ -628,23 +644,26 @@ class ReportPDFGeneratorController extends Controller
                 $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
                 if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                    GeneratePdfJob::dispatchSync(
-                        $validated,
-                        $request->user()->id,
-                        $channel,
-                        strtoupper($request->user()->name),
-                        'customeraragingreport',
-                        null,
-                        $this->resolveAppSettingId($request)
-                    );
+                $job = new GeneratePdfJob(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'customeraragingreport',
+                    null,
+                    $this->resolveAppSettingId($request)
+                );
+                
+                $excelData = $job->generateCustomerARAgingReportDataForExcel();
 
-                    return response()->json([
-                        'channel' => $channel,
-                        'user_id' => $request->user()->id,
-                        'status' => 'started',
-                        'message' => 'Excel generation has started',
-                    ]);
-                } else {
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
+                ]);
+            } else {
                     $filename = 'CustomerArAgingReport_' . time() . '_' . Str::random(6) . '.pdf';
 
                     GeneratePdfJob::dispatchSync(
@@ -718,6 +737,7 @@ class ReportPDFGeneratorController extends Controller
                 'start_date' => 'required|date',
                 'end_date' => 'required|date',
                 'processtype' => 'nullable',
+                'file_type' => 'nullable',
             ],
             [
                 'start_date.required' => 'Start Date Required',
@@ -741,27 +761,49 @@ class ReportPDFGeneratorController extends Controller
 
         if ($validated['processtype'] === 'axios') {
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
-            $filename = 'BegBalProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-            GeneratePdfJob::dispatchSync(
-                $validated,
-                $request->user()->id,
-                $channel,
-                strtoupper($request->user()->name),
-                'begbalprooflistreport',
-                $filename
-            );
+            if (($validated['file_type'] ?? 'PDF') === 'Excel') {
+                $job = new GeneratePdfJob(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'begbalprooflistreport',
+                    null
+                );
+                
+                $excelData = $job->generateBegBalProoflistDataForExcel();
 
-            $prefix = trim(config('app.url'), '/');
-            $publicUrl = $prefix . Storage::url("temp/{$filename}");
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
+                ]);
+            } else {
+                $filename = 'BegBalProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
 
-            return response()->json([
-                'channel' => $channel,
-                'user_id' => $request->user()->id,
-                'status' => 'started',
-                'message' => 'PDF generation has started',
-                'url' => $publicUrl,
-            ]);
+                GeneratePdfJob::dispatchSync(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'begbalprooflistreport',
+                    $filename
+                );
+
+                $prefix = trim(config('app.url'), '/');
+                $publicUrl = $prefix . Storage::url("temp/{$filename}");
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'started',
+                    'message' => 'PDF generation has started',
+                    'url' => $publicUrl,
+                ]);
+            }
         }
     }
 
@@ -854,7 +896,27 @@ class ReportPDFGeneratorController extends Controller
         if ($validated['processtype'] === 'axios') {
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            if (($validated['file_type'] ?? '') === 'PDF') {
+            if (($validated['file_type'] ?? '') === 'Excel') {
+                $job = new GeneratePdfJob(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'aroutstandingbalanceaoreport',
+                    null,
+                    $this->resolveAppSettingId($request)
+                );
+                
+                $excelData = $job->generateArOutstandingBalanceAODataForExcel();
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
+                ]);
+            } else if (($validated['file_type'] ?? '') === 'PDF') {
                 $filename = 'ArOutstandingBalanceAOReport_' . time() . '_' . Str::random(6) . '.pdf';
 
                 GeneratePdfJob::dispatchSync(
@@ -990,7 +1052,27 @@ class ReportPDFGeneratorController extends Controller
         if ($validated['processtype'] === 'axios') {
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
-            if (($validated['file_type'] ?? '') === 'PDF') {
+            if (($validated['file_type'] ?? '') === 'Excel') {
+                $job = new GeneratePdfJob(
+                    $validated,
+                    $request->user()->id,
+                    $channel,
+                    strtoupper($request->user()->name),
+                    'aroutstandingbalancedrreport',
+                    null,
+                    $this->resolveAppSettingId($request)
+                );
+                
+                $excelData = $job->generateArOutstandingBalanceDRDataForExcel();
+
+                return response()->json([
+                    'channel' => $channel,
+                    'user_id' => $request->user()->id,
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
+                ]);
+            } else if (($validated['file_type'] ?? '') === 'PDF') {
                 $filename = 'ArOutstandingBalanceDRReport_' . time() . '_' . Str::random(6) . '.pdf';
 
                 GeneratePdfJob::dispatchSync(
@@ -1079,19 +1161,22 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                GeneratePdfJob::dispatchSync(
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
                     strtoupper($request->user()->name),
                     'salesperitemreport'
                 );
+                
+                $excelData = $job->generateSalesPerItemReportDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $filename = 'SalesPerItemReport_' . time() . '_' . Str::random(6) . '.pdf';
@@ -1207,7 +1292,7 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                GeneratePdfJob::dispatchSync(
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -1216,12 +1301,15 @@ class ReportPDFGeneratorController extends Controller
                     null,
                     $this->resolveAppSettingId($request)
                 );
+                
+                $excelData = $job->generateOverageShortageReportDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $filename = 'OverageShortageReport_' . time() . '_' . Str::random(6) . '.pdf';
@@ -1307,7 +1395,7 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                GeneratePdfJob::dispatchSync(
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -1316,12 +1404,15 @@ class ReportPDFGeneratorController extends Controller
                     null,
                     $this->resolveAppSettingId($request)
                 );
+                
+                $excelData = $job->generateStatementOfAccountReportDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $soafilename = ($validated['soatype'] ?? 'SOA') === 'SOA'
@@ -1427,7 +1518,7 @@ class ReportPDFGeneratorController extends Controller
             $channel = 'pdf-generation.' . $request->user()->id . '.' . Str::random(20);
 
             if (($validated['file_type'] ?? 'PDF') === 'Excel') {
-                GeneratePdfJob::dispatchSync(
+                $job = new GeneratePdfJob(
                     $validated,
                     $request->user()->id,
                     $channel,
@@ -1436,12 +1527,15 @@ class ReportPDFGeneratorController extends Controller
                     null,
                     $this->resolveAppSettingId($request)
                 );
+                
+                $excelData = $job->generateStatementOfAccountSummaryReportDataForExcel();
 
                 return response()->json([
                     'channel' => $channel,
                     'user_id' => $request->user()->id,
-                    'status' => 'started',
-                    'message' => 'Excel generation has started',
+                    'status' => 'completed',
+                    'message' => 'Excel generation completed',
+                    'excelData' => $excelData,
                 ]);
             } else {
                 $filename = 'StatementOfAccountSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';

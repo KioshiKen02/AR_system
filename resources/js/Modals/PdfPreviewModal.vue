@@ -168,17 +168,51 @@ const startPdfGeneration = async () => {
     try {
         loading.value = true;
         error.value = null;
-        const isExcel = props.formData.file_type === 'Excel';
-
-        if (isExcel) {
-            error.value = "Excel export is currently unavailable because real-time processing is disabled.";
-            loading.value = false;
-            return;
-        }
-
         const response = await axios.post(route(props.apiEndpoint, { tenant: page.props.tenant }), {
             ...props.formData,
         });
+
+        if (response.data.excelData) {
+            loading.value = false;
+            const endpoint = props.apiEndpoint;
+            
+            if (endpoint === 'invoiceReport') {
+                await generateInvoiceProoflistExcelFile(response.data.excelData);
+            } else if (endpoint === 'invoiceReportSummary') {
+                await generateInvoiceSummaryExcelFile(response.data.excelData);
+            } else if (endpoint === 'adjustmentReport') {
+                 await generateAdjustmentProoflistExcelFile(response.data.excelData);
+            } else if (endpoint === 'paymentReport') {
+                 if (props.formData.paymentProoflistType === 'Detailed') {
+                     await generatePaymentProoflistDetailedExcelFile(response.data.excelData);
+                 } else {
+                     await generatePaymentProoflistSummaryExcelFile(response.data.excelData);
+                 }
+            } else if (endpoint === 'pdcDcReport') {
+                 await generatePdcDcReportExcelFile(response.data.excelData);
+            } else if (endpoint === 'customerArAging') {
+                 await generateCustomerArAgingExcelFile(response.data.excelData);
+            } else if (endpoint === 'begBalProoflist') {
+                 await generateBegBalProoflistExcelFile(response.data.excelData);
+            } else if (endpoint === 'arOutstandingBalanceAO') {
+                 await generateAROutstandingExcelFile(response.data.excelData);
+            } else if (endpoint === 'arOutstandingBalanceDR') {
+                 await generateAROutstandingExcelFile(response.data.excelData);
+            } else if (endpoint === 'salesPerItem') {
+                 await generateSalesPerItemExcelFile(response.data.excelData);
+            } else if (endpoint === 'overageShortage') {
+                 await generateOverageShortageExcelFile(response.data.excelData);
+            } else if (endpoint === 'statementOfAccount') {
+                 await generateStatementOfAccountExcelFile(response.data.excelData);
+            } else if (endpoint === 'statementOfAccountSummary') {
+                 await generateStatementOfAccountSummaryExcelFile(response.data.excelData);
+            } else {
+                error.value = "Excel generation for this report is not yet supported via direct download.";
+                return;
+            }
+            emit("closeSuccess");
+            return;
+        }
 
         // Check for HTML response (redirect to login/dashboard)
         if (response.headers['content-type'] && response.headers['content-type'].includes('text/html')) {

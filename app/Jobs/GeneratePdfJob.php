@@ -331,7 +331,7 @@ class GeneratePdfJob
         $this->updateProgress(100, 'Report Ready!');
     }
 
-    protected function generateInvoiceProoflistDataForExcel()
+    public function generateInvoiceProoflistDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -464,7 +464,7 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
     protected function generateInvoiceSummary()
@@ -577,7 +577,7 @@ class GeneratePdfJob
         }
     }
 
-    protected function generateInvoiceSummaryDataForExcel()
+    public function generateInvoiceSummaryDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -664,7 +664,7 @@ class GeneratePdfJob
             'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
     protected function generateAdjustmentProoflist()
@@ -781,7 +781,7 @@ class GeneratePdfJob
         }
     }
 
-    protected function generateAdjustmentProoflistDataForExcel()
+    public function generateAdjustmentProoflistDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
         
@@ -874,7 +874,7 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
     protected function generatePaymentReport()
@@ -1146,7 +1146,7 @@ class GeneratePdfJob
         }
     }
 
-    protected function generatePaymentReportDataForExcel()
+    public function generatePaymentReportDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -1377,7 +1377,7 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
     protected function generatePdcDcReport()
@@ -1513,7 +1513,7 @@ class GeneratePdfJob
         $this->updateProgress(100, 'Report Ready!');
     }
 
-    protected function generatePdcDcReportDataForExcel()
+    public function generatePdcDcReportDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -1630,10 +1630,10 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
-    protected function generateCustomerARAgingReportDataForExcel()
+    public function generateCustomerARAgingReportDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -1792,7 +1792,7 @@ class GeneratePdfJob
 
             $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-            $this->broadcastData($excelData);
+            return $excelData;
         } else {
             $query = PaymentDetails::where('payment_type', 'Check')
                 ->orderBy('customer_code')
@@ -2359,7 +2359,7 @@ class GeneratePdfJob
         }
     }
 
-    protected function generateBegBalProoflistDataForExcel()
+    public function generateBegBalProoflistDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -2418,7 +2418,7 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-        $this->broadcastData($excelData);
+            return $excelData;
     }
 
     protected function generateBegBalProoflist()
@@ -2923,7 +2923,7 @@ class GeneratePdfJob
         $this->updateProgress(100, 'Report Ready!');
     }
 
-    protected function generateArOutstandingBalanceAODataForExcel()
+    public function generateArOutstandingBalanceAODataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -3143,10 +3143,10 @@ class GeneratePdfJob
             'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
-    protected function generateArOutstandingBalanceDRDataForExcel()
+    public function generateArOutstandingBalanceDRDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -3316,10 +3316,10 @@ class GeneratePdfJob
             'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
-    protected function generateSalesPerItemReportDataForExcel()
+    public function generateSalesPerItemReportDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -3390,7 +3390,7 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
     protected function generateSalesPerItemReport()
@@ -3480,7 +3480,7 @@ class GeneratePdfJob
         $this->updateProgress(100, 'Report Ready!');
     }
 
-    protected function generateOverageShortageReportDataForExcel()
+    public function generateOverageShortageReportDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -3627,7 +3627,7 @@ class GeneratePdfJob
             'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
     protected function generateOverageShortageReport()
@@ -3795,7 +3795,7 @@ class GeneratePdfJob
         $this->updateProgress(100, 'Report Ready!');
     }
 
-    protected function generateStatementOfAccountReportDataForExcel()
+    public function generateStatementOfAccountReportDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -3928,7 +3928,7 @@ class GeneratePdfJob
             'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
     protected function generateStatementOfAccountReport()
@@ -4052,51 +4052,25 @@ class GeneratePdfJob
             }
         });
 
-        $this->updateProgress(98, 'Generating Report...');
+        $this->updateProgress(99, 'Preparing Excel Data...');
 
-        $data = [
+        $excelData = [
+            'reportType' => 'statementofaccountreport',
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'statement_date' => $formattedStatementDate,
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
+            'soatype' => $this->validatedData['soatype'] ?? 'SOA',
+            'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];
 
-        $view = $this->validatedData['soatype'] === 'SOA'
-            ? 'pdf.Report.statementOfAccount_pdf'
-            : 'pdf.Report.statementOfAccountDFC_pdf';
-        $pdf = Pdf::loadView($view, $data)
-            ->setPaper('A4', 'portrait')
-            ->setOptions([
-                'margin_top' => 10,
-                'margin_right' => 10,
-                'margin_bottom' => 10,
-                'margin_left' => 10,
-            ]);
+        $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-        $this->updateProgress(99, 'Almost Done...');
-
-        $soafilename = $this->validatedData['soatype'] === 'SOA'
-            ? 'StatementOfAccount'
-            : 'StatementOfAccountDFC';
-
-        $filename = $this->filename ?? $soafilename . 'Report_' . time() . '_' . Str::random(6) . '.pdf';
-        Storage::disk('public')->put("temp/{$filename}", $pdf->output());
-
-        $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
-
-        $this->updateProgress(100, 'Report Ready!');
-
-        broadcast(new PdfGenerated(
-            $this->userId,
-            $filename,
-            $publicUrl,
-            $this->channel
-        ));
+        return $excelData;
     }
 
-    protected function generateStatementOfAccountSummaryReportDataForExcel()
+    public function generateStatementOfAccountSummaryReportDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
 
@@ -4208,7 +4182,7 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-        $this->broadcastData($excelData);
+        return $excelData;
     }
 
     protected function generateStatementOfAccountSummaryReport()
