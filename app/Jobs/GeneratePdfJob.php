@@ -2,8 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Events\PdfGenerated;
-use App\Events\PdfGenerationProgress;
 use App\Models\MasterfileModels\Customer;
 use App\Models\ReportModels\CustomerLedger;
 use App\Models\TransactionModels\Adjustment;
@@ -16,11 +14,9 @@ use App\Services\ReportIndicatorService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use NumberFormatter;
@@ -39,6 +35,36 @@ class GeneratePdfJob
         protected ?int $appSettingId = null,
     ) {}
 
+    public static function calculateVatInclusiveAmounts(
+        float $grossAmount,
+        float $freightAmount = 0.0,
+        float $addedVat = 0.0,
+        float $deductedVat = 0.0,
+        ?float $netTotal = null
+    ): array {
+        $baseAmount = round($grossAmount + $freightAmount, 2);
+        $vatAmount = round($addedVat - $deductedVat, 2);
+        $useProvidedNet = $netTotal !== null && $netTotal > 0;
+        $netAmount = round($useProvidedNet ? $netTotal : ($baseAmount + $vatAmount), 2);
+
+        return [
+            'base_amount' => $baseAmount,
+            'vat_amount' => $vatAmount,
+            'net_amount' => $netAmount,
+        ];
+    }
+
+    public static function splitNetAmountByPaymentMode(string $paymentMode, float $netAmount): array
+    {
+        $cashNetAmount = $paymentMode === 'Cash' ? $netAmount : 0.0;
+        $arNetAmount = $paymentMode === 'Account Receivables' ? $netAmount : 0.0;
+
+        return [
+            'cash_net_amount' => $cashNetAmount,
+            'ar_net_amount' => $arNetAmount,
+        ];
+    }
+
     public function handle()
     {
         ini_set('memory_limit', '1024M');
@@ -49,17 +75,17 @@ class GeneratePdfJob
             if ($setting && $setting->is_active) {
                 // Configure the tenant connection
                 \Illuminate\Support\Facades\Config::set('database.connections.tenant', [
-                    'driver'    => $setting->db_driver ?? 'mysql',
-                    'host'      => $setting->db_host,
-                    'port'      => $setting->db_port,
-                    'database'  => $setting->db_database,
-                    'username'  => $setting->db_username,
-                    'password'  => $setting->db_password,
-                    'charset'   => 'utf8mb4',
+                    'driver' => $setting->db_driver ?? 'mysql',
+                    'host' => $setting->db_host,
+                    'port' => $setting->db_port,
+                    'database' => $setting->db_database,
+                    'username' => $setting->db_username,
+                    'password' => $setting->db_password,
+                    'charset' => 'utf8mb4',
                     'collation' => 'utf8mb4_unicode_ci',
-                    'prefix'    => '',
-                    'strict'    => true,
-                    'engine'    => null,
+                    'prefix' => '',
+                    'strict' => true,
+                    'engine' => null,
                 ]);
 
                 // Set it as the default connection
@@ -166,12 +192,9 @@ class GeneratePdfJob
         }
     }
 
-    protected function updateProgress(int $progress, string $message)
-    {
-    }
+    protected function updateProgress(int $progress, string $message) {}
 
-
-    //GENERATE PDF FUNCTIONS
+    // GENERATE PDF FUNCTIONS
     protected function generateInvoiceProoflist()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
@@ -188,15 +211,14 @@ class GeneratePdfJob
         if ($this->validatedData['date_type'] === 'Receipt Date') {
             $query->whereBetween('receipt_date', [
                 $this->validatedData['start_date'],
-                $this->validatedData['end_date']
+                $this->validatedData['end_date'],
             ]);
         } else {
             $query->whereBetween('transaction_date', [
                 $this->validatedData['start_date'],
-                $this->validatedData['end_date']
+                $this->validatedData['end_date'],
             ]);
         }
-
 
         $totalRows = (clone $query)->count();
         $processedRows = 0;
@@ -218,8 +240,8 @@ class GeneratePdfJob
         ) {
             foreach ($invoicesChunk as $invoice) {
                 $customerCode = $invoice->customer_code;
-                
-                if (!isset($groupedData[$customerCode])) {
+
+                if (! isset($groupedData[$customerCode])) {
                     $groupedData[$customerCode] = [
                         'customer_code' => $customerCode,
                         'customer_name' => $invoice->name,
@@ -230,13 +252,13 @@ class GeneratePdfJob
                     ];
                 }
 
-                $items = $invoice->items->map(fn($item) => [
+                $items = $invoice->items->map(fn ($item) => [
                     'item_code' => $item->item_code,
                     'item_name' => $item->item_name,
                 ])->toArray();
 
-                $baseAmount = (float)($invoice->total_amount ?? 0);
-                $vatAmount = ((float)($invoice->added_vat ?? 0)) - ((float)($invoice->deducted_vat ?? 0));
+                $baseAmount = (float) ($invoice->total_amount ?? 0);
+                $vatAmount = ((float) ($invoice->added_vat ?? 0)) - ((float) ($invoice->deducted_vat ?? 0));
                 $documentTotal = $baseAmount + $vatAmount;
 
                 if ($invoice->payment_mode === 'Cash') {
@@ -298,7 +320,7 @@ class GeneratePdfJob
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
             'grandTotalVat' => $grandTotalVat,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.invoiceProoflist_pdf', $data)
@@ -312,11 +334,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'InvoiceProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'InvoiceProoflistReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
@@ -347,15 +369,14 @@ class GeneratePdfJob
         if ($this->validatedData['date_type'] === 'Receipt Date') {
             $query->whereBetween('receipt_date', [
                 $this->validatedData['start_date'],
-                $this->validatedData['end_date']
+                $this->validatedData['end_date'],
             ]);
         } else {
             $query->whereBetween('transaction_date', [
                 $this->validatedData['start_date'],
-                $this->validatedData['end_date']
+                $this->validatedData['end_date'],
             ]);
         }
-
 
         $totalRows = (clone $query)->count();
         $processedRows = 0;
@@ -377,8 +398,8 @@ class GeneratePdfJob
         ) {
             foreach ($invoicesChunk as $invoice) {
                 $customerCode = $invoice->customer_code;
-                
-                if (!isset($groupedData[$customerCode])) {
+
+                if (! isset($groupedData[$customerCode])) {
                     $groupedData[$customerCode] = [
                         'customer_code' => $customerCode,
                         'customer_name' => $invoice->name,
@@ -389,13 +410,13 @@ class GeneratePdfJob
                     ];
                 }
 
-                $items = $invoice->items->map(fn($item) => [
+                $items = $invoice->items->map(fn ($item) => [
                     'item_code' => $item->item_code,
                     'item_name' => $item->item_name,
                 ])->toArray();
 
-                $baseAmount = (float)($invoice->total_amount ?? 0);
-                $vatAmount = ((float)($invoice->added_vat ?? 0)) - ((float)($invoice->deducted_vat ?? 0));
+                $baseAmount = (float) ($invoice->total_amount ?? 0);
+                $vatAmount = ((float) ($invoice->added_vat ?? 0)) - ((float) ($invoice->deducted_vat ?? 0));
                 $documentTotal = $baseAmount + $vatAmount;
 
                 if ($invoice->payment_mode === 'Cash') {
@@ -491,22 +512,41 @@ class GeneratePdfJob
         $flatInvoices = [];
         $grandTotalAR = 0;
         $grandTotalCash = 0;
+        $grandTotalBase = 0;
+        $grandTotalVat = 0;
 
         $query->chunkById(500, function ($invoices) use (
             &$flatInvoices,
             &$grandTotalAR,
             &$grandTotalCash,
+            &$grandTotalBase,
+            &$grandTotalVat,
             &$processedRows,
             $totalRows,
             &$lastProgress
         ) {
             foreach ($invoices as $invoice) {
                 $items = [];
-                $cashAmount = $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0;
-                $arAmount = $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0;
+                $grossAmount = (float) ($invoice->total_amount ?? 0);
+                $freightAmount = (float) ($invoice->freight ?? 0);
+                $addedVat = (float) ($invoice->added_vat ?? 0);
+                $deductedVat = (float) ($invoice->deducted_vat ?? 0);
+                $netTotal = $invoice->net_total !== null ? (float) $invoice->net_total : null;
 
-                $grandTotalCash += $cashAmount;
-                $grandTotalAR += $arAmount;
+                $amounts = self::calculateVatInclusiveAmounts(
+                    $grossAmount,
+                    $freightAmount,
+                    $addedVat,
+                    $deductedVat,
+                    $netTotal
+                );
+
+                $split = self::splitNetAmountByPaymentMode($invoice->payment_mode, $amounts['net_amount']);
+
+                $grandTotalBase += $amounts['base_amount'];
+                $grandTotalVat += $amounts['vat_amount'];
+                $grandTotalCash += $split['cash_net_amount'];
+                $grandTotalAR += $split['ar_net_amount'];
 
                 foreach ($invoice->items as $item) {
                     $items[] = [
@@ -523,8 +563,11 @@ class GeneratePdfJob
                     'reference_no' => $invoice->reference_no,
                     'particular' => $invoice->particular,
                     'items' => $items,
-                    'cash_amount' => $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0,
-                    'ar_amount' => $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0,
+                    'base_amount' => $amounts['base_amount'],
+                    'vat_amount' => $amounts['vat_amount'],
+                    'net_amount' => $amounts['net_amount'],
+                    'cash_net_amount' => $split['cash_net_amount'],
+                    'ar_net_amount' => $split['ar_net_amount'],
                 ];
                 $processedRows++;
                 $progress = intval(($processedRows / $totalRows) * 100);
@@ -549,7 +592,9 @@ class GeneratePdfJob
             'preparedBy' => $this->preparedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'grandTotalBase' => $grandTotalBase,
+            'grandTotalVat' => $grandTotalVat,
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.invoiceSummary_pdf', $data)
@@ -563,11 +608,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'InvoiceSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'InvoiceSummaryReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
@@ -601,22 +646,41 @@ class GeneratePdfJob
         $flatInvoices = [];
         $grandTotalAR = 0;
         $grandTotalCash = 0;
+        $grandTotalBase = 0;
+        $grandTotalVat = 0;
 
         $query->chunkById(500, function ($invoices) use (
             &$flatInvoices,
             &$grandTotalAR,
             &$grandTotalCash,
+            &$grandTotalBase,
+            &$grandTotalVat,
             &$processedRows,
             $totalRows,
             &$lastProgress
         ) {
             foreach ($invoices as $invoice) {
                 $items = [];
-                $cashAmount = $invoice->payment_mode === 'Cash' ? $invoice->total_amount : 0;
-                $arAmount = $invoice->payment_mode === 'Account Receivables' ? $invoice->total_amount : 0;
+                $grossAmount = (float) ($invoice->total_amount ?? 0);
+                $freightAmount = (float) ($invoice->freight ?? 0);
+                $addedVat = (float) ($invoice->added_vat ?? 0);
+                $deductedVat = (float) ($invoice->deducted_vat ?? 0);
+                $netTotal = $invoice->net_total !== null ? (float) $invoice->net_total : null;
 
-                $grandTotalCash += $cashAmount;
-                $grandTotalAR += $arAmount;
+                $amounts = self::calculateVatInclusiveAmounts(
+                    $grossAmount,
+                    $freightAmount,
+                    $addedVat,
+                    $deductedVat,
+                    $netTotal
+                );
+
+                $split = self::splitNetAmountByPaymentMode($invoice->payment_mode, $amounts['net_amount']);
+
+                $grandTotalBase += $amounts['base_amount'];
+                $grandTotalVat += $amounts['vat_amount'];
+                $grandTotalCash += $split['cash_net_amount'];
+                $grandTotalAR += $split['ar_net_amount'];
 
                 foreach ($invoice->items as $item) {
                     $items[] = [
@@ -633,8 +697,11 @@ class GeneratePdfJob
                     'reference_no' => $invoice->reference_no,
                     'particular' => $invoice->particular,
                     'items' => $items,
-                    'cash_amount' => $cashAmount,
-                    'ar_amount' => $arAmount,
+                    'base_amount' => $amounts['base_amount'],
+                    'vat_amount' => $amounts['vat_amount'],
+                    'net_amount' => $amounts['net_amount'],
+                    'cash_net_amount' => $split['cash_net_amount'],
+                    'ar_net_amount' => $split['ar_net_amount'],
                 ];
                 $processedRows++;
                 $progress = intval(($processedRows / $totalRows) * 100);
@@ -660,6 +727,8 @@ class GeneratePdfJob
             'preparedBy' => $this->preparedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
+            'grandTotalBase' => $grandTotalBase,
+            'grandTotalVat' => $grandTotalVat,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];
@@ -670,10 +739,10 @@ class GeneratePdfJob
     protected function generateAdjustmentProoflist()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
-        
+
         // Increase memory limit for this job
         ini_set('memory_limit', '1024M');
-        
+
         // Format date range
         $formattedStartDate = date('m/d/Y', strtotime($this->validatedData['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($this->validatedData['end_date']));
@@ -706,12 +775,12 @@ class GeneratePdfJob
                 $customerCode = $adjustment->customer_code;
                 $customerName = $adjustment->name;
 
-                if (!isset($groupedData[$customerCode])) {
+                if (! isset($groupedData[$customerCode])) {
                     $groupedData[$customerCode] = [
                         'customer_code' => $customerCode,
                         'customer_name' => $customerName,
                         'adjustments' => [],
-                        'customerAmountTotal' => 0
+                        'customerAmountTotal' => 0,
                     ];
                 }
 
@@ -753,7 +822,7 @@ class GeneratePdfJob
             'groupedData' => array_values($groupedData),
             'preparedBy' => $this->preparedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.adjustmentProoflist_pdf', $data)
@@ -767,11 +836,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'AdjustmentProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'AdjustmentProoflistReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
 
@@ -784,7 +853,7 @@ class GeneratePdfJob
     public function generateAdjustmentProoflistDataForExcel()
     {
         $this->updateProgress(1, 'Preparing To Process Report...');
-        
+
         // Increase memory limit for this job
         ini_set('memory_limit', '1024M');
 
@@ -820,12 +889,12 @@ class GeneratePdfJob
                 $customerCode = $adjustment->customer_code;
                 $customerName = $adjustment->name;
 
-                if (!isset($groupedData[$customerCode])) {
+                if (! isset($groupedData[$customerCode])) {
                     $groupedData[$customerCode] = [
                         'customer_code' => $customerCode,
                         'customer_name' => $customerName,
                         'adjustments' => [],
-                        'customerAmountTotal' => 0
+                        'customerAmountTotal' => 0,
                     ];
                 }
 
@@ -930,7 +999,7 @@ class GeneratePdfJob
             $selectedTypes[] = '5E - Creditable(WHT)';
         }
 
-        if (!empty($selectedTypes)) {
+        if (! empty($selectedTypes)) {
             $query->whereIn('payment_type', $selectedTypes);
         }
 
@@ -950,29 +1019,29 @@ class GeneratePdfJob
                 &$lastProgress
             ) {
                 $chunkGrouped = $paymentsChunk->groupBy(['payment_type', function ($payment) {
-                    return $payment->customer_code . '|' . $payment->name;
+                    return $payment->customer_code.'|'.$payment->name;
                 }]);
 
                 foreach ($chunkGrouped as $paymentType => $customers) {
-                    $paymentTypeIndex = collect($groupedData)->search(fn($item) => $item['payment_type'] === $paymentType);
+                    $paymentTypeIndex = collect($groupedData)->search(fn ($item) => $item['payment_type'] === $paymentType);
                     $paymentTypeData = $paymentTypeIndex !== false ? $groupedData[$paymentTypeIndex] : [
                         'payment_type' => $paymentType,
                         'customers' => [],
-                        'type_total' => 0
+                        'type_total' => 0,
                     ];
 
                     foreach ($customers as $customerKey => $customerPayments) {
                         [$customerCode, $customerName] = explode('|', $customerKey);
 
                         $customerIndex = collect($paymentTypeData['customers'])->search(
-                            fn($customer) => $customer['customer_code'] === $customerCode
+                            fn ($customer) => $customer['customer_code'] === $customerCode
                         );
 
                         $customerData = $customerIndex !== false ? $paymentTypeData['customers'][$customerIndex] : [
                             'customer_code' => $customerCode,
                             'customer_name' => $customerName,
                             'payments' => [],
-                            'customer_total' => 0
+                            'customer_total' => 0,
                         ];
 
                         foreach ($customerPayments as $payment) {
@@ -1001,7 +1070,7 @@ class GeneratePdfJob
                                 'payment_type' => $payment->payment_type,
                                 'cash_in_bank' => $payment->cash_in_bank,
                                 'payment_details' => $paymentDetails,
-                                'payment_total' => $paymentTotal
+                                'payment_total' => $paymentTotal,
                             ];
 
                             $customerData['customer_total'] += $paymentTotal;
@@ -1042,7 +1111,7 @@ class GeneratePdfJob
                 'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
                 'groupedData' => $groupedData,
                 'preparedBy' => $this->preparedBy,
-                'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+                'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             ];
 
             $pdf = Pdf::loadView('pdf.Report.paymentProoflistDetailed_pdf', $data)
@@ -1056,11 +1125,11 @@ class GeneratePdfJob
 
             $this->updateProgress(99, 'Almost Done...');
 
-            $filename = $this->filename ?? 'PaymentProoflistDetailedReport_' . time() . '_' . Str::random(6) . '.pdf';
+            $filename = $this->filename ?? 'PaymentProoflistDetailedReport_'.time().'_'.Str::random(6).'.pdf';
             Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
             $prefix = trim(config('app.url'), '/');
-            $publicUrl = $prefix . Storage::url("temp/{$filename}");
+            $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
             $this->updateProgress(100, 'Report Ready!');
         } else {
@@ -1122,7 +1191,7 @@ class GeneratePdfJob
                 'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
                 'payments' => $formattedPayments,
                 'preparedBy' => $this->preparedBy,
-                'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+                'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             ];
 
             $pdf = Pdf::loadView('pdf.Report.paymentProoflistSummary_pdf', $data)
@@ -1136,11 +1205,11 @@ class GeneratePdfJob
 
             $this->updateProgress(99, 'Almost Done...');
 
-            $filename = $this->filename ?? 'PaymentProoflistSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
+            $filename = $this->filename ?? 'PaymentProoflistSummaryReport_'.time().'_'.Str::random(6).'.pdf';
             Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
             $prefix = trim(config('app.url'), '/');
-            $publicUrl = $prefix . Storage::url("temp/{$filename}");
+            $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
             $this->updateProgress(100, 'Report Ready!');
         }
@@ -1196,7 +1265,7 @@ class GeneratePdfJob
             $selectedTypes[] = '5E - Creditable(WHT)';
         }
 
-        if (!empty($selectedTypes)) {
+        if (! empty($selectedTypes)) {
             $query->whereIn('payment_type', $selectedTypes);
         }
 
@@ -1216,29 +1285,29 @@ class GeneratePdfJob
                 &$lastProgress
             ) {
                 $chunkGrouped = $paymentsChunk->groupBy(['payment_type', function ($payment) {
-                    return $payment->customer_code . '|' . $payment->name;
+                    return $payment->customer_code.'|'.$payment->name;
                 }]);
 
                 foreach ($chunkGrouped as $paymentType => $customers) {
-                    $paymentTypeIndex = collect($groupedData)->search(fn($item) => $item['payment_type'] === $paymentType);
+                    $paymentTypeIndex = collect($groupedData)->search(fn ($item) => $item['payment_type'] === $paymentType);
                     $paymentTypeData = $paymentTypeIndex !== false ? $groupedData[$paymentTypeIndex] : [
                         'payment_type' => $paymentType,
                         'customers' => [],
-                        'type_total' => 0
+                        'type_total' => 0,
                     ];
 
                     foreach ($customers as $customerKey => $customerPayments) {
                         [$customerCode, $customerName] = explode('|', $customerKey);
 
                         $customerIndex = collect($paymentTypeData['customers'])->search(
-                            fn($customer) => $customer['customer_code'] === $customerCode
+                            fn ($customer) => $customer['customer_code'] === $customerCode
                         );
 
                         $customerData = $customerIndex !== false ? $paymentTypeData['customers'][$customerIndex] : [
                             'customer_code' => $customerCode,
                             'customer_name' => $customerName,
                             'payments' => [],
-                            'customer_total' => 0
+                            'customer_total' => 0,
                         ];
 
                         foreach ($customerPayments as $payment) {
@@ -1267,7 +1336,7 @@ class GeneratePdfJob
                                 'payment_type' => $payment->payment_type,
                                 'cash_in_bank' => $payment->cash_in_bank,
                                 'payment_details' => $paymentDetails,
-                                'payment_total' => $paymentTotal
+                                'payment_total' => $paymentTotal,
                             ];
 
                             $customerData['customer_total'] += $paymentTotal;
@@ -1363,7 +1432,7 @@ class GeneratePdfJob
                 }
             });
 
-             $excelData = [
+            $excelData = [
                 'reportType' => 'paymentprooflist_summary',
                 'dateRange' => "$formattedStartDate to $formattedEndDate",
                 'currency' => 'PHP',
@@ -1416,21 +1485,21 @@ class GeneratePdfJob
             &$lastProgress
         ) {
             $chunkGrouped = $paymentDetailsChunk->groupBy(function ($paymentDetails) {
-                return $paymentDetails->customer_code . '|' . $paymentDetails->customer_name;
+                return $paymentDetails->customer_code.'|'.$paymentDetails->customer_name;
             });
 
             foreach ($chunkGrouped as $customerKey => $customerPaymentDetails) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
 
                 $customerIndex = collect($groupedData)->search(
-                    fn($customer) => $customer['customer_code'] === $customerCode
+                    fn ($customer) => $customer['customer_code'] === $customerCode
                 );
 
                 $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
                     'customer_code' => $customerCode,
                     'customer_name' => $customerName,
                     'paymentDetails' => [],
-                    'customerAmountTotal' => 0
+                    'customerAmountTotal' => 0,
                 ];
 
                 $customerAmountTotal = $customerData['customerAmountTotal'];
@@ -1490,7 +1559,7 @@ class GeneratePdfJob
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.customerPDCReport_pdf', $data)
@@ -1504,11 +1573,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'CustomerPdcDcReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'CustomerPdcDcReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
     }
@@ -1549,21 +1618,21 @@ class GeneratePdfJob
             &$lastProgress
         ) {
             $chunkGrouped = $paymentDetailsChunk->groupBy(function ($paymentDetails) {
-                return $paymentDetails->customer_code . '|' . $paymentDetails->customer_name;
+                return $paymentDetails->customer_code.'|'.$paymentDetails->customer_name;
             });
 
             foreach ($chunkGrouped as $customerKey => $customerPaymentDetails) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
 
                 $customerIndex = collect($groupedData)->search(
-                    fn($customer) => $customer['customer_code'] === $customerCode
+                    fn ($customer) => $customer['customer_code'] === $customerCode
                 );
 
                 $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
                     'customer_code' => $customerCode,
                     'customer_name' => $customerName,
                     'paymentDetails' => [],
-                    'customerAmountTotal' => 0
+                    'customerAmountTotal' => 0,
                 ];
 
                 $customerAmountTotal = $customerData['customerAmountTotal'];
@@ -1689,7 +1758,7 @@ class GeneratePdfJob
                 &$lastProgress
             ) {
                 $chunkGrouped = $invoicesChunk->groupBy(function ($invoice) {
-                    return $invoice->customer_code . '|' . $invoice->customer_name;
+                    return $invoice->customer_code.'|'.$invoice->customer_name;
                 });
 
                 foreach ($chunkGrouped as $customerKey => $customerInvoices) {
@@ -1697,7 +1766,7 @@ class GeneratePdfJob
 
                     // Find or create customer data
                     $customerIndex = collect($groupedData)->search(
-                        fn($customer) => $customer['customer_code'] === $customerCode
+                        fn ($customer) => $customer['customer_code'] === $customerCode
                     );
 
                     $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
@@ -1711,8 +1780,8 @@ class GeneratePdfJob
                             '61_90' => 0,
                             '91_360' => 0,
                             'above_1_year' => 0,
-                            'total' => 0
-                        ]
+                            'total' => 0,
+                        ],
                     ];
 
                     foreach ($customerInvoices as $invoice) {
@@ -1739,15 +1808,15 @@ class GeneratePdfJob
                             'amount' => $invoice->amount,
                             'document_due_date' => isset($customers[$customerCode]->payment_terms)
                                 ? Carbon::parse($invoice->date)
-                                ->addDays((int)preg_replace('/[^0-9]/', '', $customers[$customerCode]->payment_terms))
-                                ->format('Y-m-d')
+                                    ->addDays((int) preg_replace('/[^0-9]/', '', $customers[$customerCode]->payment_terms))
+                                    ->format('Y-m-d')
                                 : null,
                             'days_diff' => $daysDiff,
                             'amount_1_30' => $amount1_30,
                             'amount_31_60' => $amount31_60,
                             'amount_61_90' => $amount61_90,
                             'amount_91_360' => $amount91_360,
-                            'amount_above_1_year' => $amountAbove1Year
+                            'amount_above_1_year' => $amountAbove1Year,
                         ];
 
                         $processedRows++;
@@ -1827,7 +1896,7 @@ class GeneratePdfJob
                 &$lastProgress
             ) {
                 $chunkGrouped = $invoicesChunk->groupBy(function ($invoice) {
-                    return $invoice->customer_code . '|' . $invoice->customer_name;
+                    return $invoice->customer_code.'|'.$invoice->customer_name;
                 });
 
                 foreach ($chunkGrouped as $customerKey => $customerInvoices) {
@@ -1835,7 +1904,7 @@ class GeneratePdfJob
 
                     // Find or create customer data
                     $customerIndex = collect($groupedData)->search(
-                        fn($customer) => $customer['customer_code'] === $customerCode
+                        fn ($customer) => $customer['customer_code'] === $customerCode
                     );
 
                     $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
@@ -1850,8 +1919,8 @@ class GeneratePdfJob
                             '61_75' => 0,
                             '76_90' => 0,
                             'above_90_days' => 0,
-                            'total' => 0
-                        ]
+                            'total' => 0,
+                        ],
                     ];
 
                     $groupedByCheckType = $customerInvoices->groupBy('check_type');
@@ -1859,7 +1928,7 @@ class GeneratePdfJob
                     foreach ($groupedByCheckType as $checkType => $invoicesByType) {
                         // Find or create check type data
                         $typeIndex = collect($customerData['check_types'])->search(
-                            fn($type) => $type['check_type'] === $checkType
+                            fn ($type) => $type['check_type'] === $checkType
                         );
 
                         $typeData = $typeIndex !== false ? $customerData['check_types'][$typeIndex] : [
@@ -1873,8 +1942,8 @@ class GeneratePdfJob
                                 '61_75' => 0,
                                 '76_90' => 0,
                                 'above_90_days' => 0,
-                                'total' => 0
-                            ]
+                                'total' => 0,
+                            ],
                         ];
 
                         foreach ($invoicesByType as $invoice) {
@@ -1925,7 +1994,7 @@ class GeneratePdfJob
                                 'amount_46_60' => $amount46_60,
                                 'amount_61_75' => $amount61_75,
                                 'amount_76_90' => $amount76_90,
-                                'amount_above_90_days' => $amountAbove90Days
+                                'amount_above_90_days' => $amountAbove90Days,
                             ];
 
                             $processedRows++;
@@ -1979,8 +2048,8 @@ class GeneratePdfJob
             ];
 
             $this->broadcastData($excelData);
+        }
     }
-}
 
     protected function generateCustomerARAgingReport()
     {
@@ -2038,7 +2107,7 @@ class GeneratePdfJob
                 &$lastProgress
             ) {
                 $chunkGrouped = $invoicesChunk->groupBy(function ($invoice) {
-                    return $invoice->customer_code . '|' . $invoice->customer_name;
+                    return $invoice->customer_code.'|'.$invoice->customer_name;
                 });
 
                 foreach ($chunkGrouped as $customerKey => $customerInvoices) {
@@ -2046,7 +2115,7 @@ class GeneratePdfJob
 
                     // Find or create customer data
                     $customerIndex = collect($groupedData)->search(
-                        fn($customer) => $customer['customer_code'] === $customerCode
+                        fn ($customer) => $customer['customer_code'] === $customerCode
                     );
 
                     $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
@@ -2060,8 +2129,8 @@ class GeneratePdfJob
                             '61_90' => 0,
                             '91_360' => 0,
                             'above_1_year' => 0,
-                            'total' => 0
-                        ]
+                            'total' => 0,
+                        ],
                     ];
 
                     foreach ($customerInvoices as $invoice) {
@@ -2088,15 +2157,15 @@ class GeneratePdfJob
                             'amount' => $invoice->amount,
                             'document_due_date' => isset($customers[$customerCode]->payment_terms)
                                 ? Carbon::parse($invoice->date)
-                                ->addDays((int)preg_replace('/[^0-9]/', '', $customers[$customerCode]->payment_terms))
-                                ->format('Y-m-d')
+                                    ->addDays((int) preg_replace('/[^0-9]/', '', $customers[$customerCode]->payment_terms))
+                                    ->format('Y-m-d')
                                 : null,
                             'days_diff' => $daysDiff,
                             'amount_1_30' => $amount1_30,
                             'amount_31_60' => $amount31_60,
                             'amount_61_90' => $amount61_90,
                             'amount_91_360' => $amount91_360,
-                            'amount_above_1_year' => $amountAbove1Year
+                            'amount_above_1_year' => $amountAbove1Year,
                         ];
 
                         $processedRows++;
@@ -2134,7 +2203,7 @@ class GeneratePdfJob
                 'groupedData' => $groupedData,
                 'preparedBy' => $this->preparedBy,
                 'grandTotals' => $grandTotals,
-                'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+                'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             ];
 
             $pdf = Pdf::loadView('pdf.Report.customerArAgingReport_pdf', $data)
@@ -2148,11 +2217,11 @@ class GeneratePdfJob
 
             $this->updateProgress(99, 'Almost Done...');
 
-            $filename = $this->filename ?? 'CustomerArAgingReport_' . time() . '_' . Str::random(6) . '.pdf';
+            $filename = $this->filename ?? 'CustomerArAgingReport_'.time().'_'.Str::random(6).'.pdf';
             Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
             $prefix = trim(config('app.url'), '/');
-            $publicUrl = $prefix . Storage::url("temp/{$filename}");
+            $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
             $this->updateProgress(100, 'Report Ready!');
         } else {
@@ -2189,7 +2258,7 @@ class GeneratePdfJob
                 &$lastProgress
             ) {
                 $chunkGrouped = $invoicesChunk->groupBy(function ($invoice) {
-                    return $invoice->customer_code . '|' . $invoice->customer_name;
+                    return $invoice->customer_code.'|'.$invoice->customer_name;
                 });
 
                 foreach ($chunkGrouped as $customerKey => $customerInvoices) {
@@ -2197,7 +2266,7 @@ class GeneratePdfJob
 
                     // Find or create customer data
                     $customerIndex = collect($groupedData)->search(
-                        fn($customer) => $customer['customer_code'] === $customerCode
+                        fn ($customer) => $customer['customer_code'] === $customerCode
                     );
 
                     $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
@@ -2212,8 +2281,8 @@ class GeneratePdfJob
                             '61_75' => 0,
                             '76_90' => 0,
                             'above_90_days' => 0,
-                            'total' => 0
-                        ]
+                            'total' => 0,
+                        ],
                     ];
 
                     $groupedByCheckType = $customerInvoices->groupBy('check_type');
@@ -2221,7 +2290,7 @@ class GeneratePdfJob
                     foreach ($groupedByCheckType as $checkType => $invoicesByType) {
                         // Find or create check type data
                         $typeIndex = collect($customerData['check_types'])->search(
-                            fn($type) => $type['check_type'] === $checkType
+                            fn ($type) => $type['check_type'] === $checkType
                         );
 
                         $typeData = $typeIndex !== false ? $customerData['check_types'][$typeIndex] : [
@@ -2235,8 +2304,8 @@ class GeneratePdfJob
                                 '61_75' => 0,
                                 '76_90' => 0,
                                 'above_90_days' => 0,
-                                'total' => 0
-                            ]
+                                'total' => 0,
+                            ],
                         ];
 
                         foreach ($invoicesByType as $invoice) {
@@ -2287,7 +2356,7 @@ class GeneratePdfJob
                                 'amount_46_60' => $amount46_60,
                                 'amount_61_75' => $amount61_75,
                                 'amount_76_90' => $amount76_90,
-                                'amount_above_90_days' => $amountAbove90Days
+                                'amount_above_90_days' => $amountAbove90Days,
                             ];
 
                             $processedRows++;
@@ -2335,7 +2404,7 @@ class GeneratePdfJob
                 'groupedData' => $groupedData,
                 'preparedBy' => $this->preparedBy,
                 'grandTotals' => $grandTotals,
-                'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+                'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             ];
 
             $pdf = Pdf::loadView('pdf.Report.customerARPdcDcAgingReport_pdf', $data)
@@ -2349,11 +2418,11 @@ class GeneratePdfJob
 
             $this->updateProgress(99, 'Almost Done...');
 
-            $filename = $this->filename ?? 'CustomerArPdcDcAgingReport_' . time() . '_' . Str::random(6) . '.pdf';
+            $filename = $this->filename ?? 'CustomerArPdcDcAgingReport_'.time().'_'.Str::random(6).'.pdf';
             Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
             $prefix = trim(config('app.url'), '/');
-            $publicUrl = $prefix . Storage::url("temp/{$filename}");
+            $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
             $this->updateProgress(100, 'Report Ready!');
         }
@@ -2418,7 +2487,7 @@ class GeneratePdfJob
 
         $this->updateProgress(100, 'Data Ready for Excel Generation!');
 
-            return $excelData;
+        return $excelData;
     }
 
     protected function generateBegBalProoflist()
@@ -2473,7 +2542,7 @@ class GeneratePdfJob
             'begBals' => $formattedBegBals,
             'totalAmount' => $totalAmount,
             'preparedBy' => $this->preparedBy,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.begBalProoflist_pdf', $data)
@@ -2487,11 +2556,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'BegBalProoflistReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'BegBalProoflistReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
     }
@@ -2521,7 +2590,7 @@ class GeneratePdfJob
                 'subsidiary' => 'Subsidiary',
                 'institutional' => 'Institutional',
                 'alturasEmployees' => 'Alturas Employees',
-                'easyLinkEmployees' => 'EasyLink Employees'
+                'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
             $conditions = [];
@@ -2567,18 +2636,18 @@ class GeneratePdfJob
         });
 
         $floatingAmounts = [];
-        if (!empty($customerCodes)) {
+        if (! empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
                 ->whereIn('payment_type', ['Check', 'Creditable(WHT)'])
                 ->where('status', 'Floating')
                 ->get();
 
             foreach ($paymentDetails as $detail) {
-                $key = $detail->customer_code . '|' . $detail->document_no . '|' . $detail->type;
-                if (!isset($floatingAmounts[$key])) {
+                $key = $detail->customer_code.'|'.$detail->document_no.'|'.$detail->type;
+                if (! isset($floatingAmounts[$key])) {
                     $floatingAmounts[$key] = [
                         'pdc_dc' => 0,
-                        'wht' => 0
+                        'wht' => 0,
                     ];
                 }
 
@@ -2594,7 +2663,6 @@ class GeneratePdfJob
             &$groupedData,
             &$customerOverallAmountTotal,
             $floatingAmounts,
-            $customerCodes,
             &$processedRows,
             $totalRows,
             &$lastProgress,
@@ -2602,25 +2670,25 @@ class GeneratePdfJob
             &$runningBalances
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
-                return $item->customer_code . '|' . $item->customer_name;
+                return $item->customer_code.'|'.$item->customer_name;
             });
 
             foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
 
                 $customerIndex = collect($groupedData)->search(
-                    fn($customer) => $customer['customer_code'] === $customerCode
+                    fn ($customer) => $customer['customer_code'] === $customerCode
                 );
 
                 $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
                     'customer_code' => $customerCode,
                     'customer_name' => $customerName,
                     'outstandingBalances' => [],
-                    'customerAmountTotal' => 0
+                    'customerAmountTotal' => 0,
                 ];
 
                 foreach ($customerOutstandingBalances as $outstandingBalance) {
-                    $key = $customerCode . '|' . $outstandingBalance->invoice_number . '|' . $outstandingBalance->type;
+                    $key = $customerCode.'|'.$outstandingBalance->invoice_number.'|'.$outstandingBalance->type;
                     $floatingPdcDc = $floatingAmounts[$key]['pdc_dc'] ?? 0;
                     $floatingWht = $floatingAmounts[$key]['wht'] ?? 0;
 
@@ -2629,11 +2697,11 @@ class GeneratePdfJob
                     $shrinkage_overage = $overage - $shrinkage;
 
                     $val = function ($v) {
-                        return (float) str_replace(',', '', (string)($v ?? 0));
+                        return (float) str_replace(',', '', (string) ($v ?? 0));
                     };
 
                     $balanceKey = $customerCode;
-                    if (!isset($runningBalances[$balanceKey])) {
+                    if (! isset($runningBalances[$balanceKey])) {
                         $runningBalances[$balanceKey] = 0;
                     }
 
@@ -2711,7 +2779,7 @@ class GeneratePdfJob
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.arOutstandingBalanceAO_pdf', $data)
@@ -2725,11 +2793,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'ArOutstandingBalanceAOReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'ArOutstandingBalanceAOReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
     }
@@ -2760,7 +2828,7 @@ class GeneratePdfJob
                 'subsidiary' => 'Subsidiary',
                 'institutional' => 'Institutional',
                 'alturasEmployees' => 'Alturas Employees',
-                'easyLinkEmployees' => 'EasyLink Employees'
+                'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
             $conditions = [];
@@ -2797,18 +2865,18 @@ class GeneratePdfJob
         });
 
         $floatingAmounts = [];
-        if (!empty($customerCodes)) {
+        if (! empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
                 ->whereIn('payment_type', ['Check', 'Creditable(WHT)'])
                 ->where('status', 'Floating')
                 ->get();
 
             foreach ($paymentDetails as $detail) {
-                $key = $detail->customer_code . '|' . $detail->document_no . '|' . $detail->type;
-                if (!isset($floatingAmounts[$key])) {
+                $key = $detail->customer_code.'|'.$detail->document_no.'|'.$detail->type;
+                if (! isset($floatingAmounts[$key])) {
                     $floatingAmounts[$key] = [
                         'pdc_dc' => 0,
-                        'wht' => 0
+                        'wht' => 0,
                     ];
                 }
 
@@ -2824,31 +2892,30 @@ class GeneratePdfJob
             &$groupedData,
             &$customerOverallAmountTotal,
             $floatingAmounts,
-            $customerCodes,
             &$processedRows,
             $totalRows,
             &$lastProgress
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
-                return $item->customer_code . '|' . $item->customer_name;
+                return $item->customer_code.'|'.$item->customer_name;
             });
 
             foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
 
                 $customerIndex = collect($groupedData)->search(
-                    fn($customer) => $customer['customer_code'] === $customerCode
+                    fn ($customer) => $customer['customer_code'] === $customerCode
                 );
 
                 $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
                     'customer_code' => $customerCode,
                     'customer_name' => $customerName,
                     'outstandingBalances' => [],
-                    'customerAmountTotal' => 0
+                    'customerAmountTotal' => 0,
                 ];
 
                 foreach ($customerOutstandingBalances as $outstandingBalance) {
-                    $key = $customerCode . '|' . $outstandingBalance->invoice_number . '|' . $outstandingBalance->type;
+                    $key = $customerCode.'|'.$outstandingBalance->invoice_number.'|'.$outstandingBalance->type;
                     $floatingPdcDc = $floatingAmounts[$key]['pdc_dc'] ?? 0;
                     $floatingWht = $floatingAmounts[$key]['wht'] ?? 0;
 
@@ -2900,7 +2967,7 @@ class GeneratePdfJob
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.arOutstandingBalanceDR_pdf', $data)
@@ -2914,11 +2981,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'ArOutstandingBalanceDRReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'ArOutstandingBalanceDRReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
     }
@@ -2948,7 +3015,7 @@ class GeneratePdfJob
                 'subsidiary' => 'Subsidiary',
                 'institutional' => 'Institutional',
                 'alturasEmployees' => 'Alturas Employees',
-                'easyLinkEmployees' => 'EasyLink Employees'
+                'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
             $conditions = [];
@@ -2994,18 +3061,18 @@ class GeneratePdfJob
         });
 
         $floatingAmounts = [];
-        if (!empty($customerCodes)) {
+        if (! empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
                 ->whereIn('payment_type', ['Check', 'Creditable(WHT)'])
                 ->where('status', 'Floating')
                 ->get();
 
             foreach ($paymentDetails as $detail) {
-                $key = $detail->customer_code . '|' . $detail->document_no . '|' . $detail->type;
-                if (!isset($floatingAmounts[$key])) {
+                $key = $detail->customer_code.'|'.$detail->document_no.'|'.$detail->type;
+                if (! isset($floatingAmounts[$key])) {
                     $floatingAmounts[$key] = [
                         'pdc_dc' => 0,
-                        'wht' => 0
+                        'wht' => 0,
                     ];
                 }
 
@@ -3021,7 +3088,6 @@ class GeneratePdfJob
             &$groupedData,
             &$customerOverallAmountTotal,
             $floatingAmounts,
-            $customerCodes,
             &$processedRows,
             $totalRows,
             &$lastProgress,
@@ -3029,25 +3095,25 @@ class GeneratePdfJob
             &$runningBalances
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
-                return $item->customer_code . '|' . $item->customer_name;
+                return $item->customer_code.'|'.$item->customer_name;
             });
 
             foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
 
                 $customerIndex = collect($groupedData)->search(
-                    fn($customer) => $customer['customer_code'] === $customerCode
+                    fn ($customer) => $customer['customer_code'] === $customerCode
                 );
 
                 $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
                     'customer_code' => $customerCode,
                     'customer_name' => $customerName,
                     'outstandingBalances' => [],
-                    'customerAmountTotal' => 0
+                    'customerAmountTotal' => 0,
                 ];
 
                 foreach ($customerOutstandingBalances as $outstandingBalance) {
-                    $key = $customerCode . '|' . $outstandingBalance->invoice_number . '|' . $outstandingBalance->type;
+                    $key = $customerCode.'|'.$outstandingBalance->invoice_number.'|'.$outstandingBalance->type;
                     $floatingPdcDc = $floatingAmounts[$key]['pdc_dc'] ?? 0;
                     $floatingWht = $floatingAmounts[$key]['wht'] ?? 0;
 
@@ -3056,11 +3122,11 @@ class GeneratePdfJob
                     $shrinkage_overage = $overage - $shrinkage;
 
                     $val = function ($v) {
-                        return (float) str_replace(',', '', (string)($v ?? 0));
+                        return (float) str_replace(',', '', (string) ($v ?? 0));
                     };
 
                     $balanceKey = $customerCode;
-                    if (!isset($runningBalances[$balanceKey])) {
+                    if (! isset($runningBalances[$balanceKey])) {
                         $runningBalances[$balanceKey] = 0;
                     }
 
@@ -3172,7 +3238,7 @@ class GeneratePdfJob
                 'subsidiary' => 'Subsidiary',
                 'institutional' => 'Institutional',
                 'alturasEmployees' => 'Alturas Employees',
-                'easyLinkEmployees' => 'EasyLink Employees'
+                'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
             $conditions = [];
@@ -3209,18 +3275,18 @@ class GeneratePdfJob
         });
 
         $floatingAmounts = [];
-        if (!empty($customerCodes)) {
+        if (! empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
                 ->whereIn('payment_type', ['Check', 'Creditable(WHT)'])
                 ->where('status', 'Floating')
                 ->get();
 
             foreach ($paymentDetails as $detail) {
-                $key = $detail->customer_code . '|' . $detail->document_no . '|' . $detail->type;
-                if (!isset($floatingAmounts[$key])) {
+                $key = $detail->customer_code.'|'.$detail->document_no.'|'.$detail->type;
+                if (! isset($floatingAmounts[$key])) {
                     $floatingAmounts[$key] = [
                         'pdc_dc' => 0,
-                        'wht' => 0
+                        'wht' => 0,
                     ];
                 }
 
@@ -3236,31 +3302,30 @@ class GeneratePdfJob
             &$groupedData,
             &$customerOverallAmountTotal,
             $floatingAmounts,
-            $customerCodes,
             &$processedRows,
             $totalRows,
             &$lastProgress
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
-                return $item->customer_code . '|' . $item->customer_name;
+                return $item->customer_code.'|'.$item->customer_name;
             });
 
             foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
 
                 $customerIndex = collect($groupedData)->search(
-                    fn($customer) => $customer['customer_code'] === $customerCode
+                    fn ($customer) => $customer['customer_code'] === $customerCode
                 );
 
                 $customerData = $customerIndex !== false ? $groupedData[$customerIndex] : [
                     'customer_code' => $customerCode,
                     'customer_name' => $customerName,
                     'outstandingBalances' => [],
-                    'customerAmountTotal' => 0
+                    'customerAmountTotal' => 0,
                 ];
 
                 foreach ($customerOutstandingBalances as $outstandingBalance) {
-                    $key = $customerCode . '|' . $outstandingBalance->invoice_number . '|' . $outstandingBalance->type;
+                    $key = $customerCode.'|'.$outstandingBalance->invoice_number.'|'.$outstandingBalance->type;
                     $floatingPdcDc = $floatingAmounts[$key]['pdc_dc'] ?? 0;
                     $floatingWht = $floatingAmounts[$key]['wht'] ?? 0;
 
@@ -3328,7 +3393,7 @@ class GeneratePdfJob
 
         $invoiceNos = Invoice::whereBetween('receipt_date', [
             $this->validatedData['start_date'],
-            $this->validatedData['end_date']
+            $this->validatedData['end_date'],
         ])->pluck('invoice_no');
 
         $query = InvoiceItem::query()
@@ -3402,7 +3467,7 @@ class GeneratePdfJob
 
         $invoiceNos = Invoice::whereBetween('receipt_date', [
             $this->validatedData['start_date'],
-            $this->validatedData['end_date']
+            $this->validatedData['end_date'],
         ])->pluck('invoice_no');
 
         $query = InvoiceItem::query()
@@ -3457,7 +3522,7 @@ class GeneratePdfJob
             'salesperItems' => $formattedSalesPerItem,
             'preparedBy' => $this->preparedBy,
             'totalAmount' => $totalAmount,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.salesPerItem_pdf', $data)
@@ -3471,11 +3536,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'SalesPerItemReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'SalesPerItemReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
     }
@@ -3527,29 +3592,29 @@ class GeneratePdfJob
             &$lastProgress
         ) {
             $chunkGrouped = $paymentsChunk->groupBy(['payment_type', function ($payment) {
-                return $payment->customer_code . '|' . $payment->name;
+                return $payment->customer_code.'|'.$payment->name;
             }]);
 
             foreach ($chunkGrouped as $paymentType => $customers) {
-                $paymentTypeIndex = collect($groupedData)->search(fn($item) => $item['payment_type'] === $paymentType);
+                $paymentTypeIndex = collect($groupedData)->search(fn ($item) => $item['payment_type'] === $paymentType);
                 $paymentTypeData = $paymentTypeIndex !== false ? $groupedData[$paymentTypeIndex] : [
                     'payment_type' => $paymentType,
                     'customers' => [],
-                    'type_total' => 0
+                    'type_total' => 0,
                 ];
 
                 foreach ($customers as $customerKey => $customerPayments) {
                     [$customerCode, $customerName] = explode('|', $customerKey);
 
                     $customerIndex = collect($paymentTypeData['customers'])->search(
-                        fn($customer) => $customer['customer_code'] === $customerCode
+                        fn ($customer) => $customer['customer_code'] === $customerCode
                     );
 
                     $customerData = $customerIndex !== false ? $paymentTypeData['customers'][$customerIndex] : [
                         'customer_code' => $customerCode,
                         'customer_name' => $customerName,
                         'payments' => [],
-                        'customer_total' => 0
+                        'customer_total' => 0,
                     ];
 
                     foreach ($customerPayments as $payment) {
@@ -3566,7 +3631,7 @@ class GeneratePdfJob
                                 'document_date' => $detail->document_date,
                                 'remarks' => $detail->remarks,
                                 'cancelled_amount' => $detail->status === 'Cancelled' ? $detail->amount_paid : null,
-                                'amount_overage_shortage' => $detail->status === 'Cancelled' ? null :  $detail->overage_shortage,
+                                'amount_overage_shortage' => $detail->status === 'Cancelled' ? null : $detail->overage_shortage,
                                 'amount_total' => $detail->amount,
                                 'amount_balance' => $detail->balance + $detail->amount_paid,
                             ];
@@ -3581,7 +3646,7 @@ class GeneratePdfJob
                             'payment_type' => $payment->payment_type,
                             'cash_in_bank' => $payment->cash_in_bank,
                             'payment_details' => $paymentDetails,
-                            'payment_total' => $paymentTotal
+                            'payment_total' => $paymentTotal,
                         ];
 
                         $customerData['customer_total'] += $paymentTotal;
@@ -3677,29 +3742,29 @@ class GeneratePdfJob
             &$lastProgress
         ) {
             $chunkGrouped = $paymentsChunk->groupBy(['payment_type', function ($payment) {
-                return $payment->customer_code . '|' . $payment->name;
+                return $payment->customer_code.'|'.$payment->name;
             }]);
 
             foreach ($chunkGrouped as $paymentType => $customers) {
-                $paymentTypeIndex = collect($groupedData)->search(fn($item) => $item['payment_type'] === $paymentType);
+                $paymentTypeIndex = collect($groupedData)->search(fn ($item) => $item['payment_type'] === $paymentType);
                 $paymentTypeData = $paymentTypeIndex !== false ? $groupedData[$paymentTypeIndex] : [
                     'payment_type' => $paymentType,
                     'customers' => [],
-                    'type_total' => 0
+                    'type_total' => 0,
                 ];
 
                 foreach ($customers as $customerKey => $customerPayments) {
                     [$customerCode, $customerName] = explode('|', $customerKey);
 
                     $customerIndex = collect($paymentTypeData['customers'])->search(
-                        fn($customer) => $customer['customer_code'] === $customerCode
+                        fn ($customer) => $customer['customer_code'] === $customerCode
                     );
 
                     $customerData = $customerIndex !== false ? $paymentTypeData['customers'][$customerIndex] : [
                         'customer_code' => $customerCode,
                         'customer_name' => $customerName,
                         'payments' => [],
-                        'customer_total' => 0
+                        'customer_total' => 0,
                     ];
 
                     foreach ($customerPayments as $payment) {
@@ -3716,7 +3781,7 @@ class GeneratePdfJob
                                 'document_date' => $detail->document_date,
                                 'remarks' => $detail->remarks,
                                 'cancelled_amount' => $detail->status === 'Cancelled' ? $detail->amount_paid : null,
-                                'amount_overage_shortage' => $detail->status === 'Cancelled' ? null :  $detail->overage_shortage,
+                                'amount_overage_shortage' => $detail->status === 'Cancelled' ? null : $detail->overage_shortage,
                                 'amount_total' => $detail->amount,
                                 'amount_balance' => $detail->balance + $detail->amount_paid,
                             ];
@@ -3731,7 +3796,7 @@ class GeneratePdfJob
                             'payment_type' => $payment->payment_type,
                             'cash_in_bank' => $payment->cash_in_bank,
                             'payment_details' => $paymentDetails,
-                            'payment_total' => $paymentTotal
+                            'payment_total' => $paymentTotal,
                         ];
 
                         $customerData['customer_total'] += $paymentTotal;
@@ -3772,7 +3837,7 @@ class GeneratePdfJob
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.overageShortageReport_pdf', $data)
@@ -3786,11 +3851,11 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'OverageShortageReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'OverageShortageReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         $this->updateProgress(100, 'Report Ready!');
     }
@@ -3831,7 +3896,7 @@ class GeneratePdfJob
             &$lastProgress
         ) {
             $grouped = $ledgerChunk->groupBy(function ($item) {
-                return $item->customer_code . '|' . $item->customer_name;
+                return $item->customer_code.'|'.$item->customer_name;
             });
 
             foreach ($grouped as $customerKey => $customerPaymentDetails) {
@@ -3882,7 +3947,7 @@ class GeneratePdfJob
                     foreach ($adjustments as $adjustment) {
                         $reason = $adjustment->adjustment_reason;
                         $amount = $adjustment->amount;
-                        $groupedAdjustments[$reason] = $adjustment->type === 'Positive' ? $amount : '-' . $amount;
+                        $groupedAdjustments[$reason] = $adjustment->type === 'Positive' ? $amount : '-'.$amount;
                     }
 
                     $agingDays = (int) Carbon::parse($paymentDetail->date)->diffInDays(Carbon::now(), false);
@@ -3967,7 +4032,7 @@ class GeneratePdfJob
             &$lastProgress
         ) {
             $grouped = $ledgerChunk->groupBy(function ($item) {
-                return $item->customer_code . '|' . $item->customer_name;
+                return $item->customer_code.'|'.$item->customer_name;
             });
 
             foreach ($grouped as $customerKey => $customerPaymentDetails) {
@@ -4018,7 +4083,7 @@ class GeneratePdfJob
                     foreach ($adjustments as $adjustment) {
                         $reason = $adjustment->adjustment_reason;
                         $amount = $adjustment->amount;
-                        $groupedAdjustments[$reason] = $adjustment->type === 'Positive' ? $amount : '-' . $amount;
+                        $groupedAdjustments[$reason] = $adjustment->type === 'Positive' ? $amount : '-'.$amount;
                     }
 
                     $agingDays = (int) Carbon::parse($paymentDetail->date)->diffInDays(Carbon::now(), false);
@@ -4113,14 +4178,14 @@ class GeneratePdfJob
             &$lastProgress
         ) {
             $chunkGrouped = $chunk->groupBy(function ($item) {
-                return $item->customer_code . '|' . $item->customer_name;
+                return $item->customer_code.'|'.$item->customer_name;
             });
 
             foreach ($chunkGrouped as $customerKey => $customerPaymentDetails) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
                 $customerAmountTotal = 0;
 
-                $existingCustomerIndex = collect($groupedData)->search(fn($c) => $c['customer_code'] === $customerCode);
+                $existingCustomerIndex = collect($groupedData)->search(fn ($c) => $c['customer_code'] === $customerCode);
 
                 if ($existingCustomerIndex !== false) {
                     $customerData = $groupedData[$existingCustomerIndex];
@@ -4129,14 +4194,14 @@ class GeneratePdfJob
                         'customer_code' => $customerCode,
                         'customer_name' => $customerName,
                         'customerAmountTotal' => 0,
-                        'paymentDetails' => []
+                        'paymentDetails' => [],
                     ];
                 }
 
                 foreach ($customerPaymentDetails as $paymentDetail) {
                     $type = $paymentDetail->type;
 
-                    if (!isset($customerData['paymentDetails'][$type])) {
+                    if (! isset($customerData['paymentDetails'][$type])) {
                         $customerData['paymentDetails'][$type] = [];
                     }
 
@@ -4232,14 +4297,14 @@ class GeneratePdfJob
             &$lastProgress
         ) {
             $chunkGrouped = $chunk->groupBy(function ($item) {
-                return $item->customer_code . '|' . $item->customer_name;
+                return $item->customer_code.'|'.$item->customer_name;
             });
 
             foreach ($chunkGrouped as $customerKey => $customerPaymentDetails) {
                 [$customerCode, $customerName] = explode('|', $customerKey);
                 $customerAmountTotal = 0;
 
-                $existingCustomerIndex = collect($groupedData)->search(fn($c) => $c['customer_code'] === $customerCode);
+                $existingCustomerIndex = collect($groupedData)->search(fn ($c) => $c['customer_code'] === $customerCode);
 
                 if ($existingCustomerIndex !== false) {
                     $customerData = $groupedData[$existingCustomerIndex];
@@ -4248,14 +4313,14 @@ class GeneratePdfJob
                         'customer_code' => $customerCode,
                         'customer_name' => $customerName,
                         'customerAmountTotal' => 0,
-                        'paymentDetails' => []
+                        'paymentDetails' => [],
                     ];
                 }
 
                 foreach ($customerPaymentDetails as $paymentDetail) {
                     $type = $paymentDetail->type;
 
-                    if (!isset($customerData['paymentDetails'][$type])) {
+                    if (! isset($customerData['paymentDetails'][$type])) {
                         $customerData['paymentDetails'][$type] = [];
                     }
 
@@ -4266,7 +4331,6 @@ class GeneratePdfJob
                         'date' => $paymentDetail->date,
                         'amount' => $paymentDetail->running_balance,
                     ];
-
 
                     $processedRows++;
                     $progress = intval(($processedRows / $totalRows) * 100);
@@ -4295,7 +4359,7 @@ class GeneratePdfJob
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
-            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId))
+            'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
         $pdf = Pdf::loadView('pdf.Report.statementOfAccountSummary_pdf', $data)
@@ -4309,27 +4373,27 @@ class GeneratePdfJob
 
         $this->updateProgress(99, 'Almost Done...');
 
-        $filename = $this->filename ?? 'StatementOfAccountSummaryReport_' . time() . '_' . Str::random(6) . '.pdf';
+        $filename = $this->filename ?? 'StatementOfAccountSummaryReport_'.time().'_'.Str::random(6).'.pdf';
         Storage::disk('public')->put("temp/{$filename}", $pdf->output());
 
         $prefix = trim(config('app.url'), '/');
-        $publicUrl = $prefix . Storage::url("temp/{$filename}");
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
 
         // Pass an empty array or the relevant data if needed instead of the undefined $excelData
         $this->broadcastData([], $publicUrl);
     }
 
-
-    //HELPER
+    // HELPER
     protected function capitalizeWordsWithHyphens($text)
     {
         // Capitalize normally
         $text = ucwords($text);
+
         // Capitalize after hyphens manually
         return preg_replace_callback(
             '/-([a-z])/',
             function ($matches) {
-                return '-' . strtoupper($matches[1]);
+                return '-'.strtoupper($matches[1]);
             },
             $text,
         );
@@ -4344,14 +4408,14 @@ class GeneratePdfJob
         $words = '';
 
         if ((int) $pesos > 0) {
-            $words .= $this->capitalizeWordsWithHyphens($f->format($pesos)) . ' Peso' . ((int) $pesos > 1 ? 's' : '');
+            $words .= $this->capitalizeWordsWithHyphens($f->format($pesos)).' Peso'.((int) $pesos > 1 ? 's' : '');
         }
 
         if ((int) $centavos > 0) {
             if ($words !== '') {
                 $words .= ' and ';
             }
-            $words .= $this->capitalizeWordsWithHyphens($f->format($centavos)) . ' Centavo' . ((int) $centavos > 1 ? 's' : '');
+            $words .= $this->capitalizeWordsWithHyphens($f->format($centavos)).' Centavo'.((int) $centavos > 1 ? 's' : '');
         }
 
         return $words;

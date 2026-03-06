@@ -560,12 +560,12 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
         let currentRow = 1;
 
         // Top-right information
-        worksheet.getCell("I1").value = `Run Date/Time: ${excelData.runDateTime}`;
-        worksheet.getCell("I2").value = "Note: This document is not valid without complete signatory.";
-        worksheet.getCell("I1").font = { size: 9 };
-        worksheet.getCell("I2").font = { size: 9, color: { argb: "e74c3c" } };
-        worksheet.getCell("I1").alignment = { horizontal: "right" };
-        worksheet.getCell("I2").alignment = { horizontal: "right" };
+        worksheet.getCell("K1").value = `Run Date/Time: ${excelData.runDateTime}`;
+        worksheet.getCell("K2").value = "Note: This document is not valid without complete signatory.";
+        worksheet.getCell("K1").font = { size: 9 };
+        worksheet.getCell("K2").font = { size: 9, color: { argb: "e74c3c" } };
+        worksheet.getCell("K1").alignment = { horizontal: "right" };
+        worksheet.getCell("K2").alignment = { horizontal: "right" };
 
         // Header section
         currentRow = 4;
@@ -591,8 +591,10 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
             "REFERENCE NO",
             "PARTICULAR",
             "ITEMS",
-            "CASH AMOUNT",
-            "AR AMOUNT",
+            "BASE AMOUNT",
+            "VAT AMOUNT",
+            "CASH NET AMOUNT",
+            "AR NET AMOUNT",
         ];
 
         const headerRow = worksheet.getRow(currentRow);
@@ -631,8 +633,10 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
             const itemsText = invoice.items.map(item => `${item.item_name} (${item.item_code})`).join(', ');
             dataRow.getCell(7).value = itemsText;
             
-            dataRow.getCell(8).value = parseFloat(invoice.cash_amount) || 0;
-            dataRow.getCell(9).value = parseFloat(invoice.ar_amount) || 0;
+            dataRow.getCell(8).value = parseFloat(invoice.base_amount) || 0;
+            dataRow.getCell(9).value = parseFloat(invoice.vat_amount) || 0;
+            dataRow.getCell(10).value = parseFloat(invoice.cash_net_amount) || 0;
+            dataRow.getCell(11).value = parseFloat(invoice.ar_net_amount) || 0;
 
             // Format cells
             dataRow.getCell(1).alignment = { horizontal: "center" };
@@ -644,10 +648,10 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
             dataRow.getCell(6).alignment = { horizontal: "left" };
             dataRow.getCell(7).alignment = { horizontal: "left", wrapText: true };
             
-            dataRow.getCell(8).numFmt = "#,##0.00";
-            dataRow.getCell(8).alignment = { horizontal: "right" };
-            dataRow.getCell(9).numFmt = "#,##0.00";
-            dataRow.getCell(9).alignment = { horizontal: "right" };
+            [8, 9, 10, 11].forEach(col => {
+                dataRow.getCell(col).numFmt = "#,##0.00";
+                dataRow.getCell(col).alignment = { horizontal: "right" };
+            });
 
             // Borders
             dataRow.eachCell((cell) => {
@@ -665,13 +669,15 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
         // Grand Total
         const totalRow = worksheet.getRow(currentRow);
         totalRow.getCell(7).value = "Grand Total :";
-        totalRow.getCell(8).value = parseFloat(excelData.grandTotalCash) || 0;
-        totalRow.getCell(9).value = parseFloat(excelData.grandTotalAR) || 0;
+        totalRow.getCell(8).value = parseFloat(excelData.grandTotalBase) || 0;
+        totalRow.getCell(9).value = parseFloat(excelData.grandTotalVat) || 0;
+        totalRow.getCell(10).value = parseFloat(excelData.grandTotalCash) || 0;
+        totalRow.getCell(11).value = parseFloat(excelData.grandTotalAR) || 0;
 
         totalRow.getCell(7).font = { bold: true, size: 12 };
         totalRow.getCell(7).alignment = { horizontal: "right" };
         
-        [8, 9].forEach(col => {
+        [8, 9, 10, 11].forEach(col => {
             totalRow.getCell(col).font = { bold: true, size: 12 };
             totalRow.getCell(col).numFmt = "#,##0.00";
             totalRow.getCell(col).alignment = { horizontal: "right" };
@@ -801,8 +807,10 @@ const generateInvoiceSummaryExcelFile = async (excelData) => {
             { width: 15 }, // Ref No
             { width: 25 }, // Particular
             { width: 40 }, // Items
-            { width: 15 }, // Cash
-            { width: 15 }, // AR
+            { width: 15 }, // Base
+            { width: 15 }, // VAT
+            { width: 18 }, // Cash Net
+            { width: 18 }, // AR Net
         ];
 
         // Generate filename
