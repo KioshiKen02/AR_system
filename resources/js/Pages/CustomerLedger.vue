@@ -488,7 +488,11 @@
                         class="hover:bg-[var(--color-primary)]/20 transition-colors duration-150 group h-10"
                     >
                         <td class="px-3 py-1 font-medium">
-                            {{ customerledger.invoice_number }}
+                            <div class="flex flex-col leading-tight">
+                                <span>{{ customerledger.invoice_number }}</span>
+                                <span class="text-[10px] text-[var(--color-text-secondary)]">
+                                </span>
+                            </div>
                         </td>
                         <td class="px-3 py-1">
                             {{ formatDate(customerledger.date) }}

@@ -209,14 +209,18 @@ watch(
                 const summary = detailResponse.data.summary || {};
                 form.pos_adjustment = formatCurrency(summary.pos_adjustment || 0);
                 form.neg_adjustment = formatCurrency(summary.neg_adjustment || 0);
-                if (form.type === 'BG' || form.type === 'Beginning Balance') {
-                    form.amount_paid = formatCurrency(summary.payments_total || 0);
-                } else {
-                    form.amount_paid = formatCurrency(props.selected.amount_paid || 0);
-                }
-                form.amount = formatCurrency(summary.beginning_amount ?? parseFloat(props.selected.amount || 0));
+                // Always trust backend summary to avoid mixing by reused reference numbers
+                form.amount_paid = formatCurrency(summary.payments_total || 0);
+                form.amount = formatCurrency(
+                    summary.beginning_amount ?? 0
+                );
                 form.adjusted_amount = formatCurrency(summary.adjusted_amount ?? 0);
                 form.running_balance = formatCurrency(summary.running_balance ?? 0);
+            // Sync ledger components to match transaction math
+            form.overage = formatCurrency(summary.overage || 0);
+            form.shrinkage = formatCurrency(summary.shrinkage || 0);
+            form.return = formatCurrency(summary.return_amount || 0);
+            form.wht_amount = formatCurrency(summary.wht_amount || 0);
 
                 const response = await axios.get(
                     route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),

@@ -140,12 +140,8 @@ class CustomerLedgerController extends Controller
 
                 $grossDebit = $amount - $shrinkage + $overage - $return;
 
-                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
-                    // For BG, amount is treated as Net.
-                    $netDebit = $grossDebit;
-                } else {
-                    $netDebit = $grossDebit + $adjustedAmount;
-                }
+                // Always include adjustments (positive/negative) in net debit
+                $netDebit = $grossDebit + $adjustedAmount;
 
                 $credit = $val($record->amount_paid);
 
@@ -220,12 +216,8 @@ class CustomerLedgerController extends Controller
 
                 $grossDebit = $amount - $shrinkage + $overage - $return;
 
-                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
-                    // For BG, amount is treated as Net.
-                    $netDebit = $grossDebit;
-                } else {
-                    $netDebit = $grossDebit + $adjustedAmount;
-                }
+                // Always include adjustments (positive/negative) in net debit
+                $netDebit = $grossDebit + $adjustedAmount;
 
                 $credit = $val($record->amount_paid) + $floatingAmount;
                 $record->amount_paid = $credit;
@@ -287,12 +279,8 @@ class CustomerLedgerController extends Controller
 
                 $grossDebit = $amount - $shrinkage + $overage - $return;
 
-                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
-                    // For BG, amount is treated as Net.
-                    $netDebit = $grossDebit;
-                } else {
-                    $netDebit = $grossDebit + $adjustedAmount;
-                }
+                // Always include adjustments (positive/negative) in net debit
+                $netDebit = $grossDebit + $adjustedAmount;
 
                 $credit = $val($record->amount_paid);
 
@@ -434,10 +422,17 @@ class CustomerLedgerController extends Controller
         }
 
         // 3. Get Payments
-        $payments = PaymentDetails::where('document_no', $invoiceNo)
-            // ->where('type', $type) // Sometimes type might mismatch slightly (e.g. BG vs Beginning Balance), usually document_no is unique enough or handle strictly
-            ->orderBy('payment_date', 'asc')
-            ->get();
+        $paymentsQuery = PaymentDetails::where('document_no', $invoiceNo)
+            ->orderBy('payment_date', 'asc');
+
+        // Enforce strict type matching while allowing common synonyms for Beginning Balance
+        if (in_array($type, ['BG', 'Beginning Balance'], true)) {
+            $paymentsQuery->whereIn('type', ['BG', 'Beginning Balance']);
+        } else {
+            $paymentsQuery->where('type', $type);
+        }
+
+        $payments = $paymentsQuery->get();
 
         foreach ($payments as $payment) {
             $amountPaid = $payment->amount_paid;
@@ -455,10 +450,14 @@ class CustomerLedgerController extends Controller
             ];
         }
         
-        $ledgerRow = CustomerLedger::where('invoice_number', $invoiceNo)
-            ->whereIn('type', ['BG', 'Beginning Balance', $type])
-            ->orderByDesc('id')
-            ->first();
+        // Fetch the matching ledger row for contextual fields (overage/shrinkage/return/wht)
+        $ledgerRowQuery = CustomerLedger::where('invoice_number', $invoiceNo);
+        if (in_array($type, ['BG', 'Beginning Balance'], true)) {
+            $ledgerRowQuery->whereIn('type', ['BG', 'Beginning Balance']);
+        } else {
+            $ledgerRowQuery->where('type', $type);
+        }
+        $ledgerRow = $ledgerRowQuery->orderByDesc('id')->first();
         $overage = $ledgerRow->overage ?? 0.00;
         $shrinkage = $ledgerRow->shrinkage ?? 0.00;
         $returnAmt = $ledgerRow->return ?? 0.00;
@@ -478,7 +477,8 @@ class CustomerLedgerController extends Controller
             $beginningAmountDisplay = $baseAmount;
         }
         $adjustedAmountVal = $baseAmount - $overage - $shrinkage - $returnAmt - $whtAmt + $posAdjSum - $negAdjSum;
-        $finalRunningBalance = $adjustedAmountVal - (($type === 'Beginning Balance' || $type === 'BG') ? $paymentsSum : ($ledgerRow->amount_paid ?? 0.00));
+        // Use the payments we computed above for the selected type to keep consistent with transaction history
+        $finalRunningBalance = $adjustedAmountVal - $paymentsSum;
         
         // Sort transactions by date if needed, but they are usually added in chronological order of processing logic
         // If strict date sorting is needed, we can collect all and sort.
@@ -492,6 +492,10 @@ class CustomerLedgerController extends Controller
                 'beginning_amount' => $beginningAmountDisplay,
                 'adjusted_amount' => $adjustedAmountVal,
                 'running_balance' => $finalRunningBalance,
+                'overage' => $overage,
+                'shrinkage' => $shrinkage,
+                'return_amount' => $returnAmt,
+                'wht_amount' => $whtAmt,
             ],
         ]);
     }
