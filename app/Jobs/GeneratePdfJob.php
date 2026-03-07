@@ -10,6 +10,7 @@ use App\Models\TransactionModels\Invoice;
 use App\Models\TransactionModels\InvoiceItem;
 use App\Models\TransactionModels\Payment;
 use App\Models\TransactionModels\PaymentDetails;
+use App\Services\SignatoryService;
 use App\Services\ReportIndicatorService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -1104,6 +1105,10 @@ class GeneratePdfJob
 
             $this->updateProgress(98, 'Generating Report...');
 
+            $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+            $notedBy = \App\Services\SignatoryService::getNotedBy($tenantDatabase);
+            $hidePreparedChecked = \App\Services\SignatoryService::shouldHidePreparedChecked($tenantDatabase);
+
             $data = [
                 'grandTotal' => $grandTotal,
                 'dateRange' => "$formattedStartDate to $formattedEndDate",
@@ -1111,6 +1116,8 @@ class GeneratePdfJob
                 'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
                 'groupedData' => $groupedData,
                 'preparedBy' => $this->preparedBy,
+                'notedBy' => $notedBy,
+                'hidePreparedChecked' => $hidePreparedChecked,
                 'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             ];
 
@@ -1185,12 +1192,18 @@ class GeneratePdfJob
 
             $this->updateProgress(98, 'Generating Report...');
 
+            $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+            $notedBy = \App\Services\SignatoryService::getNotedBy($tenantDatabase);
+            $hidePreparedChecked = \App\Services\SignatoryService::shouldHidePreparedChecked($tenantDatabase);
+
             $data = [
                 'dateRange' => "$formattedStartDate to $formattedEndDate",
                 'currency' => 'PHP',
                 'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
                 'payments' => $formattedPayments,
                 'preparedBy' => $this->preparedBy,
+                'notedBy' => $notedBy,
+                'hidePreparedChecked' => $hidePreparedChecked,
                 'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             ];
 
@@ -4117,22 +4130,45 @@ class GeneratePdfJob
             }
         });
 
-        $this->updateProgress(99, 'Preparing Excel Data...');
+        $this->updateProgress(98, 'Generating Report...');
 
-        $excelData = [
-            'reportType' => 'statementofaccountreport',
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $hidePreparedChecked = \App\Services\SignatoryService::shouldHidePreparedChecked($tenantDatabase);
+
+        $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'statement_date' => $formattedStatementDate,
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
+            'hidePreparedChecked' => $hidePreparedChecked,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
-            'soatype' => $this->validatedData['soatype'] ?? 'SOA',
             'runDateTime' => now()->format('m/d/Y h:i:s A'),
         ];
 
-        $this->updateProgress(100, 'Data Ready for Excel Generation!');
+        $soaType = $this->validatedData['soatype'] ?? 'SOA';
+        $viewName = $soaType === 'SOA' ? 'pdf.Report.statementOfAccount_pdf' : 'pdf.Report.statementOfAccountDFC_pdf';
 
-        return $excelData;
+        $pdf = Pdf::loadView($viewName, $data)
+            ->setPaper('A4', 'portrait')
+            ->setOptions([
+                'margin_top' => 10,
+                'margin_right' => 10,
+                'margin_bottom' => 10,
+                'margin_left' => 10,
+            ]);
+
+        $this->updateProgress(99, 'Almost Done...');
+
+        $soafilename = $soaType === 'SOA' ? 'StatementOfAccount' : 'StatementOfAccountDFC';
+        $filename = $this->filename ?? $soafilename.'Report_'.time().'_'.Str::random(6).'.pdf';
+        Storage::disk('public')->put("temp/{$filename}", $pdf->output());
+
+        $prefix = trim(config('app.url'), '/');
+        $publicUrl = $prefix.Storage::url("temp/{$filename}");
+
+        $this->updateProgress(100, 'Report Ready!');
     }
 
     public function generateStatementOfAccountSummaryReportDataForExcel()

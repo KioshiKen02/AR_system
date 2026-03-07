@@ -529,4 +529,5 @@ const handleSOA = (type) => {
     showStatementOfAccount.value = true;
     SOAType.value = type;
 };
+
 </script>
