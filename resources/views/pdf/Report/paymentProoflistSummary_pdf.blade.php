@@ -350,45 +350,39 @@
     </div>
     <table class="signatory-table">
         <tr>
-            @if (!($hidePreparedChecked ?? false))
-                <td>
-                    <div class="signatory-label">Prepared By:</div>
-                    <div class="signatory-signature-line">{{ $preparedBy }}</div>
-                    <div class="signatory-caption">(Signature Over Printed Name)</div>
-                    <div class="signatory-field-label">Date:</div>
-                    <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format('m/d/Y') }}</div>
-                    <div class="signatory-field-label">Time:</div>
-                    <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format(' h:i:s A') }}</div>
-                    <div class="signatory-field-label">Designation:</div>
-                    <div class="signatory-field-line"></div>
-                </td>
-                <td>
-                    <div class="signatory-label">Checked By:</div>
-                    <div class="signatory-signature-line"></div>
-                    <div class="signatory-caption">(Signature Over Printed Name)</div>
-                    <div class="signatory-field-label">Date:</div>
-                    <div class="signatory-field-line"></div>
-                    <div class="signatory-field-label">Time:</div>
-                    <div class="signatory-field-line"></div>
-                    <div class="signatory-field-label">Designation:</div>
-                    <div class="signatory-field-line"></div>
-                </td>
-                <td>
-                    <div class="signatory-label">Note By:</div>
-                    <div class="signatory-signature-line">{{ $notedBy ?? '' }}</div>
-                    <div class="signatory-caption">(Signature Over Printed Name)</div>
-                    <div class="signatory-field-label">Date:</div>
-                    <div class="signatory-field-line"></div>
-                    <div class="signatory-field-label">Time:</div>
-                    <div class="signatory-field-line"></div>
-                    <div class="signatory-field-label">Designation:</div>
-                    <div class="signatory-field-line"></div>
-                </td>
-            @else
-                <td colspan="3">
-                    @include('pdf.components.noted_by', ['notedBy' => $notedBy ?? null])
-                </td>
-            @endif
+            <td>
+                <div class="signatory-label">Prepared By:</div>
+                <div class="signatory-signature-line">{{ $preparedBy }}</div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <div class="signatory-field-label">Date:</div>
+                <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format('m/d/Y') }}</div>
+                <div class="signatory-field-label">Time:</div>
+                <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format(' h:i:s A') }}</div>
+                <div class="signatory-field-label">Designation:</div>
+                <div class="signatory-field-line"></div>
+            </td>
+            <td>
+                <div class="signatory-label">Checked By:</div>
+                <div class="signatory-signature-line"></div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <div class="signatory-field-label">Date:</div>
+                <div class="signatory-field-line"></div>
+                <div class="signatory-field-label">Time:</div>
+                <div class="signatory-field-line"></div>
+                <div class="signatory-field-label">Designation:</div>
+                <div class="signatory-field-line"></div>
+            </td>
+            <td>
+                <div class="signatory-label">Note By:</div>
+                <div class="signatory-signature-line">{{ $notedBy ?? '' }}</div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <div class="signatory-field-label">Date:</div>
+                <div class="signatory-field-line"></div>
+                <div class="signatory-field-label">Time:</div>
+                <div class="signatory-field-line"></div>
+                <div class="signatory-field-label">Designation:</div>
+                <div class="signatory-field-line"></div>
+            </td>
         </tr>
     </table>
 

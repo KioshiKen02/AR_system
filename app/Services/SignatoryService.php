@@ -71,7 +71,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'cortes') && str_contains($identifier, 'fertilizer')) {
-            return '';
+            return 'ALEXIO AVENIDO JR.';
         }
 
         if (str_contains($identifier, 'ubay') && str_contains($identifier, 'fertilizer')) {
@@ -110,7 +110,30 @@ class SignatoryService
         if (! $tenantIdentifier) {
             return false;
         }
+
         $identifier = strtolower($tenantIdentifier);
-        return str_contains($identifier, 'ubay') && str_contains($identifier, 'fertilizer');
+
+        // List of tenants (keywords) that should hide Prepared/Checked By
+        // Add new tenant keywords here to enable hiding for them
+        $tenantsToHide = [
+            ['ubay', 'fertilizer'],
+            ['cortes', 'fertilizer'],
+            // ['another', 'tenant'], // Example: Un-comment to enable
+        ];
+
+        foreach ($tenantsToHide as $keywords) {
+            $match = true;
+            foreach ($keywords as $keyword) {
+                if (!str_contains($identifier, $keyword)) {
+                    $match = false;
+                    break;
+                }
+            }
+            if ($match) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

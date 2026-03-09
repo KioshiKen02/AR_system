@@ -391,7 +391,7 @@
                     <div class="signatory-field-line"></div>
                 </td>
                 <td>
-                    <div class="signatory-label">Note By:</div>
+                    <div class="signatory-label">Noted By:</div>
                     <div class="signatory-signature-line">{{ $notedBy ?? '' }}</div>
                     <div class="signatory-caption">(Signature Over Printed Name)</div>
                     <div class="signatory-field-label">Date:</div>
@@ -403,7 +403,7 @@
                 </td>
             @else
                 <td colspan="3">
-                    @include('pdf.components.noted_by', ['notedBy' => $notedBy ?? null])
+                    @include('pdf.components.reviewed_by', ['reviewedBy' => $notedBy ?? null])
                 </td>
             @endif
         </tr>
