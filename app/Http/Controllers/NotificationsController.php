@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\NotificationEvent;
-use App\Models\MasterfileModels\User;
+use App\Models\MasterfileModels\TenantUser as User;
 use App\Models\Notifications;
 use App\Models\TransactionModels\PaymentDetails;
 use Carbon\Carbon;

@@ -307,34 +307,23 @@
                                                 ]" :message="form.errors.check_type
                                                     " placeholder="Click to Select" />
 
-                                                <DropdownInput v-if="
-                                                    form.payment_type ===
-                                                    '5D - Check'
-                                                " label="Aging Basis" v-model="form.aging_basis" :options="[
-                                                    'Receipt Date',
-                                                    'SI Date',
-                                                ]" :message="form.errors.aging_basis
-                                                    " placeholder="Click to Select" />
+                                                <DropdownInput 
+                                                    v-if="form.payment_type === '5D - Check' && form.check_type !== 'Dated Check'" 
+                                                    label="Aging Basis" 
+                                                    v-model="form.aging_basis" 
+                                                    :options="['Receipt Date', 'SI Date']" 
+                                                    :message="form.errors.aging_basis" 
+                                                    placeholder="Click to Select" 
+                                                />
 
-                                                <TextInput v-if="
-                                                    form.payment_type ===
-                                                    '5D - Check'
-                                                " label="Aging Days" v-model="form.aging_days" type="number" :message="form.errors.aging_days
-                                                    " :readonly="!form.aging_basis ||
-                                                        (form.aging_basis ===
-                                                            'Receipt Date' &&
-                                                            !form.receipt_date) ||
-                                                        (form.aging_basis ===
-                                                            'SI Date' &&
-                                                            !form.document_date)
-                                                        " :modified-placeholder="form.aging_basis ===
-                                                            'Receipt Date'
-                                                            ? 'Receipt Date Required'
-                                                            : form.aging_basis ===
-                                                                'SI Date'
-                                                                ? 'Document Number Required'
-                                                                : 'Aging Basis Required'
-                                                            " />
+                                                <TextInput v-if="form.payment_type === '5D - Check' && form.check_type !== 'Dated Check'" 
+                                                    label="Aging Days" 
+                                                    v-model="form.aging_days" 
+                                                    type="number" 
+                                                    :message="form.errors.aging_days" 
+                                                    :readonly="!form.aging_basis || (form.aging_basis === 'Receipt Date' && !form.receipt_date) || (form.aging_basis === 'SI Date' && !form.document_date)" 
+                                                    :modified-placeholder="form.aging_basis === 'Receipt Date' ? 'Receipt Date Required' : form.aging_basis === 'SI Date' ? 'Document Number Required' : 'Aging Basis Required'" 
+                                                />
 
                                                 <div v-if="
                                                     form.payment_type ===
@@ -379,7 +368,7 @@
                                                 <div v-if="
                                                     form.payment_type ===
                                                     '5D - Check' &&
-                                                    form.aging_days
+                                                    (form.check_type === 'Dated Check' || form.aging_days)
                                                 " class="w-full grid grid-cols-3 gap-x-[16px]">
                                                     <TextInput label="Account Name & Address" v-model="form.acc_name_address
                                                         " type="textarea" :message="form.errors
@@ -989,6 +978,29 @@ watch(
     }
 );
 
+watch(
+    () => form.check_type,
+    (newValue) => {
+        if (newValue === "Dated Check") {
+            form.aging_basis = "";
+            form.aging_days = "";
+            form.errors.aging_basis = "";
+            form.errors.aging_days = "";
+            
+            // Set due_date to receipt_date for Dated Check
+            if (form.receipt_date) {
+                const date = new Date(form.receipt_date);
+                if (!isNaN(date.getTime())) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, "0");
+                    const day = String(date.getDate()).padStart(2, "0");
+                    form.due_date = `${year}-${month}-${day}`;
+                }
+            }
+        }
+    }
+);
+
 const handleODConfirm = async (confirmed) => {
     if (showODDialog.value) {
         showODDialog.value = false;
@@ -1118,6 +1130,19 @@ watch(
     (newDate, oldDate) => {
         if (newDate && newDate !== oldDate) {
             form.aging_days = "";
+            
+            // If Check Type is Dated Check, update Due Date
+            if (form.check_type === "Dated Check") {
+                const date = new Date(newDate);
+                if (!isNaN(date.getTime())) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, "0");
+                    const day = String(date.getDate()).padStart(2, "0");
+                    form.due_date = `${year}-${month}-${day}`;
+                } else {
+                    form.due_date = "";
+                }
+            }
         }
     }
 );
@@ -1230,6 +1255,11 @@ const submit = () => {
         _check_confirmation: check_confirmation.value,
         _cl_type: ledgerType.value,
     };
+
+    if (form.payment_type === '5D - Check' && form.check_type === 'Dated Check') {
+        delete submissionData.aging_basis;
+        delete submissionData.aging_days;
+    }
 
     if (!form.document_no === "Oldest to Newest Applied") {
         if (floatingAmount.value) {
