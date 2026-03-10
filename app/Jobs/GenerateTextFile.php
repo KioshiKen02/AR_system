@@ -189,11 +189,14 @@ class GenerateTextFile
                     mkdir($directory, 0777, true);
                 }
 
-                $content = stream_get_contents($stream);
-                file_put_contents($destination, $content);
-
-                // Log the exact path we wrote to
-                Log::info("Textfile generated (via file_put_contents) at: " . $destination);
+                $destStream = fopen($destination, 'w');
+                if ($destStream) {
+                    stream_copy_to_stream($stream, $destStream);
+                    fclose($destStream);
+                    Log::info("Textfile generated (via stream_copy_to_stream) at: " . $destination);
+                } else {
+                    Log::error("Failed to open destination stream: " . $destination);
+                }
                 
                 // Reset stream for local save if needed (though local save is commented out)
                 rewind($stream);
@@ -347,11 +350,14 @@ class GenerateTextFile
                     mkdir($directory, 0777, true);
                 }
 
-                $content = stream_get_contents($stream);
-                file_put_contents($destination, $content);
-
-                // Log the exact path we wrote to
-                Log::info("Textfile generated (via file_put_contents) at: " . $destination);
+                $destStream = fopen($destination, 'w');
+                if ($destStream) {
+                    stream_copy_to_stream($stream, $destStream);
+                    fclose($destStream);
+                    Log::info("Textfile generated (via stream_copy_to_stream) at: " . $destination);
+                } else {
+                    Log::error("Failed to open destination stream: " . $destination);
+                }
                 
                 // Reset stream for local save if needed (though local save is commented out)
                 rewind($stream);
@@ -558,11 +564,14 @@ class GenerateTextFile
                     mkdir($directory, 0777, true);
                 }
 
-                $content = stream_get_contents($stream);
-                file_put_contents($destination, $content);
-
-                // Log the exact path we wrote to
-                Log::info("Textfile generated (via file_put_contents) at: " . $destination);
+                $destStream = fopen($destination, 'w');
+                if ($destStream) {
+                    stream_copy_to_stream($stream, $destStream);
+                    fclose($destStream);
+                    Log::info("Textfile generated (via stream_copy_to_stream) at: " . $destination);
+                } else {
+                    Log::error("Failed to open destination stream: " . $destination);
+                }
                 
                 // Reset stream for local save if needed (though local save is commented out)
                 rewind($stream);
@@ -1116,11 +1125,6 @@ class GenerateTextFile
 
         return implode(',', $headerLine) . "\n" . implode(',', $detailLine) . "\n";
     }
-
-
-
-
-
 
 
     protected function configureTenantEnvironment()

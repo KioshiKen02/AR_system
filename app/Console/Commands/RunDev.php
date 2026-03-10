@@ -38,16 +38,16 @@ class RunDev extends Command
         $npmDevProcess = Process::fromShellCommandline("npm run dev -- --host $host");
         $npmDevProcess->start();
 
-        $this->info('Starting Reverb server...');
-        $reverbProcess = Process::fromShellCommandline("php artisan reverb:start --host=$host --port=8081");
-        $reverbProcess->start();
+        // $this->info('Starting Reverb server...');
+        // $reverbProcess = Process::fromShellCommandline("php artisan reverb:start --host=$host --port=8081");
+        // $reverbProcess->start();
 
-        $this->info('Starting queue listener...');
-        // $queueProcess = Process::fromShellCommandline("php artisan queue:listen");
-        $queueProcess = Process::fromShellCommandline("php artisan queue:work --queue=default --tries=3 --timeout=0");
-        $queueProcess->start();
+        // $this->info('Starting queue listener...');
+        // // $queueProcess = Process::fromShellCommandline("php artisan queue:listen");
+        // $queueProcess = Process::fromShellCommandline("php artisan queue:work --queue=default --tries=3 --timeout=0");
+        // $queueProcess->start();
 
-        $processes = [$laravelProcess, $npmDevProcess, $reverbProcess, $queueProcess];
+        $processes = [$laravelProcess, $npmDevProcess];
 
         while (array_filter($processes, fn($p) => $p->isRunning())) {
             foreach ($processes as $process) {
