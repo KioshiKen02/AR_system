@@ -76,57 +76,61 @@
         }
 
         .col-trans-no {
-            width: 8%;
+            width: 10%;
             text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
         }
 
         .col-date {
-            width: 8%;
+            width: 14%;
             text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
         }
 
         .col-name {
-            width: 25%;
+            width: 20%;
             text-align: left;
         }
 
         .col-ref {
-            width: 10%;
+            width: 8%;
             text-align: left;
         }
 
         .col-item {
-            width: 15%;
+            width: 24%;
             text-align: left;
         }
 
         .col-vat {
-            width: 15%;
+            width: 12%;
             text-align: right;
         }
 
         .col-vat-h {
-            width: 15%;
+            width: 9%;
             text-align: center;
         }
 
         .col-base {
-            width: 15%;
+            width: 12%;
             text-align: right;
         }
 
         .col-base-h {
-            width: 15%;
+            width: 9%;
             text-align: center;
         }
 
         .col-ar {
-            width: 15%;
+            width: 12%;
             text-align: right;
         }
 
         .col-ar-h {
-            width: 15%;
+            width: 9%;
             text-align: center;
         }
 
