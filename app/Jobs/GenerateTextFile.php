@@ -29,12 +29,28 @@ class GenerateTextFile
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    protected $tenantConfig;
+
     public function __construct(
         protected array $validatedData,
         protected string $userId,
         protected string $channel,
         protected ?int $appSettingId = null,
-    ) {}
+    ) {
+        // Initialize TenantConfigService
+        $user = User::find($this->userId);
+        $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
+        
+        // If appSettingId is provided, override the appName
+        if ($this->appSettingId) {
+            $appSetting = \App\Models\AppSetting::find($this->appSettingId);
+            if ($appSetting) {
+                $appName = $appSetting->app_name;
+            }
+        }
+        
+        $this->tenantConfig = new \App\Services\TenantConfigService($appName);
+    }
 
     public function handle()
     {
@@ -607,6 +623,12 @@ class GenerateTextFile
     protected function generateOtherIncomeLine($invoice, &$auto_increment, $customerCusNavCode, $customerCusNavCodeDescription, $bankCode, $itemName, $itemCode)
     {
         $formattedDate = $this->formatDate($invoice->receipt_date);
+        
+        $prefix = $this->tenantConfig->getPrefix();
+        $companyCode = $this->tenantConfig->getCompanyCode();
+        $deptCode = $this->tenantConfig->getDeptCode();
+        $journalCode = $this->tenantConfig->getJournalCode();
+        
         $headerLine = [
             'SALES',
             'OCASHSALES',
@@ -615,18 +637,18 @@ class GenerateTextFile
             $customerCusNavCode === '' ? $invoice->customer_code : $customerCusNavCode,
             $formattedDate,
             'Invoice',
-            'BBCI' . $invoice->invoice_no,
+            $prefix . 'CI' . $invoice->invoice_no,
             $customerCusNavCodeDescription,
             'PHP',
             $invoice->total_amount,
             $invoice->total_amount,
-            ' ',
+            '',
             $invoice->total_amount,
             $invoice->total_amount,
             '1',
-            '3',
-            '03.01.2.02.2',
-            'SALESJNL',
+            $companyCode,
+            $deptCode,
+            $journalCode,
             $invoice->total_amount,
             ($invoice->total_amount * -1),
             $formattedDate,
@@ -645,34 +667,40 @@ class GenerateTextFile
             $itemCode,
             $formattedDate,
             'Invoice',
-            'BBCI' . $invoice->invoice_no,
+            $prefix . 'CI' . $invoice->invoice_no,
             $invoice->type . $itemName,
             'PHP',
             ($invoice->total_amount * -1),
-            ' ',
+            '',
             $invoice->total_amount,
             ($invoice->total_amount * -1),
             ($invoice->total_amount * -1),
             '1',
-            '3',
-            '03.01.2.02.2',
-            'SALESJNL',
+            $companyCode,
+            $deptCode,
+            $journalCode,
             ($invoice->total_amount * -1),
             $invoice->total_amount,
             $formattedDate,
             'CASH SALES',
-            ' ',
-            ' ',
+            '',
+            '',
             ($invoice->total_amount * -1),
             $invoice->total_amount,
         ];
 
-        return implode(',', $headerLine) . "\n" . implode(',', $detailLine) . "\n";
+        return $this->formatLines($headerLine, $detailLine);
     }
 
     protected function generateCreditAdjustmentLine($adjustment, &$auto_increment, $adjustmentAccCode, $customerCusPosting)
     {
         $formattedDate = $this->formatDate($adjustment->receipt_date);
+        
+        $prefix = $this->tenantConfig->getPrefix();
+        $companyCode = $this->tenantConfig->getCompanyCode();
+        $deptCode = $this->tenantConfig->getDeptCode();
+        $journalCode = $this->tenantConfig->getJournalCode();
+
         $headerLine = [
             'SALES',
             'ADJSALES',
@@ -681,29 +709,29 @@ class GenerateTextFile
             $adjustmentAccCode,
             $formattedDate,
             'Credit Memo',
-            'BBARCM' . $adjustment->adjustment_no,
+            $prefix . 'ARCM' . $adjustment->adjustment_no,
             $adjustment->adjustment_reason,
             'PHP',
             $adjustment->amount,
-            ' ',
+            '',
             $adjustment->amount,
             $adjustment->amount,
             $adjustment->amount,
             '1',
-            ' ',
-            ' ',
-            '3',
-            '03.01.2.02.2',
-            'SALESJNL',
-            ' ',
-            ' ',
-            ' ',
+            '',
+            '',
+            $companyCode,
+            $deptCode,
+            $journalCode,
+            '',
+            '',
+            '',
             $adjustment->amount,
             ($adjustment->amount * -1),
             $formattedDate,
-            $adjustment->apply_to == 'Sales Invoice' ? 'BBSI#' . $adjustment->invoice_no . '/' . $adjustment->particulars : 'BBCI#' . $adjustment->invoice_no . '/' . $adjustment->particulars,
-            ' ',
-            ' ',
+            $adjustment->apply_to == 'Sales Invoice' ? $prefix . 'SI#' . $adjustment->invoice_no . '/' . $adjustment->particulars : $prefix . 'CI#' . $adjustment->invoice_no . '/' . $adjustment->particulars,
+            '',
+            '',
             $adjustment->amount,
             ($adjustment->amount * -1)
         ];
@@ -716,39 +744,45 @@ class GenerateTextFile
             $adjustment->customer_code,
             $formattedDate,
             'Credit Memo',
-            'BBARCM' . $adjustment->adjustment_no,
+            $prefix . 'ARCM' . $adjustment->adjustment_no,
             $adjustment->name,
             'PHP',
             ($adjustment->amount * -1),
             $adjustment->amount,
-            ' ',
+            '',
             ($adjustment->amount * -1),
             ($adjustment->amount * -1),
             '1',
             $adjustment->customer_code,
             $customerCusPosting,
-            '3',
-            '03.01.2.02.2',
-            'SALESJNL',
+            $companyCode,
+            $deptCode,
+            $journalCode,
             'Invoice',
-            $adjustment->apply_to == 'Sales Invoice' ? 'BBSI' . $adjustment->invoice_no : 'BBCI' . $adjustment->invoice_no,
+            $adjustment->apply_to == 'Sales Invoice' ? $prefix . 'SI' . $adjustment->invoice_no : $prefix . 'CI' . $adjustment->invoice_no,
             $formattedDate,
             ($adjustment->amount * -1),
             $adjustment->amount,
             $formattedDate,
-            $adjustment->apply_to == 'Sales Invoice' ? 'BBSI#' . $adjustment->invoice_no . '/' . $adjustment->particulars : 'BBCI#' . $adjustment->invoice_no . '/' . $adjustment->particulars,
+            $adjustment->apply_to == 'Sales Invoice' ? $prefix . 'SI#' . $adjustment->invoice_no . '/' . $adjustment->particulars : $prefix . 'CI#' . $adjustment->invoice_no . '/' . $adjustment->particulars,
             'Customer',
-            ' ',
+            '',
             ($adjustment->amount * -1),
             $adjustment->amount
         ];
 
-        return implode(',', $headerLine) . "\n" . implode(',', $detailLine) . "\n";
+        return $this->formatLines($headerLine, $detailLine);
     }
 
     protected function generateDebitAdjustmentLine($adjustment, &$auto_increment, $adjustmentAccCode, $customerCusPosting)
     {
         $formattedDate = $this->formatDate($adjustment->receipt_date);
+        
+        $prefix = $this->tenantConfig->getPrefix();
+        $companyCode = $this->tenantConfig->getCompanyCode();
+        $deptCode = $this->tenantConfig->getDeptCode();
+        $journalCode = $this->tenantConfig->getJournalCode();
+
         $headerLine = [
             'SALES',
             'ADJSALES',
@@ -757,27 +791,27 @@ class GenerateTextFile
             $adjustment->customer_code,
             $formattedDate,
             'Invoice',
-            'BBARCM' . $adjustment->adjustment_no,
+            $prefix . 'ARCM' . $adjustment->adjustment_no,
             $adjustment->name,
             'PHP',
             $adjustment->amount,
             $adjustment->amount,
-            ' ',
+            '',
             $adjustment->amount,
             $adjustment->amount,
             '1',
             $adjustment->customer_code,
             $customerCusPosting,
-            '3',
-            '03.01.2.02.2',
-            'SALESJNL',
-            ' ',
-            ' ',
+            $companyCode,
+            $deptCode,
+            $journalCode,
+            '',
+            '',
             $formattedDate,
             $adjustment->amount,
             ($adjustment->amount * -1),
             $formattedDate,
-            $adjustment->apply_to == 'Sales Invoice' ? 'BBSI#' . $adjustment->invoice_no . '/' . $adjustment->particulars : 'BBCI#' . $adjustment->invoice_no . '/' . $adjustment->particulars,
+            $adjustment->apply_to == 'Sales Invoice' ? $prefix . 'SI#' . $adjustment->invoice_no . '/' . $adjustment->particulars : $prefix . 'CI#' . $adjustment->invoice_no . '/' . $adjustment->particulars,
             'Customer',
             $adjustment->customer_code,
             $adjustment->amount,
@@ -792,68 +826,74 @@ class GenerateTextFile
             $adjustmentAccCode,
             $formattedDate,
             'Invoice',
-            'BBARCM' . $adjustment->adjustment_no,
+            $prefix . 'ARCM' . $adjustment->adjustment_no,
             $adjustment->adjustment_reason,
             'PHP',
             ($adjustment->amount * -1),
-            ' ',
+            '',
             $adjustment->amount,
             ($adjustment->amount * -1),
             ($adjustment->amount * -1),
             '1',
-            ' ',
-            ' ',
-            '3',
-            '03.01.2.02.2',
-            'SALESJNL',
-            ' ',
-            ' ',
-            ' ',
+            '',
+            '',
+            $companyCode,
+            $deptCode,
+            $journalCode,
+            '',
+            '',
+            '',
             ($adjustment->amount * -1),
             $adjustment->amount,
             $formattedDate,
-            $adjustment->apply_to == 'Sales Invoice' ? 'BBSI#' . $adjustment->invoice_no . '/' . $adjustment->particulars : 'BBCI#' . $adjustment->invoice_no . '/' . $adjustment->particulars,
-            ' ',
-            ' ',
+            $adjustment->apply_to == 'Sales Invoice' ? $prefix . 'SI#' . $adjustment->invoice_no . '/' . $adjustment->particulars : $prefix . 'CI#' . $adjustment->invoice_no . '/' . $adjustment->particulars,
+            '',
+            '',
             ($adjustment->amount * -1),
             $adjustment->amount
         ];
 
-        return implode(',', $headerLine) . "\n" . implode(',', $detailLine) . "\n";
+        return $this->formatLines($headerLine, $detailLine);
     }
 
     protected function generateCashPaymentLine(&$auto_increment, $bankCode, $detail, $bankName, $customerNavCode)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
+        
+        $prefix = $this->tenantConfig->getPrefix();
+        $companyCode = $this->tenantConfig->getCompanyCode();
+        $deptCode = $this->tenantConfig->getDeptCode();
+       
+        
         $headerLine = [
             'CASH RECEI',
-            'BBCOLL',
+            $prefix . 'COLL',
             ($auto_increment += 10000),
             'Bank Account',
             $bankCode,
             $formattedDate,
             'Payment',
-            'BBPY' . $detail->payment_no,
+            $prefix . 'PY' . $detail->payment_no,
             $bankName,
             'PHP',
             $detail->amount_paid,
             $detail->amount_paid,
-            ' ',
+            '',
             $detail->amount_paid,
             $detail->amount_paid,
             '1',
-            ' ',
-            ' ',
-            '03.00',
-            '03.01.2.02.1',
+            '',
+            '',
+            $companyCode,
+            $deptCode,
             'CASHRECJNL',
-            ' ',
-            ' ',
-            ' ',
+            '',
+            '',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1),
             $formattedDate,
-            'BBSI#' . $detail->document_no,
+            $prefix . 'SI#' . $detail->document_no,
             'Bank Account',
             $bankCode,
             $detail->amount_paid,
@@ -862,150 +902,161 @@ class GenerateTextFile
 
         $detailLine = [
             'CASH RECEI',
-            'BBCOLL',
+            $prefix . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $customerNavCode,
             $formattedDate,
             'Payment',
-            'BBPY' . $detail->payment_no,
+            $prefix . 'PY' . $detail->payment_no,
             $detail->customer_name,
             'PHP',
             ($detail->amount_paid * -1),
-            ' ',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1),
             ($detail->amount_paid * -1),
             '1',
             $customerNavCode,
             'INT-TRADE',
-            '3',
-            '03.01.2.02.1',
+            $companyCode,
+            $deptCode,
             'CASHRECJNL',
             'Invoice',
-            'BBSI' . $detail->document_no,
+            $prefix . 'SI' . $detail->document_no,
             $formattedDate,
             ($detail->amount_paid * -1),
             $detail->amount_paid,
             $formattedDate,
-            'BBSI#' . $detail->document_no,
+            $prefix . 'SI#' . $detail->document_no,
             'Customer',
             $bankCode,
             ($detail->amount_paid * -1),
             $detail->amount_paid
         ];
 
-        return implode(',', $headerLine) . "\n" . implode(',', $detailLine) . "\n";
+        return $this->formatLines($headerLine, $detailLine);
     }
 
     protected function generateJournalVoucherLine(&$auto_increment, $detail, $customerNavCode, $customerCusPosting, $customerCode, $customerName, $accCode, $accCodeName)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
+        
+        $prefix = $this->tenantConfig->getPrefix();
+        $companyCode = $this->tenantConfig->getCompanyCode();
+        $deptCode = $this->tenantConfig->getDeptCode();
+        // Assuming JV also uses the same company code logic
+        
         $headerLine = [
             'CASH RECEI',
-            'BBCOLL',
+            $prefix . 'COLL',
             ($auto_increment += 10000),
             'G/L Account',
             $accCode,
             $formattedDate,
             'Payment',
-            'BBPY' . $detail->payment_no,
+            $prefix . 'PY' . $detail->payment_no,
             $accCodeName,
             'PHP',
             $detail->amount_paid,
             $detail->amount_paid,
-            ' ',
+            '',
             $detail->amount_paid,
             $detail->amount_paid,
             '1',
-            ' ',
-            ' ',
-            '3',
-            '03.01.2.02.1',
+            '',
+            '',
+            $companyCode,
+            $deptCode,
             'CASHRECJNL',
-            ' ',
-            ' ',
-            ' ',
+            '',
+            '',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1),
             $formattedDate,
-            'BBSI#' . $detail->document_no,
-            ' ',
-            ' ',
+            $prefix . 'SI#' . $detail->document_no,
+            '',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1)
         ];
 
         $detailLine = [
             'CASH RECEI',
-            'BBCOLL',
+            $prefix . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $customerCode,
             $formattedDate,
             'Payment',
-            'BBPY' . $detail->payment_no,
+            $prefix . 'PY' . $detail->payment_no,
             $customerName,
             'PHP',
             ($detail->amount_paid * -1),
-            ' ',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1),
             ($detail->amount_paid * -1),
             '1',
             $customerNavCode,
             $customerCusPosting,
-            '3',
-            '03.01.2.02.1',
+            $companyCode,
+            $deptCode,
             'CASHRECJNL',
-            ' ',
-            'BBSI' . $detail->document_no,
+            '',
+            $prefix . 'SI' . $detail->document_no,
             $formattedDate,
             ($detail->amount_paid * -1),
             $detail->amount_paid,
             $formattedDate,
-            'BBSI#' . $detail->document_no,
+            $prefix . 'SI#' . $detail->document_no,
             'Customer',
             $customerCode,
             ($detail->amount_paid * -1),
             $detail->amount_paid
         ];
 
-        return implode(',', $headerLine) . "\n" . implode(',', $detailLine) . "\n";
+        return $this->formatLines($headerLine, $detailLine);
     }
 
     protected function generateOnlineDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerNavCode, $customerCusPosting, $customerCode, $customerName, $accCode, $accCodeName)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
+        
+        $prefix = $this->tenantConfig->getPrefix();
+        $companyCode = $this->tenantConfig->getCompanyCode();
+        $deptCode = $this->tenantConfig->getDeptCode();
+
         $headerLine = [
             'CASH RECEI',
-            'BBCOLL',
+            $prefix . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $bankCode,
             $formattedDate,
-            ' ',
-            'BBPY' . $detail->payment_no,
+            '',
+            $prefix . 'PY' . $detail->payment_no,
             $bankName,
             'PHP',
             $detail->amount_paid,
             $detail->amount_paid,
-            ' ',
+            '',
             $detail->amount_paid,
             $detail->amount_paid,
             '1',
             $accCode,
             $customerCusPosting,
-            '3',
-            '03.01.2.02.1',
+            $companyCode,
+            $deptCode,
             'CASHRECJNL',
-            ' ',
-            ' ',
+            '',
+            '',
             $formattedDate,
             $detail->amount_paid,
             ($detail->amount_paid * -1),
             $formattedDate,
-            'BBSI#' . $detail->document_no,
+            $prefix . 'SI#' . $detail->document_no,
             'Customer',
             $accCode,
             $detail->amount_paid,
@@ -1014,118 +1065,128 @@ class GenerateTextFile
 
         $detailLine = [
             'CASH RECEI',
-            'BBCOLL',
+            $prefix . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $customerNavCode,
             $formattedDate,
-            ' ',
-            'BBPY' . $detail->payment_no,
+            '',
+            $prefix . 'PY' . $detail->payment_no,
             $customerName,
             'PHP',
             ($detail->amount_paid * -1),
-            ' ',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1),
             ($detail->amount_paid * -1),
             '1',
             $customerNavCode,
             $customerCusPosting,
-            '3',
-            '03.01.2.02.1',
+            $companyCode,
+            $deptCode,
             'CASHRECJNL',
             'Invoice',
-            'BBSI' . $detail->document_no,
+            $prefix . 'SI' . $detail->document_no,
             $formattedDate,
             ($detail->amount_paid * -1),
             $detail->amount_paid,
             $formattedDate,
-            'BBSI#' . $detail->document_no,
+            $prefix . 'SI#' . $detail->document_no,
             'Customer',
             $customerNavCode,
             ($detail->amount_paid * -1),
             $detail->amount_paid
         ];
 
-        return implode(',', $headerLine) . "\n" . implode(',', $detailLine) . "\n";
+        return $this->formatLines($headerLine, $detailLine);
     }
 
     protected function generateWHTLine(&$auto_increment, $detail, $paymentAccountCode, $paymentAccountCodeDescription, $bankCode, $bankName, $customerNavCode, $customerCusPosting, $customerCode, $customerName, $accCode, $accCodeName)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
+        
+        $prefix = $this->tenantConfig->getPrefix();
+        $companyCode = $this->tenantConfig->getCompanyCode();
+        $deptCode = $this->tenantConfig->getDeptCode();
+        
         $headerLine = [
             'CASH RECEI',
-            'BBCOLL',
+            $prefix . 'COLL',
             ($auto_increment += 10000),
             'G/L Account',
             $paymentAccountCode,
             $formattedDate,
             'Payment',
-            'BBPY' . $detail->payment_no,
+            $prefix . 'PY' . $detail->payment_no,
             $paymentAccountCodeDescription,
             'PHP',
             $detail->amount_paid,
             $detail->amount_paid,
-            ' ',
+            '',
             $detail->amount_paid,
             $detail->amount_paid,
             '1',
-            ' ',
-            ' ',
-            '3',
-            '03.01.2.02.1',
+            '',
+            '',
+            $companyCode,
+            $deptCode,
             'CASHRECJNL',
-            ' ',
-            ' ',
-            ' ',
+            '',
+            '',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1),
             $formattedDate,
-            'BBSI#' . $detail->document_no,
-            ' ',
-            ' ',
+            $prefix . 'SI#' . $detail->document_no,
+            '',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1)
         ];
 
         $detailLine = [
             'CASH RECEI',
-            'BBCOLL',
+            $prefix . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $customerNavCode,
             $formattedDate,
             'Payment',
-            'BBPY' . $detail->payment_no,
+            $prefix . 'PY' . $detail->payment_no,
             $customerName,
             'PHP',
             ($detail->amount_paid * -1),
-            ' ',
+            '',
             $detail->amount_paid,
             ($detail->amount_paid * -1),
             ($detail->amount_paid * -1),
             '1',
-            ' ',
+            '',
             $customerCusPosting,
-            '3',
-            '03.01.2.02.1',
+            $companyCode,
+            $deptCode,
             'CASHRECJNL',
             'Invoice',
-            'BBSI' . $detail->document_no,
+            $prefix . 'SI' . $detail->document_no,
             $formattedDate,
             ($detail->amount_paid * -1),
             $detail->amount_paid,
             $formattedDate,
-            'BBSI#' . $detail->document_no,
+            $prefix . 'SI#' . $detail->document_no,
             'Customer',
-            ' ',
+            '',
             ($detail->amount_paid * -1),
             $detail->amount_paid
         ];
 
-        return implode(',', $headerLine) . "\n" . implode(',', $detailLine) . "\n";
+        return $this->formatLines($headerLine, $detailLine);
     }
 
+
+    protected function formatLines(array $header, array $detail): string
+    {
+        return implode(',', $header) . PHP_EOL . implode(',', $detail) . PHP_EOL;
+    }
 
     protected function configureTenantEnvironment()
     {
@@ -1188,7 +1249,7 @@ class GenerateTextFile
         }
 
         try {
-            return Carbon::createFromFormat('Y-m-d', $dateString)->format('d/m/Y');
+            return Carbon::createFromFormat('Y-m-d', $dateString)->format('m/d/Y');
         } catch (Exception $e) {
             return $dateString; // fallback to original format if parsing fails
         }
