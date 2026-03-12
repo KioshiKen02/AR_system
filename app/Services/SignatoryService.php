@@ -12,6 +12,11 @@ class SignatoryService
      */
     public static function getNotedBy(?string $tenantIdentifier): ?string
     {
+        return self::getReviewedBy($tenantIdentifier);
+    }
+
+    public static function getReviewedBy(?string $tenantIdentifier): ?string
+    {
         if (! $tenantIdentifier) {
             return null;
         }

@@ -143,6 +143,7 @@ class PDFGeneratorController extends Controller
         $data = $request->all();
         $reprintconfirmation = $request->input('_reprint_confirmation', false);
         $personauthored = $request->input('_person_authored', null);
+        $data['tenant'] = $request->route('tenant');
 
         $channel = 'transaction-pdf-generation.' . $request->user()->id;
         $filename = 'PaymentSlip_' . time() . '_' . Str::random(6) . '.pdf';

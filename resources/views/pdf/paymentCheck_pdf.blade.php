@@ -221,6 +221,7 @@
                 <th>S.I / C.I No.</th>
                 <th>S.I / C.I Amount</th>
                 <th>Balance</th>
+                <th>WHT Amount</th>
                 <th>Amount</th>
             </tr>
         </thead>
@@ -231,14 +232,23 @@
                     <td>{{ $doc->document_no }}</td>
                     <td>{{ number_format($doc->amount, 2) }}</td>
                     <td>{{ number_format($doc->balance, 2) }}</td>
+                    <td>{{ number_format($doc->wht_amount, 2) }}</td>
                     <td>{{ number_format($doc->amount_paid, 2) }}</td>
                 </tr>
             @endforeach
         </tbody>
         <tfoot class="tfoot">
             <tr>
-                <td colspan="4" style="text-align: right;">Total Amount >>></td>
+                <td colspan="5" style="text-align: right;">Total Amount >>></td>
                 <td>{{ number_format($data['amount_paid'], 2) }}</td>
+            </tr>
+            <tr>
+                <td colspan="5" style="text-align: right;">Total WHT Amount >>></td>
+                <td>{{ number_format($data['wht_amount'], 2) }}</td>
+            </tr>
+            <tr>
+                <td colspan="5" style="text-align: right;">Total Amount Less WHT >>></td>
+                <td>{{ number_format($data['total_amount_less_wht'], 2) }}</td>
             </tr>
         </tfoot>
     </table>
@@ -261,21 +271,10 @@
                 <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;"></div>
             </td>
             <td>
-                <div>Checked By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 22px; text-align: center;"></div>
-                <div style="text-align: center;">(Signature Over Printed Name)</div>
-                <div>Date:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
+                <div>Review By:</div>
+                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;">
+                    {{ $data['reviewBy'] }}
                 </div>
-                <div>Time:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Designation:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;"></div>
-            </td>
-            <td>
-                <div>Note By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 22px; text-align: center;"></div>
                 <div style="text-align: center;">(Signature Over Printed Name)</div>
                 <div>Date:</div>
                 <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">

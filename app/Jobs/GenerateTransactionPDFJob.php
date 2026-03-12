@@ -8,6 +8,7 @@ use App\Models\ReportModels\ReprintLog;
 use App\Models\TransactionModels\Payment;
 use App\Models\TransactionModels\PaymentDetails;
 use App\Services\ReportIndicatorService;
+use App\Services\SignatoryService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -316,10 +317,21 @@ class GenerateTransactionPDFJob
 
         $this->passedData['payment_type'] = substr($this->passedData['payment_type'], 5);
         $this->passedData['preparedBy'] = $this->preparedBy;
+        $this->passedData['reviewBy'] = SignatoryService::getReviewedBy($this->passedData['tenant'] ?? null);
         $this->passedData['reportName'] = ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId));
 
 
         $this->passedData['paidDocuments'] = PaymentDetails::where('payment_no', $this->passedData['payment_no'])->orderBy('id')->get();
+
+        $totalGross = $this->passedData['paidDocuments']->sum('amount_paid');
+        $totalWht = $this->passedData['paidDocuments']->sum('wht_amount');
+        $totalNet = $totalGross - $totalWht;
+
+        $this->passedData['amount_paid'] = $totalGross;
+        $this->passedData['wht_amount'] = $totalWht;
+        $this->passedData['total_amount_less_wht'] = $totalNet;
+        $this->passedData['amount_in_words'] = $this->amountToWords($totalGross);
+
         if ($this->reprintconfirmation) {
             ReprintLog::create([
                 'document_no' => $this->passedData['payment_no'],
