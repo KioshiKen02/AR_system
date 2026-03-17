@@ -35,6 +35,7 @@
         </Transition>
 
         <ToastAlertWarning :show="showToast" :message="toastMessage" />
+        <ToastAlert :show="showSuccess" :message="successMessage" />
 
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
             enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
@@ -497,6 +498,7 @@ import TextInput from "../../Pages/Components/TextInput.vue";
 import { useForm, usePage } from "@inertiajs/vue3";
 import ManagersKey from "../ManagersKey.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
+import ToastAlert from "../../Pages/Components/ToastAlert.vue";
 import axios from "axios";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import CashPaymentModal from "./CashPaymentModal.vue";
@@ -538,7 +540,8 @@ const form = useForm({
     added_vat: null,
     deducted_vat: null,
     freight: null,
-    net_total: null
+    net_total: null,
+    authorized_by: null,
 });
 
 const rows = ref([
@@ -637,15 +640,20 @@ function openManagerModal(date) {
     showManagerModal.value = true;
 }
 
-function onManagerSuccess() {
+function onManagerSuccess(data) {
     showManagerModal.value = false;
     pendingOldDate.value = null;
+    if (data && data.person_authored) {
+        form.authorized_by = data.person_authored;
+        showSuccessToast(`Backdating authorized by: ${data.person_authored}`);
+    }
 }
 
 function onManagerCancel() {
     form.receipt_date = new Date().toISOString().split("T")[0];
     showManagerModal.value = false;
     pendingOldDate.value = null;
+    form.authorized_by = null;
 }
 
 function onCashPaymentSuccess() {
@@ -705,6 +713,25 @@ const showWarningToast = (message) => {
     toastTimeout = setTimeout(() => {
         showToast.value = false;
         toastTimeout = null;
+    }, 3000);
+};
+
+const showSuccess = ref(false);
+const successMessage = ref("");
+let successTimeout = null;
+
+const showSuccessToast = (message) => {
+    successMessage.value = message;
+    showSuccess.value = false;
+    if (successTimeout) clearTimeout(successTimeout);
+
+    setTimeout(() => {
+        showSuccess.value = true;
+    }, 0);
+
+    successTimeout = setTimeout(() => {
+        showSuccess.value = false;
+        successTimeout = null;
     }, 3000);
 };
 
@@ -1098,10 +1125,20 @@ watch(
             // When receipt date changes
             const selectedDate = new Date(newReceiptDate);
             const today = new Date();
-            const diffDays = daysBetween(selectedDate, today);
+            
+            // Normalize to midnight
+            today.setHours(0, 0, 0, 0);
+            selectedDate.setHours(0, 0, 0, 0);
 
-            if (diffDays > 3) {
+            // Calculate difference in milliseconds (positive = backdate)
+            const diffTime = today.getTime() - selectedDate.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            // Check if backdated by 7 days or more
+            if (diffDays >= 7) {
                 openManagerModal(newReceiptDate);
+            } else {
+                form.authorized_by = null;
             }
         }
     }

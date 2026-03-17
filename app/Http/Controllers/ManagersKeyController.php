@@ -32,24 +32,26 @@ class ManagersKeyController extends Controller
             $permissionUserId = $mainUser->id;
 
             if (config('database.default') === 'tenant') {
-                $tenantUser = TenantUser::on('tenant')
-                    ->where('employee_id', $mainUser->employee_id)
-                    ->orWhere('username', $mainUser->username)
-                    ->first();
+                $tenantUser = TenantUser::on('tenant')->where('employee_id', $mainUser->employee_id)->first();
 
-                if ($tenantUser) {
-                    $permissionUserId = $tenantUser->id;
+                if (! $tenantUser) {
+                    return response()->json([
+                        'authorized' => false,
+                        'message' => 'Manager is not linked to this tenant via employee_id.',
+                    ]);
                 }
+
+                $permissionUserId = $tenantUser->id;
             }
 
-            $hasSuperPermission = Permission::where('user_id', $permissionUserId)
+            $hasSuperPermission = Permission::on('tenant')->where('user_id', $permissionUserId)
                 ->where('role_id', 'MANAGERKEY')
                 ->where('can_insert', 1)
                 ->exists();
 
             if ($hasSuperPermission) {
-                ManagerKeyEntries::create([
-                    'user_id' => $mainUser->id,
+                ManagerKeyEntries::on('tenant')->create([
+                    'user_id' => $permissionUserId,
                     'user_name' => $mainUser->name,
                     'entered_at' => now(),
                 ]);
