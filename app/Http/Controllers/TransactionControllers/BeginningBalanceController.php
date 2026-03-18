@@ -111,7 +111,7 @@ class BeginningBalanceController extends Controller
 
             CustomerLedger::create([
                 'invoice_number' => $validated['beginningbalance_no'],
-                'date' => $validated['transaction_date'],
+                'date' => $validated['receipt_date'],
                 'type' => "BG",
                 'customer_code' => $validated['customer_code'],
                 'customer_name' => $validated['name'],

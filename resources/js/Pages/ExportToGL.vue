@@ -160,7 +160,7 @@
                     class="font-semibold text-lg pb-3 mb-3 border-b border-[var(--color-border)]/30 flex items-center gap-2">
                     <svg-icon type="mdi" :path="mdiInvoiceTextSendOutline"
                         class="w-8 h-8 text-[var(--color-primary)]" />
-                    Export To GL (Nav Feedmill)
+                    Export To GL (Navision)
                 </h3>
                 <div
                     v-if="isGenerating || generationStatus"
@@ -366,6 +366,25 @@ import usePermissions from "./Composables/usePermissions";
 
 const { canUpdate } = usePermissions();
 
+const triggerDownload = (url) => {
+    if (!url) return;
+    const link = document.createElement("a");
+    link.href = url;
+    link.rel = "noopener";
+    link.download = "";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+const triggerBatchDownloads = (urls) => {
+    if (!Array.isArray(urls)) return;
+    urls.filter(Boolean).forEach((url) => {
+        triggerDownload(url);
+    });
+};
+
 const form = useForm({
     export_type: "Other Income",
     start_date: null,
@@ -521,6 +540,7 @@ const generateExport = async () => {
         }
 
         exportStatus.value = "success";
+        triggerBatchDownloads(response.data.download_urls);
         showSuccessToast(
             "Report ready!"
         );

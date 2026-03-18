@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\GenerateTextFile;
+use App\Models\AppSetting;
 use App\Models\MasterfileModels\CashInBank;
 use App\Models\MasterfileModels\Customer;
 use App\Models\TransactionModels\Adjustment;
@@ -12,6 +13,7 @@ use App\Models\TransactionModels\PaymentDetails;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -65,26 +67,10 @@ class ExportToGLController extends Controller
 
             $channel = 'textfile-generation.' . Str::random(20);
 
-            // Resolve current tenant ID from route slug
             $tenantSlug = $request->route('tenant');
-            $appSettingId = null;
-            if ($tenantSlug) {
-                // Find matching AppSetting (simplified logic similar to middleware)
-                $appSetting = \App\Models\AppSetting::on('mysql')
-                    ->where('is_active', true)
-                    ->get()
-                    ->first(function ($setting) use ($tenantSlug) {
-                        $normalizedName = strtolower(str_replace(' ', '', $setting->app_name));
-                        return str_contains(strtolower($tenantSlug), $normalizedName) 
-                            || $normalizedName === strtolower($tenantSlug);
-                    });
-                
-                if ($appSetting) {
-                    $appSettingId = $appSetting->id;
-                }
-            }
+            $appSettingId = config('tenant.current_app_setting_id');
 
-            GenerateTextFile::dispatchSync(
+            $generatedFilenames = GenerateTextFile::dispatchSync(
                 $validated,
                 $request->user()->id,
                 $channel,
@@ -94,6 +80,14 @@ class ExportToGLController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Successfully Generate Report Export File.',
+                'filenames' => $generatedFilenames,
+                'download_urls' => collect($generatedFilenames)
+                    ->map(fn ($filename) => route('navtextfiles.download', [
+                        'tenant' => $tenantSlug ?? 'arsystem',
+                        'filename' => $filename,
+                    ]))
+                    ->values()
+                    ->all(),
             ]);
         } catch (ValidationException $e) {
             return response()->json([
@@ -101,6 +95,65 @@ class ExportToGLController extends Controller
                 'errors' => $e->errors(),
             ], 422);
         }
+    }
+
+    public function downloadNavTextFile(Request $request, string $tenant, string $filename)
+    {
+        $tenantSlug = $tenant;
+        $appName = config('app.name');
+
+        $appSettingId = config('tenant.current_app_setting_id');
+        if ($appSettingId) {
+            $appSetting = AppSetting::on('mysql')->find($appSettingId);
+            if ($appSetting) {
+                $appName = $appSetting->app_name;
+            }
+        }
+
+        if (!preg_match('/^[A-Za-z0-9_.-]+$/', $filename)) {
+            abort(400, 'Invalid filename.');
+        }
+
+        $root = config('tenant_paths.textfile_paths.' . $appName)
+            ?? config('filesystems.disks.nav_textfiles.root');
+
+        $path = rtrim($root, '\\/') . DIRECTORY_SEPARATOR . $filename;
+
+        // Check primary path (Network)
+        if (!file_exists($path)) {
+            // Check fallback path (Local)
+            $localPath = storage_path('app/private/exports/' . $filename);
+            
+            if (file_exists($localPath)) {
+                $path = $localPath;
+            } else {
+                Log::warning('Nav textfile download failed. File not found in network or local.', [
+                    'tenant' => $tenantSlug,
+                    'app_name' => $appName,
+                    'network_path' => $path,
+                    'local_path' => $localPath,
+                    'root' => $root,
+                ]);
+                
+                // Return debug info to help troubleshoot
+                return response()->json([
+                    'error' => 'Nav textfile not found on server.',
+                    'debug_info' => [
+                        'tenant_slug' => $tenantSlug,
+                        'resolved_app_name' => $appName,
+                        'filename_requested' => $filename,
+                        'network_path_checked' => $path,
+                        'local_path_checked' => $localPath,
+                        'root_path_from_config' => $root,
+                        'file_exists_check' => false
+                    ]
+                ], 404);
+            }
+        }
+
+        return response()->download($path, $filename, [
+            'Content-Type' => 'text/plain',
+        ]);
     }
 
     public function untag(Request $request)

@@ -309,6 +309,7 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         Route::get('/export-to-gl', [ExportToGLController::class, 'export'])
             ->middleware(['web']);
         Route::post('/untag-export', [ExportToGLController::class, 'untag'])->name('untagExport');
+        Route::get('/download/nav-textfiles/{filename}', [ExportToGLController::class, 'downloadNavTextFile'])->name('navtextfiles.download');
 
         //Notifications
         Route::get('/get-notifications-count', [NotificationsController::class, 'unreadNotifs'])->name('getNotificationsCount');
