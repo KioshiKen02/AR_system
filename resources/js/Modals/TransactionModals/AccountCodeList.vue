@@ -243,55 +243,55 @@ watch(
                         break;
                     // ubay server 
                     case "feedmill":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=19";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=19";
                         break;
                     case "growout":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=20";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=20";
                         break;
                     case "cortes fertilizer":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42";
                         break;
                     case "mficortesfertilizer":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=42";
                         break;
                     case "ubay fertilizer":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22";
                         break;
                     case "mfiubayfertilizer":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=22";
                         break;
                     case "piggery untaga":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23";
                         break;
                     case "piggeryuntaga":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=23";
                         break;
                     case "demo farm":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21";
                         break;
                     case "demofarm":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=21";
                         break;
                     case "dressing plant":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17";
                         break;
                     case "dressingplant":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=17";
                         break;
                     case "farmers market":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41";
                         break;
                     case "farmersmarket":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=41";
                         break;
                     case "meat processing":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46";
                         break;
                     case "meatprocessing":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=46";
                         break;
                     case "rendering":
-                        baseUrl = "http://172.16.18.27/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=18";
+                        baseUrl = "http://172.16.105.2:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=18";
                         break;
                     default:
                         console.error(`Unknown app/tenant name: ${switchKey}`);

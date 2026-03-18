@@ -445,16 +445,16 @@ const fetchPriceGroup = async () => {
             lapsaonbreeder: "http://172.16.220.222:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=16",
             rizalbreeder: "http://172.16.217.11:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=43",
             // Ubay server
-            feedmill: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=19",
-            growout: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=20",
-            mficortesfertilizer: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=42",
-            mfiubayfertilizer: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=22",
-            piggeryuntaga: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=23",
-            demofarm: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=21",
-            dressingplant: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=17",
-            farmersmarket: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=41",
-            meatprocessing: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=46",
-            rendering: "http://172.16.18.27/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=18",
+            feedmill: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=19",
+            growout: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=20",
+            mficortesfertilizer: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=42",
+            mfiubayfertilizer: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=22",
+            piggeryuntaga: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=23",
+            demofarm: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=21",
+            dressingplant: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=17",
+            farmersmarket: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=41",
+            meatprocessing: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=46",
+            rendering: "http://172.16.105.2:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=18",
         };
         const baseUrl = endpoints[tenant];
         if (!baseUrl) {
