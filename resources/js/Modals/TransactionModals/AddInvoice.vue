@@ -326,8 +326,8 @@
                                                                     updateAmount(
                                                                         index
                                                                     )
-                                                                    " type="number" inputmode="numeric" min="0"
-                                                            step="1" :readonly="!row.packing
+                                                                    " type="number" inputmode="decimal" min="0"
+                                                            step="any" :readonly="!row.packing
                                                                 " :placeholder="row.packing
                                                                     ? '0'
                                                                     : ''

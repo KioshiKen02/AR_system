@@ -284,7 +284,7 @@
                     <td>{{ $doc['item_code'] }}</td>
                     <td>{{ $doc['item_name'] }}</td>
                     <td>{{ $doc['packing'] }}</td>
-                    <td>{{ number_format($doc['quantity']) }}</td>
+                    <td>{{ number_format((float) $doc['quantity'], 2) }}</td>
                     <td>{{ number_format($doc['price'], 2) }}</td>
                     <td>{{ number_format($doc['amount'], 2) }}</td>
                 </tr>
