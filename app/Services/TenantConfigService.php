@@ -45,6 +45,33 @@ class TenantConfigService
              default => 'BB', // Default fallback
         };
     }
+    public function getPrefix1($locCode = null)
+    {
+        return match ($this->appName) {
+            'Bilar Breeder', 'Bilar Breeder Local' => 'BB',
+            'Gp Jagna' => 'GP',
+            'Ice Plant' => 'IP',
+            'Peanut Kisses' => 'PK',
+            'Cortes Poultry' => 'CP',
+            'Cortes Piggery' => 'CPIG',
+            'Canhayupon Breeder' => 'CB',
+            'Bilar Hatchery' => 'BH',
+            'Lapsaon Breeder' => 'LB',
+            'Rizal Breeder' => 'RB',
+
+            'Feedmill' => 'FM',
+            'Growout' => 'GRW',
+            'Cortes Fertilizer' => 'FP',
+            'Ubay Fertilizer' => 'FP',
+            'Piggery Untaga' => 'UP',
+            'Demo Farm' => 'DF',
+            'Dressing Plant' => 'DP',
+            'Farmers Market' => 'DP',
+            'Meat Processing' => 'DP',
+            'Rendering' => 'RP',
+             default => 'BB', // Default fallback
+        };
+    }
 
     public function getCompanyCode()
     {

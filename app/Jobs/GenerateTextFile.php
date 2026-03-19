@@ -555,6 +555,7 @@ class GenerateTextFile
 
                         foreach ($payment->paymentDetails as $detail) {
                             $docCode = $this->getPaymentDocumentCodeFromPaymentType($payment->type ?? $detail->type ?? '');
+                            $paymentReferenceNo = trim((string) ($payment->ds_no ?: ($payment->reference_no ?: $detail->document_no)));
                             if ($payment->payment_type === '5A - Cash') {
                                 $lines[] = $this->generateCashPaymentLine(
                                     $auto_increment,
@@ -577,6 +578,7 @@ class GenerateTextFile
                                     $payment->customer_code,
                                     $customerName,
                                     $accCodeName,
+                                    $paymentReferenceNo,
                                     $docCode,
                                     $customerLocCode
                                 );
@@ -592,6 +594,7 @@ class GenerateTextFile
                                     $payment->customer_code,
                                     $customerName,
                                     $accCodeName,
+                                    $paymentReferenceNo,
                                     $docCode,
                                     $customerLocCode
                                 );
@@ -1003,13 +1006,14 @@ class GenerateTextFile
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
         $prefix = $this->tenantConfig->getPrefix($locCode);
+        $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
        
         
         $headerLine = [
             'CASH RECEI',
-            $prefix . 'COLL',
+            $prefix1 . 'COLL',
             ($auto_increment += 10000),
             'Bank Account',
             $bankCode,
@@ -1044,7 +1048,7 @@ class GenerateTextFile
 
         $detailLine = [
             'CASH RECEI',
-            $prefix . 'COLL',
+            $prefix1 . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $customerNavCode,
@@ -1080,11 +1084,12 @@ class GenerateTextFile
         return $this->formatLines($headerLine, $detailLine);
     }
 
-    protected function generateJournalVoucherLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $customerCode, $customerName, $accCodeName, string $docCode, $locCode = null)
+    protected function generateJournalVoucherLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
         $prefix = $this->tenantConfig->getPrefix($locCode);
+        $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
         // Assuming JV also uses the same company code logic
@@ -1106,10 +1111,20 @@ class GenerateTextFile
         } else {
             $accountType = 'Bank Account';
         }
+
+        $grossAmountValue = (float) ($detail->amount_paid ?? 0);
+        $whtAmountValue = (float) ($detail->wht_amount ?? 0);
+        $headerAmountValue = $grossAmountValue;
+        if ($accountType === 'Bank Account' && $whtAmountValue > 0) {
+            $headerAmountValue = max($grossAmountValue - $whtAmountValue, 0);
+        }
+
+        $headerAmount = $this->fmt($headerAmountValue);
+        $headerAmountNegative = $this->fmt($headerAmountValue * -1);
         
         $headerLine = [
             'CASH RECEI',
-            $prefix . 'COLL',
+            $prefix1 . 'COLL',
             ($auto_increment += 10000),
             $accountType,
             $code,
@@ -1118,11 +1133,11 @@ class GenerateTextFile
             $prefix . 'PY' . $detail->payment_no,
             $codeDetails,
             'PHP',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid),
+            $headerAmount,
+            $headerAmount,
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid),
+            $headerAmount,
+            $headerAmount,
             '1',
             $code,
             $customerCusPosting,
@@ -1132,21 +1147,21 @@ class GenerateTextFile
             '',
             '',
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1),
+            $headerAmount,
+            $headerAmountNegative,
             $formattedDate,
-            $prefix . $docCode . '#' . $detail->document_no,
+            $prefix . $docCode . '#' . $paymentReferenceNo,
             'Customer',
             $code,
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1)
+            $headerAmount,
+            $headerAmountNegative
         ];
 
         $whtLineString = '';
         if (!empty($detail->wht_amount) && $detail->wht_amount > 0) {
             $whtLine = [
                 'CASH RECEI',
-                $prefix . 'COLL',
+                $prefix1 . 'COLL',
                 ($auto_increment += 10000),
                 'G/L Account',
                 '10.07.01.01',
@@ -1172,7 +1187,7 @@ class GenerateTextFile
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount * -1),
                 $formattedDate,
-                $prefix . $docCode . '#' . $detail->document_no,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
                 'Customer',
                 '10.07.01.01',
                 $this->fmt($detail->wht_amount),
@@ -1183,7 +1198,7 @@ class GenerateTextFile
 
         $detailLine = [
             'CASH RECEI',
-            $prefix . 'COLL',
+            $prefix1 . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $customerCode,
@@ -1209,7 +1224,7 @@ class GenerateTextFile
             $this->fmt($detail->amount_paid * -1),
             $this->fmt($detail->amount_paid),
             $formattedDate,
-            $prefix . $docCode . '#' . $detail->document_no,
+            $prefix . $docCode . '#' . $paymentReferenceNo,
             'Customer',
             $customerCode,
             $this->fmt($detail->amount_paid * -1),
@@ -1221,11 +1236,12 @@ class GenerateTextFile
             . implode(',', $detailLine) . "\r\n";
     }
 
-    protected function generateOnlineDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $customerCode, $customerName, $accCodeName, string $docCode, $locCode = null)
+    protected function generateOnlineDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
         $prefix = $this->tenantConfig->getPrefix($locCode);
+        $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
 
@@ -1249,9 +1265,19 @@ class GenerateTextFile
             $accountType = 'Bank Account';
         }
 
+        $grossAmountValue = (float) ($detail->amount_paid ?? 0);
+        $whtAmountValue = (float) ($detail->wht_amount ?? 0);
+        $headerAmountValue = $grossAmountValue;
+        if ($accountType === 'Bank Account' && $whtAmountValue > 0) {
+            $headerAmountValue = max($grossAmountValue - $whtAmountValue, 0);
+        }
+
+        $headerAmount = $this->fmt($headerAmountValue);
+        $headerAmountNegative = $this->fmt($headerAmountValue * -1);
+
         $headerLine = [
             'CASH RECEI',
-            $prefix . 'COLL',
+            $prefix1 . 'COLL',
             ($auto_increment += 10000),
             $accountType,
             $code,
@@ -1260,11 +1286,11 @@ class GenerateTextFile
             $prefix . 'PY' . $detail->payment_no,
             $codeDetails,
             'PHP',
-            $amount,
-            $amount,
+            $headerAmount,
+            $headerAmount,
             '',
-            $amount,
-            $amount,
+            $headerAmount,
+            $headerAmount,
             '1',
             $code,
             $customerCusPosting,
@@ -1274,19 +1300,19 @@ class GenerateTextFile
             '',
             '',
             '',
-            $amount,
-            $amountNegative,
+            $headerAmount,
+            $headerAmountNegative,
             $formattedDate,
-            $prefix . $docCode . '#' . $detail->document_no,
+            $prefix . $docCode . '#' . $paymentReferenceNo,
             'Customer',
             $code,
-            $amount,
-            $amountNegative
+            $headerAmount,
+            $headerAmountNegative
         ];
 
         $detailLine = [
             'CASH RECEI',
-            $prefix . 'COLL',
+            $prefix1 . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $customerCode,
@@ -1312,7 +1338,7 @@ class GenerateTextFile
             $amountNegative,
             $amount,
             $formattedDate,
-            $prefix . $docCode . '#' . $detail->document_no,
+            $prefix . $docCode . '#' . $paymentReferenceNo,
             'Customer',
             $customerCode,
             $amountNegative,
@@ -1323,7 +1349,7 @@ class GenerateTextFile
         if (!empty($detail->wht_amount) && $detail->wht_amount > 0) {
             $whtLine = [
                 'CASH RECEI',
-                $prefix . 'COLL',
+                $prefix1 . 'COLL',
                 ($auto_increment += 10000),
                 'G/L Account',
                 '10.07.01.01',
@@ -1349,7 +1375,7 @@ class GenerateTextFile
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount * -1),
                 $formattedDate,
-                $prefix . $docCode . '#' . $detail->document_no,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
                 'Customer',
                 '10.07.01.01',
                 $this->fmt($detail->wht_amount),
@@ -1368,12 +1394,13 @@ class GenerateTextFile
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
         $prefix = $this->tenantConfig->getPrefix($locCode);
+        $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
         
         $headerLine = [
             'CASH RECEI',
-            $prefix . 'COLL',
+            $prefix1 . 'COLL',
             ($auto_increment += 10000),
             'G/L Account',
             $paymentAccountCode,
@@ -1408,7 +1435,7 @@ class GenerateTextFile
 
         $detailLine = [
             'CASH RECEI',
-            $prefix . 'COLL',
+            $prefix1 . 'COLL',
             ($auto_increment += 10000),
             'Customer',
             $customerNavCode,
