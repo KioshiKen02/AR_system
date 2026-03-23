@@ -12,7 +12,7 @@ class ReportIndicatorService
         $user = $user ?? auth()->user();
         
         // Check if we have a specific tenant slug in the route
-        $tenantSlug = request()->route('tenant');
+        $tenantSlug = strtolower(trim((string) request()->route('tenant')));
         
         $reportName = null;
         
@@ -20,8 +20,8 @@ class ReportIndicatorService
              // Map slug to App Name directly for performance if possible, or query DB
              // We can query AppSetting to find the app_name for this slug
              $appSetting = \App\Models\AppSetting::on('mysql')
-                ->where('base_url', $tenantSlug) // Assuming base_url holds the slug 'feedmill', 'growout', etc.
-                ->orWhereRaw("REPLACE(LOWER(app_name), ' ', '') = ?", [strtolower($tenantSlug)])
+                ->whereRaw('LOWER(TRIM(base_url)) = ?', [$tenantSlug])
+                ->orWhereRaw("REPLACE(LOWER(TRIM(app_name)), ' ', '') = ?", [$tenantSlug])
                 ->first();
                 
              if ($appSetting) {
@@ -34,69 +34,70 @@ class ReportIndicatorService
             $reportName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
         }
 
-        switch ($reportName) {
-            case 'Bilar Breeder Local':
+        $key = strtolower(preg_replace('/\s+/', '', trim((string) $reportName)));
+
+        switch ($key) {
+            case 'bilarbreederlocal':
                 $reportIndicator = 'BRDR BIL-AG003-Local';
                 break;
-            case 'Bilar Breeder':
+            case 'bilarbreeder':
                 $reportIndicator = 'BRDR BIL-AG003';
                 break;
-            case 'Gp Jagna':
+            case 'gpjagna':
                 $reportIndicator = 'GPFARM-AG021';
                 break;
-            case 'Ice Plant':
+            case 'iceplant':
                 $reportIndicator = 'ICE-NF001';
                 break;
-            case 'Peanut Kisses':
+            case 'peanutkisses':
                 $reportIndicator = 'PK TAG-NF002';
                 break;
-            case 'Cortes Poultry':
+            case 'cortespoultry':
                 $reportIndicator = 'LAYER CORT-AG002';
                 break;
-            case 'Cortes Piggery':
+            case 'cortespiggery':
                 $reportIndicator = 'PGRY CORT-AG001';
                 break;
-            case 'Canhayupon Breeder':
+            case 'canhayuponbreeder':
                 $reportIndicator = 'BRDR DIMCAN-AG005';
                 break;
-            case 'Bilar Hatchery':
+            case 'bilarhatchery':
                 $reportIndicator = 'HTCH BIL-AG004';
                 break;
-            case 'Lapsaon Breeder':
+            case 'lapsaonbreeder':
                 $reportIndicator = 'BRDR DIMLAP-AG006';
                 break;
-            case 'Rizal Breeder':
+            case 'rizalbreeder':
                 $reportIndicator = 'RIZAL BIL-AG015';
                 break;
-            // ubay server 
-            case 'Feedmill':
+            case 'feedmill':
                 $reportIndicator = 'FDML UBAY-AG009';
                 break;
-            case 'Growout':
+            case 'growout':
                 $reportIndicator = 'GRWT UBAY-AG010';
                 break;
-            case 'Cortes Fertilizer':
+            case 'cortesfertilizer':
                 $reportIndicator = 'FERP CORTES-AG015';
                 break;
-            case 'Ubay Fertilizer':
+            case 'ubayfertilizer':
                 $reportIndicator = 'FERP UBAY-AG012';
                 break;
-            case 'Piggery Untaga':
+            case 'piggeryuntaga':
                 $reportIndicator = 'PGRY ALC-AG013';
                 break;
-            case 'Demo Farm':
+            case 'demofarm':
                 $reportIndicator = 'DMO UBAY-AG011';
                 break;
-            case 'Dressing Plant':
+            case 'dressingplant':
                 $reportIndicator = 'DRSP UBAY-AG007';
                 break;
-            case 'Farmers Market':
-                $reportIndicator = 'FARMS MARKET';
+            case 'farmersmarket':
+                $reportIndicator = 'FARMERS MARKET';
                 break;
-            case 'Meat Processing':
+            case 'meatprocessing':
                 $reportIndicator = 'MPP-UBAY-AG017';
                 break;
-            case 'Rendering':
+            case 'rendering':
                 $reportIndicator = 'REND UBAY-AG008';
                 break;
             default:

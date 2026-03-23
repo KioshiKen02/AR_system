@@ -113,8 +113,16 @@ class SetTenantDatabase
                     Config::set('database.default', 'tenant');
                     Config::set('tenant.current_app_setting_id', $targetSetting->id);
 
-                    DB::purge('tenant');
-                    DB::reconnect('tenant');
+                    try {
+                        DB::purge('tenant');
+                        DB::connection('tenant')->getPdo();
+                    } catch (\Throwable $e) {
+                        if ($request->expectsJson()) {
+                            return response()->json(['error' => 'Tenant database connection failed'], 503);
+                        }
+                        $fallbackTenant = 'arsystem';
+                        return redirect()->route('session.expired', ['tenant' => $fallbackTenant]);
+                    }
                 } else {
                     // User found, Tenant found, but No Access
                     if ($request->expectsJson()) {

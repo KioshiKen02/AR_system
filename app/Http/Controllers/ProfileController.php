@@ -207,7 +207,10 @@ class ProfileController extends Controller
                     ]);
                 }
             } catch (\Exception $e) {
-                Log::warning("ReportIndicatorService failed: " . $e->getMessage());
+                Log::warning("ReportIndicatorService failed", [
+                    'tenant' => request()->route('tenant'),
+                    'message' => $e->getMessage(),
+                ]);
                 // Fallback to user's assigned BU
             }
     
