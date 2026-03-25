@@ -1017,16 +1017,18 @@ const submit = () => {
     Object.keys(form.errors).forEach((key) => {
         form.errors[key] = "";
     });
-    form.post(route("checkclearing"), {
+    form.post(route("checkclearing", { tenant: page.props.tenant }), {
         onSuccess: () => {
-            axios.get(route("clearing.latest.clearingNumber")).then((res) => {
-                form.clearing_no = res.data.clearing_number;
-                if (canPrint("0401-CHKCLR")) {
-                    showDialog.value = true;
-                } else {
-                    emit("closeSuccess");
-                }
-            });
+            axios
+                .get(route("clearing.latest.clearingNumber", { tenant: page.props.tenant }))
+                .then((res) => {
+                    form.clearing_no = res.data.clearing_number;
+                    if (canPrint("0401-CHKCLR")) {
+                        showDialog.value = true;
+                    } else {
+                        emit("closeSuccess");
+                    }
+                });
         },
         onError: (errors) => {
             console.log(errors);

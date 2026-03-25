@@ -92,7 +92,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'dressing') && str_contains($identifier, 'plant')) {
-            return '';
+            return 'MARILOU ORFANO/JERAMIE ARTIAGA ';
         }
 
         if (str_contains($identifier, 'farmers') && str_contains($identifier, 'market')) {
@@ -100,7 +100,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'meat') && str_contains($identifier, 'processing')) {
-            return '';
+            return 'MARILOU ORFANO/JERAMIE ARTIAGA ';
         }
 
         if (str_contains($identifier, 'rendering')) {
@@ -123,6 +123,9 @@ class SignatoryService
         $tenantsToHide = [
             ['ubay', 'fertilizer'],
             ['cortes', 'fertilizer'],
+            ['dressing', 'plant'],
+            ['meat', 'processing'],
+
             // ['another', 'tenant'], // Example: Un-comment to enable
         ];
 
