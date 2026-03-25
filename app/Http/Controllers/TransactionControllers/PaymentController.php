@@ -1201,12 +1201,6 @@ class PaymentController extends Controller
             $customer = CustomerService::getCustomerByCode($validated['cust_code']);
             $invoiceNumber = $invoiceNumberService->generate();
 
-            if (Invoice::where('invoice_no', $invoiceNumber)->exists()) {
-                throw ValidationException::withMessages([
-                    'general' => 'Error Please Try Again',
-                ]);
-            }
-
             CustomerLedger::create([
                 'invoice_number' => $invoiceNumber,
                 'date' => $validated['transaction_date'],
@@ -1218,21 +1212,6 @@ class PaymentController extends Controller
                 'adjusted_amount' => 0.00,
                 'amount_paid' => 0.00,
                 'running_balance' => $validated['amount_paid'],
-            ]);
-
-            Invoice::create([
-                'invoice_no' => $invoiceNumber,
-                'receipt_date' => $validated['transaction_date'],
-                'transaction_date' => $validated['transaction_date'],
-                'customer_code' => $validated['cust_code'],
-                'name' => $customer->cus_name,
-                'price_group' => $customer->cus_type,
-                'payment_mode' => "Account Receivables",
-                'chargeinvoice_type' => "N/A",
-                'particular' => "N/A",
-                'reference_no' => "N/A",
-                'total_amount' => $validated['amount_paid'],
-                'created_by' => $request->user()->name,
             ]);
         });
     }

@@ -230,6 +230,7 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         Route::put('/editBeginningBalance/{id}', [BeginningBalanceController::class, 'editBeginningBalance'])->name('editBeginningBalance');
         Route::delete('/deleteBeginningBalance/{id}', [BeginningBalanceController::class, 'destroy'])->name('deleteBeginningBalance');
         Route::get('/getlatestbeginningbalanceno', [BeginningBalanceController::class, 'latest'])->name('getlatestbeginningbalanceno');
+        Route::post('/beginningbalance/update-amount', [BeginningBalanceController::class, 'updateAmount'])->name('beginningbalance.updateAmount');
 
         //ROUTES FOR REPORTS**********************************************************************************************************************
         //GenerateReport

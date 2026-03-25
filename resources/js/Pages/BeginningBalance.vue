@@ -177,6 +177,41 @@
             <ConfirmationDialog :show="showDialog" message="Are you sure about deleting this packing type?"
                 @close="handleConfirm" />
         </Transition>
+        <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
+            leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+            <div v-if="showEditBalanceModal"
+                class="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+                <div class="bg-[var(--color-bg-secondary)] rounded-xl shadow-xl w-full max-w-md p-6 border border-[var(--color-border)]">
+                    <h3 class="text-lg font-semibold text-[var(--color-text-primary)] mb-4">
+                        Edit Beginning Balance
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-sm text-[var(--color-text-secondary)]">Beginning Balance No</label>
+                            <div class="mt-1 text-[var(--color-text-primary)] font-medium">
+                                {{ editBalanceForm.beginningbalance_no }}
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-sm text-[var(--color-text-secondary)]">Balance Amount</label>
+                            <input type="number" step="0.01" v-model="editBalanceForm.balance_amount" class="w-full"
+                                autocomplete="off" />
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end gap-2">
+                        <button @click="closeEditBalanceModal"
+                            class="px-4 py-2 rounded-md font-medium transition-all duration-300 bg-transparent text-[var(--color-primary)] ring-1 ring-[var(--color-primary)]">
+                            Cancel
+                        </button>
+                        <button @click="saveEditBalance"
+                            class="px-4 py-2 rounded-md font-medium transition-all duration-300 bg-[var(--color-primary)] text-white">
+                            Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Transition>
 
         <div class="bg-[var(--color-bg-secondary)]/20 p-4 rounded-md shadow-[0_0_20px_var(--color-shadow)]/20 mt-4">
             <table class="w-full text-sm text-[var(--color-text-primary)] rounded-xl overflow-hidden mb-2">
@@ -259,6 +294,10 @@
                                     class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100">
                                     <svg-icon type="mdi" :path="mdiEye" class="w-4 h-4 text-[var(--color-primary)]" />
                                 </button>
+                                <button v-if="canUpdate('0204-BGBLT')" @click="openEditBalanceModal(beginningbalance)"
+                                    class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100">
+                                    <svg-icon type="mdi" :path="mdiPencil" class="w-4 h-4 text-[var(--color-primary)]" />
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -308,6 +347,8 @@ import { FunnelIcon } from "@heroicons/vue/24/solid";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import DatePicker from "./Components/DatePicker.vue";
 import usePermissions from "./Composables/usePermissions";
+import axios from "axios";
+import { mdiPencil } from "@mdi/js";
 
 const props = defineProps({
     beginningbalances: Object,
@@ -319,6 +360,7 @@ const props = defineProps({
 
 const { canInsert } = usePermissions();
 const { canView } = usePermissions();
+const { canUpdate } = usePermissions();
 
 const showModal = ref(false);
 const showImportExportModal = ref(false);
@@ -374,6 +416,40 @@ const closeEditSuccessModal = () => {
     showSuccessToast("Payment has Been Updated Successfully");
 };
 
+const showEditBalanceModal = ref(false);
+const editBalanceForm = ref({
+    beginningbalance_no: "",
+    balance_amount: 0,
+});
+
+const openEditBalanceModal = (row) => {
+    showEditBalanceModal.value = true;
+    editBalanceForm.value.beginningbalance_no = row.beginningbalance_no;
+    editBalanceForm.value.balance_amount = row.balance_amount;
+};
+const closeEditBalanceModal = () => {
+    showEditBalanceModal.value = false;
+    editBalanceForm.value = { beginningbalance_no: "", balance_amount: 0 };
+};
+const saveEditBalance = async () => {
+    try {
+        await axios.post(
+            route("beginningbalance.updateAmount", { tenant: page.props.tenant }),
+            {
+                beginningbalance_no: editBalanceForm.value.beginningbalance_no,
+                balance_amount: editBalanceForm.value.balance_amount,
+            }
+        );
+        closeEditBalanceModal();
+        router.reload({
+            preserveState: true,
+            only: ["beginningbalances"],
+        });
+        showSuccessToast("Beginning Balance Updated");
+    } catch (error) {
+        console.error("Failed to update beginning balance:", error);
+    }
+};
 const deleteItem = async (adjust) => {
     pendingDeleteID.value = adjust;
     showDialog.value = true;

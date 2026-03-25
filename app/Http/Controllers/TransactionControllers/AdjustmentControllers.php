@@ -151,25 +151,63 @@ class AdjustmentControllers extends Controller
             if ($cl_type === 'Beginning Balance') {
                 $formattedType = 'BG';
 
-                $ledger = CustomerLedger::where('invoice_number', $validated['invoice_no'])->where('type', $formattedType)->first();
-                
-                if ($ledger) {
-                    $ledgerCurrentAdjustedAmount = $ledger->adjusted_amount ?? 0;
-                    $ledgerCurrentRunningBalance = $ledger->running_balance;
+                $ledger = CustomerLedger::where('invoice_number', $validated['invoice_no']) 
+                    ->where('type', $formattedType) 
+                    ->firstOrFail();
 
-                    if (strtolower($validated['type']) === 'positive') {
-                        $newRunningBalance = $ledgerCurrentRunningBalance + $validated['amount'];
-                        $newAdjustedAmount = $ledgerCurrentAdjustedAmount + $validated['amount'];
-                    } elseif (strtolower($validated['type']) === 'negative') {
-                        $newRunningBalance = max($ledgerCurrentRunningBalance - $validated['amount'], 0);
-                        $newAdjustedAmount = $ledgerCurrentAdjustedAmount - $validated['amount'];
+                $beginningBalance = BeginningBalance::where('beginningbalance_no', $validated['invoice_no'])->first();
+
+                if ($beginningBalance && $ledger->amount != $beginningBalance->balance_amount) {
+                    $ledger->update(['amount' => $beginningBalance->balance_amount]);
+                    $ledger->refresh();
+                }
+
+                $existingPositive = Adjustment::where('invoice_no', $validated['invoice_no'])
+                    ->where('apply_to', 'Beginning Balance')
+                    ->where('type', 'Positive')
+                    ->sum('amount');
+
+                $existingNegative = Adjustment::where('invoice_no', $validated['invoice_no'])
+                    ->where('apply_to', 'Beginning Balance')
+                    ->where('type', 'Negative')
+                    ->sum('amount');
+
+                $amount = $ledger->amount;
+                $currentAdjusted = $amount + $existingPositive - $existingNegative;
+                $syncedRunningBalance = $currentAdjusted - $ledger->amount_paid;
+
+                $floatingPaid = PaymentDetails::where('document_no', $ledger->invoice_number)
+                    ->where('type', $ledger->type)
+                    ->whereIn('status', ['Floating', 'Paid'])
+                    ->sum('amount_paid');
+
+                $newPositive = $existingPositive;
+                $newNegative = $existingNegative;
+
+                if (strtolower($validated['type']) === 'positive') {
+                    $newPositive += $validated['amount'];
+                } elseif (strtolower($validated['type']) === 'negative') {
+                    $prospectiveNegative = $existingNegative + $validated['amount'];
+                    $prospectiveAdjusted = $amount + $newPositive - $prospectiveNegative;
+
+                    if (($prospectiveAdjusted - $floatingPaid) < 0) {
+                        throw ValidationException::withMessages([
+                            'amount' => 'Amount Exceeds Available Balance. Selected Document Has A Total Payment (Paid + Floating) of ' . number_format($floatingPaid, 2),
+                        ]);
                     }
 
-                    $ledger->update([
-                        'running_balance' => $newRunningBalance,
-                        'adjusted_amount' => $newAdjustedAmount
-                    ]);
+                    $newNegative = $prospectiveNegative;
                 }
+
+                $newAdjustedAmount = $amount + $newPositive - $newNegative;
+                $newRunningBalance = $newAdjustedAmount - $ledger->amount_paid;
+
+                $ledger->update([
+                    'adjusted_amount' => $newAdjustedAmount,
+                    'positive_adjustment_amount' => $newPositive,
+                    'negative_adjustment_amount' => $newNegative,
+                    'running_balance' => $newRunningBalance,
+                ]);
 
                 $dbData = collect($validated)
                     ->except(['_cl_type'])

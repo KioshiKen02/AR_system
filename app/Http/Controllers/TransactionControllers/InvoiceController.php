@@ -346,71 +346,100 @@ class InvoiceController extends Controller
         $customerCode = $request->input('type');
 
         if (in_array($request->input('apply_to'), ['Sales Invoice', 'Other Income'])) {
+            $applyTo = $request->input('apply_to');
+            $ledgerType = $applyTo === 'Sales Invoice' ? 'Sales Invoice' : 'Charge Invoice';
+
             $ledgers = CustomerLedger::where('customer_code', $customerCode)
+                ->where('type', $ledgerType)
                 ->where('amount', '>', 0)
-                ->select(
-                    'invoice_number',
-                    'date',
-                    'type',
-                    'amount',
-                    'amount_paid',
-                    'running_balance'
-                )
                 ->get();
 
-            $result = $ledgers->map(function ($ledger) {
+            $result = $ledgers->map(function ($ledger) use ($applyTo) {
+                $existingPositive = Adjustment::where('invoice_no', $ledger->invoice_number)
+                    ->where('apply_to', $applyTo)
+                    ->where('type', 'Positive')
+                    ->sum('amount');
+
+                $existingNegative = Adjustment::where('invoice_no', $ledger->invoice_number)
+                    ->where('apply_to', $applyTo)
+                    ->where('type', 'Negative')
+                    ->sum('amount');
+
+                $shrinkage = $ledger->shrinkage ?? 0;
+                $overage = $ledger->overage ?? 0;
+                $returnAmount = $ledger->return ?? 0;
+
+                $netAdjustment = $existingPositive - $existingNegative;
+                $debit = ($ledger->amount ?? 0) + $netAdjustment - $shrinkage + $overage - $returnAmount;
+                $syncedRunningBalance = max(0, $debit - ($ledger->amount_paid ?? 0));
+
+                if (
+                    $ledger->adjusted_amount != (($ledger->amount ?? 0) + $netAdjustment) ||
+                    $ledger->positive_adjustment_amount != $existingPositive ||
+                    $ledger->negative_adjustment_amount != $existingNegative ||
+                    $ledger->running_balance != $syncedRunningBalance
+                ) {
+                    $ledger->update([
+                        'adjusted_amount' => ($ledger->amount ?? 0) + $netAdjustment,
+                        'positive_adjustment_amount' => $existingPositive,
+                        'negative_adjustment_amount' => $existingNegative,
+                        'running_balance' => $syncedRunningBalance,
+                    ]);
+                }
+
                 return [
                     'invoice_no' => $ledger->invoice_number,
                     'receipt_date' => $ledger->date,
                     'type' => $ledger->type,
                     'amount' => $ledger->amount,
                     'amount_paid' => $ledger->amount_paid,
-                    'running_balance' => $ledger->running_balance,
+                    'running_balance' => $syncedRunningBalance,
                 ];
-            });
+            })->filter(fn ($row) => ($row['running_balance'] ?? 0) > 0)->values();
         } else {
-            $balance = BeginningBalance::where('customer_code', $customerCode)
-                ->where('balance_amount', '>', 0)
-                ->select(
-                    'beginningbalance_no',
-                    'receipt_date',
-                    'transaction_date',
-                    'customer_code',
-                    'name',
-                    'balance_amount'
-                )
+            $ledgers = CustomerLedger::where('customer_code', $customerCode)
+                ->where('type', 'BG')
+                ->where('running_balance', '>', 0)
                 ->get();
 
-            $result = $balance->map(function ($bal) {
-                // Get the latest adjustment for this invoice number and type
-                $latestAdjustment = Adjustment::where('invoice_no', $bal->beginningbalance_no)
+            $result = $ledgers->map(function ($ledger) {
+                $beginningBalance = BeginningBalance::where('beginningbalance_no', $ledger->invoice_number)->first();
+
+                if ($beginningBalance && $ledger->amount != $beginningBalance->balance_amount) {
+                    $ledger->update(['amount' => $beginningBalance->balance_amount]);
+                    $ledger->refresh();
+                }
+
+                $existingPositive = Adjustment::where('invoice_no', $ledger->invoice_number)
                     ->where('apply_to', 'Beginning Balance')
-                    ->orderByDesc('id')
-                    ->first();
+                    ->where('type', 'Positive')
+                    ->sum('amount');
 
-                // Use the balance from the latest adjustment, or fallback to the original balance amount
-                if ($latestAdjustment) {
-                    $adjustmentAmount = $latestAdjustment->amount;
-                    $previousBalance = $latestAdjustment->balance;
+                $existingNegative = Adjustment::where('invoice_no', $ledger->invoice_number)
+                    ->where('apply_to', 'Beginning Balance')
+                    ->where('type', 'Negative')
+                    ->sum('amount');
 
-                    if ($latestAdjustment->type === 'Positive') {
-                        $currentBalance = $previousBalance + $adjustmentAmount;
-                    } elseif ($latestAdjustment->type === 'Negative') {
-                        $currentBalance = $previousBalance - $adjustmentAmount;
-                    } else {
-                        $currentBalance = $previousBalance;
-                    }
-                } else {
-                    $currentBalance = $bal->balance_amount;
+                $amount = $ledger->amount;
+                $currentAdjusted = $amount + $existingPositive - $existingNegative;
+                $syncedRunningBalance = $currentAdjusted - $ledger->amount_paid;
+
+                if ($ledger->adjusted_amount != $currentAdjusted || $ledger->running_balance != $syncedRunningBalance) {
+                    $ledger->update([
+                        'adjusted_amount' => $currentAdjusted,
+                        'positive_adjustment_amount' => $existingPositive,
+                        'negative_adjustment_amount' => $existingNegative,
+                        'running_balance' => $syncedRunningBalance
+                    ]);
                 }
 
                 return [
-                    'invoice_no' => $bal->beginningbalance_no,
-                    'receipt_date' => $bal->receipt_date,
+                    'invoice_no' => $ledger->invoice_number,
+                    'receipt_date' => $ledger->date,
                     'type' => 'Beginning Balance',
-                    'amount' => $bal->balance_amount,
-                    'amount_paid' => 0.00,
-                    'running_balance' => $currentBalance,
+                    'amount' => $syncedRunningBalance,
+                    'amount_paid' => $ledger->amount_paid,
+                    'running_balance' => $syncedRunningBalance,
                 ];
             });
         }
@@ -489,6 +518,116 @@ class InvoiceController extends Controller
             'customer_code' => $customerCode,
             'date' => $date,
         ]);
+
+        if ($customerCode && $date) {
+            $ledgersToRecompute = CustomerLedger::on('tenant')
+                ->where('customer_code', $customerCode)
+                ->where('date', '<=', $date)
+                ->whereIn('type', ['Sales Invoice', 'Charge Invoice', 'BG', 'Beginning Balance'])
+                ->get([
+                    'id',
+                    'invoice_number',
+                    'type',
+                    'amount',
+                    'amount_paid',
+                    'adjusted_amount',
+                    'positive_adjustment_amount',
+                    'negative_adjustment_amount',
+                    'running_balance',
+                    'shrinkage',
+                    'overage',
+                    'return',
+                ]);
+
+            if ($ledgersToRecompute->isNotEmpty()) {
+                $invoiceNumbers = $ledgersToRecompute->pluck('invoice_number')->unique()->values();
+
+                $beginningBalances = BeginningBalance::on('tenant')
+                    ->whereIn('beginningbalance_no', $invoiceNumbers)
+                    ->get(['beginningbalance_no', 'balance_amount'])
+                    ->keyBy('beginningbalance_no');
+
+                $adjustmentsPosNeg = Adjustment::on('tenant')
+                    ->whereIn('invoice_no', $invoiceNumbers)
+                    ->selectRaw("
+                        invoice_no,
+                        apply_to,
+                        SUM(CASE WHEN type='Positive' THEN amount ELSE 0 END) as pos_sum,
+                        SUM(CASE WHEN type='Negative' THEN amount ELSE 0 END) as neg_sum
+                    ")
+                    ->groupBy('invoice_no', 'apply_to')
+                    ->get()
+                    ->groupBy(['invoice_no', 'apply_to']);
+
+                $paidAmounts = PaymentDetails::on('tenant')
+                    ->where('customer_code', $customerCode)
+                    ->where('status', 'Paid')
+                    ->whereIn('document_no', $invoiceNumbers)
+                    ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
+                    ->groupBy('document_no', 'type')
+                    ->get()
+                    ->groupBy(['document_no', 'type']);
+
+                foreach ($ledgersToRecompute as $ledger) {
+                    $applyTo = $ledger->type;
+                    if ($ledger->type === 'Charge Invoice') {
+                        $applyTo = 'Other Income';
+                    } elseif ($ledger->type === 'BG' || $ledger->type === 'Beginning Balance') {
+                        $applyTo = 'Beginning Balance';
+                    }
+
+                    $amount = (float) ($ledger->amount ?? 0);
+                    if ($ledger->type === 'BG' || $ledger->type === 'Beginning Balance') {
+                        $beginRow = $beginningBalances->get($ledger->invoice_number);
+                        if ($beginRow) {
+                            $amount = (float) $beginRow->balance_amount;
+                        }
+                    }
+
+                    $posNeg = $adjustmentsPosNeg
+                        ->get($ledger->invoice_number, collect())
+                        ->get($applyTo, collect())
+                        ->first();
+
+                    $posSum = (float) ($posNeg->pos_sum ?? 0);
+                    $negSum = (float) ($posNeg->neg_sum ?? 0);
+                    $netAdjustment = $posSum - $negSum;
+
+                    $shrinkage = (float) ($ledger->shrinkage ?? 0);
+                    $overage = (float) ($ledger->overage ?? 0);
+                    $returnAmount = (float) ($ledger->return ?? 0);
+
+                    $debit = $amount + $netAdjustment - $shrinkage + $overage - $returnAmount;
+                    $adjustedAmount = $amount + $netAdjustment;
+
+                    $paidRow = $paidAmounts
+                        ->get($ledger->invoice_number, collect())
+                        ->get($ledger->type, collect())
+                        ->first();
+                    $paid = (float) ($paidRow->total_paid ?? $ledger->amount_paid ?? 0);
+
+                    $runningBalance = max(0, $debit - $paid);
+
+                    if (
+                        $ledger->amount != $amount ||
+                        $ledger->amount_paid != $paid ||
+                        $ledger->adjusted_amount != $adjustedAmount ||
+                        $ledger->positive_adjustment_amount != $posSum ||
+                        $ledger->negative_adjustment_amount != $negSum ||
+                        $ledger->running_balance != $runningBalance
+                    ) {
+                        CustomerLedger::on('tenant')->where('id', $ledger->id)->update([
+                            'amount' => $amount,
+                            'amount_paid' => $paid,
+                            'adjusted_amount' => $adjustedAmount,
+                            'positive_adjustment_amount' => $posSum,
+                            'negative_adjustment_amount' => $negSum,
+                            'running_balance' => $runningBalance,
+                        ]);
+                    }
+                }
+            }
+        }
 
         // Get all ledger entries for the customer
         $columns = ['invoice_number', 'date', 'type', 'amount', 'amount_paid', 'running_balance', 'trade_type'];

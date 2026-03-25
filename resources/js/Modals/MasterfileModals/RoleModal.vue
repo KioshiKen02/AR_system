@@ -339,7 +339,7 @@ const roles = ref([
     {
         id: "0204-BGBLT",
         description: "AR Beg Bal Transaction",
-        enabledActions: ["can_view", "can_insert"],
+        enabledActions: ["can_view", "can_insert","can_update"],
     },
     {
         id: "0301-GNRPRT",

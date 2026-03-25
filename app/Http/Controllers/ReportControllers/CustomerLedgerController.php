@@ -45,6 +45,22 @@ class CustomerLedgerController extends Controller
                 ->groupBy('invoice_no', 'apply_to')
                 ->get()
                 ->groupBy(['invoice_no', 'apply_to']);
+            $adjustmentsPosNeg = Adjustment::where('customer_code', $request->customer_code)
+                ->selectRaw("
+                    invoice_no,
+                    apply_to,
+                    SUM(CASE WHEN type='Positive' THEN amount ELSE 0 END) as pos_sum,
+                    SUM(CASE WHEN type='Negative' THEN amount ELSE 0 END) as neg_sum
+                ")
+                ->groupBy('invoice_no', 'apply_to')
+                ->get()
+                ->groupBy(['invoice_no', 'apply_to']);
+            $paidAmounts = PaymentDetails::where('customer_code', $request->customer_code)
+                ->where('status', 'Paid')
+                ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
+                ->groupBy('document_no', 'type')
+                ->get()
+                ->groupBy(['document_no', 'type']);
 
             // $partialPaymentForwarded = (float) CustomerLedger::where('customer_code', $request->customer_code)
             //     ->whereDate('date', '<', $request->date_start)
@@ -55,7 +71,7 @@ class CustomerLedgerController extends Controller
                 ->whereDate('date', '<', $request->date_start)
                 ->get();
             
-            $partialPaymentForwarded = $prevRecords->sum(function ($record) use ($adjustmentsGrouped) {
+            $partialPaymentForwarded = $prevRecords->sum(function ($record) use ($adjustmentsPosNeg) {
                  $applyTo = $record->type;
                  if ($record->type === 'BG') {
                      $applyTo = 'Beginning Balance';
@@ -63,23 +79,24 @@ class CustomerLedgerController extends Controller
                      $applyTo = 'Other Income';
                  }
 
-                 $adjAmount = $adjustmentsGrouped
+                 $pos = $adjustmentsPosNeg
                         ->get($record->invoice_number, collect())
                         ->get($applyTo, collect())
-                        ->first()
-                        ->total_adjustment ?? 0;
+                        ->first();
+                 $posSum = $pos->pos_sum ?? 0;
+                 $negSum = $pos->neg_sum ?? 0;
 
-                 // For BG/Beginning Balance, the amount column is already Net (updated by Adjustment), 
-                 // so we should NOT add the adjustment again.
                  if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
-                     $adjAmount = 0;
+                     $beginRow = BeginningBalance::where('beginningbalance_no', $record->invoice_number)->first();
+                     $baseAmount = $beginRow?->balance_amount ?? 0;
+                 } else {
+                     $baseAmount = ($record->amount ?? 0);
                  }
 
-                 return ($record->amount ?? 0)
+                 return (($baseAmount ?? 0) + $posSum - $negSum)
                     - ($record->shrinkage ?? 0)
                     + ($record->overage ?? 0)
                     - ($record->return ?? 0)
-                    + $adjAmount // Use dynamic adjustment
                     - ($record->amount_paid ?? 0);
             });
 
@@ -89,13 +106,39 @@ class CustomerLedgerController extends Controller
                 ->sum('amount_paid');
         } else {
              $adjustmentsGrouped = collect();
+             $adjustmentsPosNeg = collect();
+             $paidAmounts = collect();
         }
         $paymentForwarded = 0;
+        $shouldPersist = filter_var($request->generateTableData, FILTER_VALIDATE_BOOLEAN);
+
+        if ($request->customer_code && $shouldPersist) {
+            $bgLedgers = CustomerLedger::where('customer_code', $request->customer_code)
+                ->whereIn('type', ['BG', 'Beginning Balance'])
+                ->get(['id', 'invoice_number', 'amount']);
+
+            if ($bgLedgers->isNotEmpty()) {
+                $beginningBalances = BeginningBalance::whereIn('beginningbalance_no', $bgLedgers->pluck('invoice_number'))
+                    ->get(['beginningbalance_no', 'balance_amount'])
+                    ->keyBy('beginningbalance_no');
+
+                foreach ($bgLedgers as $bgLedger) {
+                    $beginRow = $beginningBalances->get($bgLedger->invoice_number);
+                    if (! $beginRow) {
+                        continue;
+                    }
+                    if ($bgLedger->amount != $beginRow->balance_amount) {
+                        CustomerLedger::where('id', $bgLedger->id)->update([
+                            'amount' => $beginRow->balance_amount,
+                        ]);
+                    }
+                }
+            }
+        }
 
         if ($request->type_filters && $request->type_filters === 'Without Floating Deducted') {
 
             $paymentForwarded = $partialPaymentForwarded;
-
             // Get all records (not paginated) to calculate running balance
             $allRecords = $query->clone()
                 ->orderBy('customer_code')
@@ -106,7 +149,7 @@ class CustomerLedgerController extends Controller
 
             // Calculate running balance per customer and type
             $runningBalances = [];
-            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $paymentForwarded, $adjustmentsGrouped) {
+            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $paymentForwarded, $adjustmentsPosNeg, $paidAmounts, $shouldPersist) {
                 $key = $record->customer_code;
 
                 // Initialize running balance for this customer+type if not exists
@@ -132,27 +175,48 @@ class CustomerLedgerController extends Controller
                     $applyTo = 'Other Income';
                 }
 
-                $adjustedAmount = $adjustmentsGrouped
+                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
+                    $beginRow = BeginningBalance::where('beginningbalance_no', $record->invoice_number)->first();
+                    $amount = $val($beginRow?->balance_amount);
+                    if ($shouldPersist && $beginRow && $record->amount != $beginRow->balance_amount) {
+                        CustomerLedger::where('id', $record->id)->update(['amount' => $beginRow->balance_amount]);
+                        $record->amount = $beginRow->balance_amount;
+                    }
+                }
+
+                $posNeg = $adjustmentsPosNeg
                         ->get($record->invoice_number, collect())
                         ->get($applyTo, collect())
                         ->first()
-                        ->total_adjustment ?? 0;
+                        ?? null;
+                $posSum = $posNeg->pos_sum ?? 0;
+                $negSum = $posNeg->neg_sum ?? 0;
+                $adjustedAmount = $posSum - $negSum;
 
                 $grossDebit = $amount - $shrinkage + $overage - $return;
 
-                // Always include adjustments (positive/negative) in net debit
                 $netDebit = $grossDebit + $adjustedAmount;
 
-                $credit = $val($record->amount_paid);
+                $paidRow = $paidAmounts
+                    ->get($record->invoice_number, collect())
+                    ->get($record->type, collect())
+                    ->first();
+                $creditBase = $paidRow?->total_paid ?? $val($record->amount_paid);
+                $credit = $creditBase;
+                $record->amount_paid = $creditBase;
 
                 $record->document_balance = $record->running_balance; // for display document real balance
                 // Update running balance
                 $runningBalances[$key] += $netDebit - $credit;
                 $record->running_balance = $runningBalances[$key];
+                $record->persist_running_balance = $netDebit - $creditBase;
+                $record->persist_amount_paid = $creditBase;
                 
-                // Store Net for display (Backend calculated)
                 $record->debit_amount = $netDebit;  
                 $record->credit_amount = $credit; // Optional: store for display
+                $record->adjusted_amount = $netDebit;
+                $record->positive_adjustment_amount = $posSum;
+                $record->negative_adjustment_amount = $negSum;
 
                 return $record;
             });
@@ -176,7 +240,7 @@ class CustomerLedgerController extends Controller
 
             // Calculate running balance per customer and type
             $runningBalances = [];
-            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $floatingAmounts, $paymentForwarded, $adjustmentsGrouped) {
+            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $floatingAmounts, $paymentForwarded, $adjustmentsPosNeg, $paidAmounts, $shouldPersist) {
                 $key = $record->customer_code;
 
                 // Initialize running balance for this customer+type if not exists
@@ -208,18 +272,34 @@ class CustomerLedgerController extends Controller
                     $applyTo = 'Other Income';
                 }
                 
-                $adjustedAmount = $adjustmentsGrouped
+                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
+                    $beginRow = BeginningBalance::where('beginningbalance_no', $record->invoice_number)->first();
+                    $amount = $val($beginRow?->balance_amount);
+                    if ($shouldPersist && $beginRow && $record->amount != $beginRow->balance_amount) {
+                        CustomerLedger::where('id', $record->id)->update(['amount' => $beginRow->balance_amount]);
+                        $record->amount = $beginRow->balance_amount;
+                    }
+                }
+
+                $posNeg = $adjustmentsPosNeg
                         ->get($record->invoice_number, collect())
                         ->get($applyTo, collect())
                         ->first()
-                        ->total_adjustment ?? 0;
+                        ?? null;
+                $posSum = $posNeg->pos_sum ?? 0;
+                $negSum = $posNeg->neg_sum ?? 0;
+                $adjustedAmount = $posSum - $negSum;
 
                 $grossDebit = $amount - $shrinkage + $overage - $return;
 
-                // Always include adjustments (positive/negative) in net debit
                 $netDebit = $grossDebit + $adjustedAmount;
 
-                $credit = $val($record->amount_paid) + $floatingAmount;
+                $paidRow = $paidAmounts
+                    ->get($record->invoice_number, collect())
+                    ->get($record->type, collect())
+                    ->first();
+                $creditBase = $paidRow?->total_paid ?? $val($record->amount_paid);
+                $credit = $creditBase + $floatingAmount;
                 $record->amount_paid = $credit;
 
                 // for display document real balance
@@ -228,9 +308,14 @@ class CustomerLedgerController extends Controller
                 // Update running balance
                 $runningBalances[$key] += $netDebit - $credit;
                 $record->running_balance = $runningBalances[$key];
+                $record->persist_running_balance = $netDebit - $creditBase;
+                $record->persist_amount_paid = $creditBase;
                 
-                $record->debit_amount = $netDebit;  // Store Net for display
-                $record->amount_paid = $credit; // Optional: store for display
+                $record->debit_amount = $netDebit;
+                $record->amount_paid = $credit;
+                $record->adjusted_amount = $netDebit;
+                $record->positive_adjustment_amount = $posSum;
+                $record->negative_adjustment_amount = $negSum;
 
                 return $record;
             });
@@ -245,7 +330,7 @@ class CustomerLedgerController extends Controller
 
             // Calculate running balance per customer and type
             $runningBalances = [];
-            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $adjustmentsGrouped) {
+            $processedRecords = $allRecords->map(function ($record) use (&$runningBalances, $adjustmentsPosNeg, $paidAmounts, $shouldPersist) {
                 $key = $record->customer_code;
 
                 // Initialize running balance for this customer+type if not exists
@@ -271,28 +356,69 @@ class CustomerLedgerController extends Controller
                     $applyTo = 'Other Income';
                 }
 
-                $adjustedAmount = $adjustmentsGrouped
+                if ($record->type === 'BG' || $record->type === 'Beginning Balance') {
+                    $beginRow = BeginningBalance::where('beginningbalance_no', $record->invoice_number)->first();
+                    $amount = $val($beginRow?->balance_amount);
+                    if ($shouldPersist && $beginRow && $record->amount != $beginRow->balance_amount) {
+                        CustomerLedger::where('id', $record->id)->update(['amount' => $beginRow->balance_amount]);
+                        $record->amount = $beginRow->balance_amount;
+                    }
+                }
+
+                $posNeg = $adjustmentsPosNeg
                         ->get($record->invoice_number, collect())
                         ->get($applyTo, collect())
                         ->first()
-                        ->total_adjustment ?? 0;
+                        ?? null;
+                $posSum = $posNeg->pos_sum ?? 0;
+                $negSum = $posNeg->neg_sum ?? 0;
+                $adjustedAmount = $posSum - $negSum;
 
                 $grossDebit = $amount - $shrinkage + $overage - $return;
 
-                // Always include adjustments (positive/negative) in net debit
                 $netDebit = $grossDebit + $adjustedAmount;
 
-                $credit = $val($record->amount_paid);
+                $paidRow = $paidAmounts
+                    ->get($record->invoice_number, collect())
+                    ->get($record->type, collect())
+                    ->first();
+                $creditBase = $paidRow?->total_paid ?? $val($record->amount_paid);
+                $credit = $creditBase;
+                $record->amount_paid = $creditBase;
 
                 $record->document_balance = $record->running_balance; // for display document real balance
                 // Update running balance
                 $runningBalances[$key] += $netDebit - $credit;
                 $record->running_balance = $runningBalances[$key];
-                $record->debit_amount = $netDebit;  // Store Net for display
-                $record->credit_amount = $credit; // Optional: store for display
+                $record->persist_running_balance = $netDebit - $creditBase;
+                $record->persist_amount_paid = $creditBase;
+                $record->debit_amount = $netDebit;
+                $record->credit_amount = $credit;
+                $record->adjusted_amount = $netDebit;
+                $record->positive_adjustment_amount = $posSum;
+                $record->negative_adjustment_amount = $negSum;
 
                 return $record;
             });
+        }
+
+        if (isset($processedRecords) && $shouldPersist) {
+            foreach ($processedRecords as $r) {
+                $adj = $r->adjusted_amount ?? $r->debit_amount ?? null;
+                $rb = $r->persist_running_balance ?? $r->running_balance;
+                $pos = $r->positive_adjustment_amount ?? null;
+                $neg = $r->negative_adjustment_amount ?? null;
+                $amt = $r->amount ?? null;
+                $paid = $r->persist_amount_paid ?? null;
+                CustomerLedger::where('id', $r->id)->update([
+                    'amount' => $amt,
+                    'adjusted_amount' => $adj,
+                    'positive_adjustment_amount' => $pos,
+                    'negative_adjustment_amount' => $neg,
+                    'amount_paid' => $paid,
+                    'running_balance' => $rb,
+                ]);
+            }
         }
 
         // Now apply pagination to the processed records

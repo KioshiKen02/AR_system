@@ -21,6 +21,8 @@ class CustomerLedger extends Model
         'currency',
         'amount',
         'adjusted_amount',
+        'positive_adjustment_amount',
+        'negative_adjustment_amount',
         'amount_paid',
         'running_balance',
         'wht_amount',

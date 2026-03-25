@@ -5,6 +5,7 @@ namespace App\Http\Controllers\TransactionControllers;
 use App\Events\NewCreated;
 use App\Http\Controllers\Controller;
 use App\Models\ReportModels\CustomerLedger;
+use App\Models\TransactionModels\Adjustment;
 use App\Models\TransactionModels\BeginningBalance;
 use App\Models\TransactionModels\PaymentDetails;
 use Exception;
@@ -324,6 +325,66 @@ class BeginningBalanceController extends Controller
             return response()->json([
                 'next_beginningbalance_no' => $nextNumber,
                 'is_new_sequence' => !$latestBeginningBalance
+            ]);
+        });
+    }
+
+    public function updateAmount(Request $request)
+    {
+        $validated = $request->validate([
+            'beginningbalance_no' => ['required', 'string'],
+            'balance_amount' => ['required', 'numeric'],
+        ]);
+
+        if (($request->user()->role ?? null) !== 'Admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized',
+            ], 403);
+        }
+
+        return DB::transaction(function () use ($validated, $request) {
+            $bb = BeginningBalance::where('beginningbalance_no', $validated['beginningbalance_no'])->lockForUpdate()->firstOrFail();
+            $bb->update([
+                'balance_amount' => $validated['balance_amount'],
+            ]);
+
+            $ledger = CustomerLedger::where('invoice_number', $validated['beginningbalance_no'])
+                ->whereIn('type', ['BG', 'Beginning Balance'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($ledger) {
+                $amount = (float)$validated['balance_amount'];
+
+                $posSum = Adjustment::where('invoice_no', $validated['beginningbalance_no'])
+                    ->where('apply_to', 'Beginning Balance')
+                    ->where('type', 'Positive')
+                    ->sum('amount');
+
+                $negSum = Adjustment::where('invoice_no', $validated['beginningbalance_no'])
+                    ->where('apply_to', 'Beginning Balance')
+                    ->where('type', 'Negative')
+                    ->sum('amount');
+
+                $adjustedAmount = $amount + $posSum - $negSum;
+                $runningBalance = $adjustedAmount - ($ledger->amount_paid ?? 0.00);
+
+                $ledger->update([
+                    'amount' => $amount,
+                    'positive_adjustment_amount' => $posSum,
+                    'negative_adjustment_amount' => $negSum,
+                    'adjusted_amount' => $adjustedAmount,
+                    'running_balance' => $runningBalance,
+                ]);
+            }
+
+            event(new NewCreated('beginningbalance'));
+            event(new NewCreated('customerledger'));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Beginning balance updated and ledger synchronized',
             ]);
         });
     }
