@@ -26,7 +26,7 @@ class UserController extends Controller
 
         $permissions = [];
         foreach ($users as $user) {
-            $permissions[$user->id] = Permission::where('user_id', $user->id)->get()->keyBy('role_id')->toArray();
+            $permissions[$user->id] = $user->permissions()->get()->keyBy('role_id')->toArray();
         }
 
         return Inertia::render('Users', [
