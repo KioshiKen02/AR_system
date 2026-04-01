@@ -118,7 +118,7 @@ class GenerateTextFile
             $accCodes = AccCode::all()->keyBy('gl_account_navcode');
             $bankNames = Payment::all()->keyBy('document_no');
             $banks = CashInBank::all()->keyBy('bank_name');
-            $itemsList = Item::all()->keyBy('name');
+            $itemsList = Item::all()->keyBy(fn ($item) => $this->normalizeItemNameKey($item->name));
             $locCodeByCustomer = $this->getLocCodeByCustomer($customers);
 
             $auto_increment_cash = 0;
@@ -186,7 +186,7 @@ class GenerateTextFile
                         $bankCode = $banks->get($bankName)?->bank_code ?? '';
 
                         $itemName = $invoice->items->first()?->item_name ?? '';
-                        $itemCode = $itemsList->get($itemName)?->acc_code ?? '';
+                        $itemCode = $itemsList->get($this->normalizeItemNameKey($itemName))?->acc_code ?? '';
 
                         if (strcasecmp(trim((string) $invoice->payment_mode), 'Cash') === 0) {
                             $cashLines[] = $this->generateOtherIncomeLine(
@@ -1481,6 +1481,17 @@ class GenerateTextFile
     {
         $n = is_numeric($value) ? (float) $value : 0.0;
         return number_format($n, 2, '.', '');
+    }
+
+    protected function normalizeItemNameKey($value): string
+    {
+        $trimmed = trim((string) $value);
+        $collapsed = preg_replace('/\s+/', ' ', $trimmed);
+        if ($collapsed === null) {
+            $collapsed = $trimmed;
+        }
+
+        return Str::lower($collapsed);
     }
 
     protected function getPaymentDocumentCodeFromPaymentType($type): string
