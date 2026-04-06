@@ -269,81 +269,28 @@ class AdjustmentControllers extends Controller
                 
                 $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
                 
-                switch ($appName) {
-                    case 'Bilar Breeder Local':
-                        $baseUrl = 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=13';
-                        break;
-                    case 'Bilar Breeder':
-                        $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=13';
-                        break;
-                    case 'Gp Jagna':
-                        $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=50';
-                        break;
-                    case 'Ice Plant':
-                        $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=25';
-                        break;
-                    case 'Peanut Kisses':
-                        $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=26';
-                        break;
-                    case 'Cortes Poultry':
-                        $baseUrl = 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=12';
-                        break;
-                    case 'Cortes Piggery':
-                        $baseUrl = 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=11';
-                        break;
-                    case 'Canhayupon Breeder':
-                        $baseUrl = 'http://172.16.220.223:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=15';
-                        break;
-                    case 'Bilar Hatchery':
-                        $baseUrl = 'http://172.16.219.200:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=14';
-                        break;
-                    case 'Lapsaon Breeder':
-                        $baseUrl = 'http://172.16.220.222:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=16';
-                        break;
-                    case 'Rizal Breeder':
-                        $baseUrl = 'http://172.16.217.11:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=43';
-                        break;
-                    // ubay server 
-                    case 'Feedmill':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=19';
-                        break;
-                    case 'Growout':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=20';
-                        break;
-                    case 'Cortes Fertilizer':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=42';
-                        break;
-                    case 'Ubay Fertilizer':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=22';
-                        break;
-                    case 'Piggery Untaga':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=23';
-                        break;
-                    case 'Demo Farm':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=21';
-                        break;
-                    case 'Dressing Plant':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=17';
-                        break;
-                    case 'Farmers Market':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=41';
-                        break;
-                    case 'Meat Processing':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=46';
-                        break;
-                    case 'Rendering':
-                        $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=18';
-                        break;
-                    case 'Ar System':
-                        // Fallback or specific logic for Ar System if needed
-                        $baseUrl = null; 
-                        break;
-                    default:
-                        throw new \Exception("Unknown app name: {$appName}");
+                $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
+                if ($baseUrl === null && $appName !== 'Ar System') {
+                    throw new \Exception("Unknown app name: {$appName}");
                 }
                 
                 if ($baseUrl) {
-                    $url = $baseUrl;
+                    $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
+                    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                        Log::error('Adjustment Sales API Failed', [
+                            'app_name' => $appName,
+                            'url' => $url,
+                            'status' => null,
+                            'response_body' => null,
+                            'response_json' => null,
+                            'payload' => [
+                                'adj_sales' => (string) $newAdjustmentAmount,
+                                'tds_no'    => $validated['invoice_no'],
+                            ],
+                            'exception' => 'Invalid URL',
+                        ]);
+                        return $adjustmentNumber;
+                    }
                     try {
                         $response = Http::timeout(3)
                             ->retry(2, 200)
@@ -390,6 +337,162 @@ class AdjustmentControllers extends Controller
 
         session()->put('adjustment_number', $adjNo);
         return redirect()->back();
+    }
+
+    public function syncAdjustmentSales(Request $request, $adjustment)
+    {
+        $invoiceNo = $request->input('invoice_no');
+
+        $adjustment = Adjustment::withTrashed()->find($adjustment);
+        if ($adjustment) {
+            $invoiceNo = $adjustment->invoice_no;
+            if ($adjustment->apply_to !== 'Sales Invoice') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only Sales Invoice adjustments can be synced.',
+                ], 422);
+            }
+        }
+
+        if (!$invoiceNo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'invoice_no is required.',
+            ], 422);
+        }
+
+        $ledger = CustomerLedger::where('invoice_number', $invoiceNo)
+            ->where('type', 'Sales Invoice')
+            ->first();
+
+        if (!$ledger) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer ledger not found for this Sales Invoice.',
+            ], 404);
+        }
+
+        $userAppSetting = $request->user()->appSetting;
+        $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
+
+        $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
+        if ($baseUrl === null && $appName !== 'Ar System') {
+            return response()->json([
+                'success' => false,
+                'message' => "Unknown app name: {$appName}",
+            ], 422);
+        }
+
+        if (!$baseUrl) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No sync URL configured for this app.',
+            ], 422);
+        }
+
+        $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            Log::error('Adjustment Sales API Failed', [
+                'app_name' => $appName,
+                'url' => $url,
+                'status' => null,
+                'response_body' => null,
+                'response_json' => null,
+                'payload' => [
+                    'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                    'tds_no'    => $invoiceNo,
+                ],
+                'exception' => 'Invalid URL',
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid sync URL.',
+            ], 422);
+        }
+
+        try {
+            $response = Http::timeout(5)
+                ->retry(2, 200)
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                ])->post($url, [
+                    'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                    'tds_no' => $invoiceNo,
+                ]);
+
+            if (!$response->successful()) {
+                Log::error('Adjustment Sales API Failed', [
+                    'app_name' => $appName,
+                    'url' => $url,
+                    'status' => $response->status(),
+                    'response_body' => $response->body(),
+                    'response_json' => $response->json(),
+                    'payload' => [
+                        'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                        'tds_no'    => $invoiceNo,
+                    ],
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Sync failed. Please check logs for details.',
+                ], 502);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Sync successful.',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Adjustment Sales API Failed', [
+                'app_name' => $appName,
+                'url' => $url,
+                'status' => null,
+                'response_body' => null,
+                'response_json' => null,
+                'payload' => [
+                    'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                    'tds_no'    => $invoiceNo,
+                ],
+                'exception' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Sync failed due to a network/connection error.',
+            ], 502);
+        }
+    }
+
+    private function adjustmentSalesBaseUrlForApp(string $appName): ?string
+    {
+        $map = [
+            'Bilar Breeder Local' => 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=13',
+            'Bilar Breeder' => 'http://172.16.220.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=13',
+            'Gp Jagna' => 'http://172.16.220.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=50',
+            'Ice Plant' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=25',
+            'Peanut Kisses' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=26',
+            'Cortes Poultry' => 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=12',
+            'Cortes Piggery' => 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=11',
+            'Canhayupon Breeder' => 'http://172.16.220.223:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=15',
+            'Bilar Hatchery' => 'http://172.16.219.200:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=14',
+            'Lapsaon Breeder' => 'http://172.16.220.222:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=16',
+            'Rizal Breeder' => 'http://172.16.217.11:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=43',
+            'Feedmill' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=19',
+            'Growout' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=20',
+            'Cortes Fertilizer' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=42',
+            'Ubay Fertilizer' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=22',
+            'Piggery Untaga' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=23',
+            'Demo Farm' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=21',
+            'Dressing Plant' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=17',
+            'Farmers Market' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=41',
+            'Meat Processing' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=46',
+            'Rendering' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=18',
+            'Ar System' => null,
+        ];
+
+        return $map[$appName] ?? null;
     }
 
     public function destroy($id)

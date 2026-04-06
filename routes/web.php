@@ -204,6 +204,7 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         //Adjustment Page
         Route::get('/adjustment', [AdjustmentControllers::class, 'index'])->middleware('check.permission:0202-ADT,view')->name('adjustment');
         Route::post('/addAdjustment', [AdjustmentControllers::class, 'addAdjustment'])->name('addAdjustment');
+        Route::post('/adjustment/{adjustment}/sync-sales', [AdjustmentControllers::class, 'syncAdjustmentSales'])->middleware(EnsureUserIsAdmin::class)->name('adjustment.syncSales');
         Route::put('/editAdjustment/{id}', [AdjustmentControllers::class, 'editAdjustment'])->name('editAdjustment');
         Route::delete('/deleteAdjustment/{id}', [AdjustmentControllers::class, 'destroy'])->name('deleteAdjustment');
         Route::get('/getlatestadjustmentno', [AdjustmentControllers::class, 'latest'])->name('getlatestadjustmentno');

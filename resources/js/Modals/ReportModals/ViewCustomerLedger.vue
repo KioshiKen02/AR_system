@@ -194,8 +194,7 @@ watch(
                 : formatCurrency("0.00");
             form.amount_paid = formatCurrency(props.selected.amount_paid);
             form.wht_amount = formatCurrency(props.selected.wht_amount);
-            form.running_balance = formatCurrency(
-            );
+            form.running_balance = formatCurrency(props.selected.running_balance ?? 0);
 
             try {
                 // Fetch details for ALL types
@@ -206,21 +205,21 @@ watch(
                     }
                 });
                 detailedTransactions.value = detailResponse.data.data;
-                const summary = detailResponse.data.summary || {};
-                form.pos_adjustment = formatCurrency(summary.pos_adjustment || 0);
-                form.neg_adjustment = formatCurrency(summary.neg_adjustment || 0);
-                // Always trust backend summary to avoid mixing by reused reference numbers
-                form.amount_paid = formatCurrency(summary.payments_total || 0);
-                form.amount = formatCurrency(
-                    summary.beginning_amount ?? 0
+                const ledger = detailResponse.data.ledger || {};
+                form.amount = formatCurrency(ledger.amount ?? 0);
+                form.adjusted_amount = formatCurrency(ledger.adjusted_amount ?? 0);
+                form.pos_adjustment = formatCurrency(
+                    ledger.positive_adjustment_amount ?? 0
                 );
-                form.adjusted_amount = formatCurrency(summary.adjusted_amount ?? 0);
-                form.running_balance = formatCurrency(summary.running_balance ?? 0);
-            // Sync ledger components to match transaction math
-            form.overage = formatCurrency(summary.overage || 0);
-            form.shrinkage = formatCurrency(summary.shrinkage || 0);
-            form.return = formatCurrency(summary.return_amount || 0);
-            form.wht_amount = formatCurrency(summary.wht_amount || 0);
+                form.neg_adjustment = formatCurrency(
+                    ledger.negative_adjustment_amount ?? 0
+                );
+                form.amount_paid = formatCurrency(ledger.amount_paid ?? 0);
+                form.running_balance = formatCurrency(ledger.running_balance ?? 0);
+                form.overage = formatCurrency(ledger.overage ?? 0);
+                form.shrinkage = formatCurrency(ledger.shrinkage ?? 0);
+                form.return = formatCurrency(ledger.return ?? 0);
+                form.wht_amount = formatCurrency(ledger.wht_amount ?? 0);
 
                 const response = await axios.get(
                     route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),

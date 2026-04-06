@@ -4,7 +4,9 @@
     "scripts": {
         "build": "vite build",
         "watch": "vite",
-        "dev": "vite"
+        "dev": "vite",
+        "test": "vitest",
+        "test:run": "vitest run"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.1.3",

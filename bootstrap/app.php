@@ -67,10 +67,14 @@ return Application::configure(basePath: dirname(__DIR__))
             // 'api/insertcustomerledger',
             // 'bilar_breeder_ar/api/insertpayment',
             'api/*', // Or wildcard for all API routes
+            '*/adjustment/*/sync-sales',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->renderable(function (AuthenticationException $e, $request) {
+            if ($request->routeIs('adjustment.syncSales')) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'Unauthenticated.'], 401);
             }
@@ -78,16 +82,25 @@ return Application::configure(basePath: dirname(__DIR__))
             return redirect()->guest(route('session.expired', ['tenant' => $tenant]));
         });
         $exceptions->renderable(function (NotFoundHttpException $e) {
-            return Inertia::render('PageNotFound');
+            if (request()->expectsJson()) {
+                return response()->json(['message' => 'Not Found.'], 404);
+            }
+            return Inertia::render('PageNotFound')->toResponse(request())->setStatusCode(404);
         });
 
         $exceptions->renderable(function (AccessDeniedHttpException $e) {
-            return Inertia::render('Forbidden');
+            if (request()->expectsJson()) {
+                return response()->json(['message' => 'Forbidden.'], 403);
+            }
+            return Inertia::render('Forbidden')->toResponse(request())->setStatusCode(403);
         });
 
         $exceptions->renderable(function (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
             if ($e->getStatusCode() === 403) {
-                return Inertia::render('Forbidden');
+                if (request()->expectsJson()) {
+                    return response()->json(['message' => 'Forbidden.'], 403);
+                }
+                return Inertia::render('Forbidden')->toResponse(request())->setStatusCode(403);
             }
         });
     })

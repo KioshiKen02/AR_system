@@ -339,9 +339,15 @@
                         </td>
                         <td class="px-3 py-2">
                             <div class="flex justify-center gap-2">
-                                <button @click="openViewModal(adjustment)"
+                                <button type="button" @click="openViewModal(adjustment)"
                                     class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100">
                                     <svg-icon type="mdi" :path="mdiEye" class="w-4 h-4 text-[var(--color-primary)]" />
+                                </button>
+                                <button type="button" v-if="isAdmin && adjustment.apply_to === 'Sales Invoice'"
+                                    :disabled="syncingAdjustmentId === adjustment.id"
+                                    @click="syncAdjustmentSales(adjustment)"
+                                    class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100 disabled:opacity-70 disabled:cursor-not-allowed">
+                                    <svg-icon type="mdi" :path="mdiSync" class="w-4 h-4 text-[var(--color-primary)]" />
                                 </button>
                             </div>
                         </td>
@@ -380,7 +386,7 @@ import ToastAlert from "./Components/ToastAlert.vue";
 import ConfirmationDialog from "./Components/ConfirmationDialog.vue";
 import AddAdjustment from "../Modals/TransactionModals/AddAdjustment.vue";
 import ViewAdjustment from "../Modals/TransactionModals/ViewAdjustment.vue";
-import { mdiClose, mdiEye, mdiMagnify, mdiPlus } from "@mdi/js";
+import { mdiClose, mdiEye, mdiMagnify, mdiPlus, mdiSync } from "@mdi/js";
 import { FunnelIcon } from "@heroicons/vue/24/solid";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import DatePicker from "./Components/DatePicker.vue";
@@ -398,6 +404,8 @@ const props = defineProps({
 const page = usePage();
 
 const { canInsert } = usePermissions();
+
+const isAdmin = computed(() => page.props.auth?.user?.role === "Admin");
 
 const showModal = ref(false);
 const showViewModal = ref(false);
@@ -417,6 +425,63 @@ const showSuccessToast = (message) => {
     setTimeout(() => {
         showToast.value = false;
     }, 3000);
+};
+
+const syncingAdjustmentId = ref(null);
+const syncAdjustmentSales = async (adjustment) => {
+    if (!adjustment?.id) return;
+    if (syncingAdjustmentId.value) return;
+
+    try {
+        syncingAdjustmentId.value = adjustment.id;
+        const response = await axios.post(
+            route("adjustment.syncSales", {
+                tenant: page.props.tenant,
+                adjustment: adjustment.id,
+            }),
+            {
+                invoice_no: adjustment.invoice_no,
+            },
+            {
+                headers: {
+                    Accept: "application/json",
+                },
+            }
+        );
+
+        const contentType = response?.headers?.["content-type"] || "";
+        if (!contentType.includes("application/json")) {
+            showSuccessToast("Session expired or not authorized");
+            router.reload();
+            return;
+        }
+
+        if (response.data?.success === true) {
+            showSuccessToast(response.data?.message || "Sync successful");
+            return;
+        }
+
+        showSuccessToast(response.data?.message || "Sync failed");
+    } catch (error) {
+        const status = error?.response?.status;
+        if (status === 401) {
+            showSuccessToast("Session expired. Please login again.");
+            router.reload();
+            return;
+        }
+        if (status === 403) {
+            showSuccessToast("Not authorized");
+            return;
+        }
+        if (status === 419) {
+            showSuccessToast("Session expired. Please refresh.");
+            router.reload();
+            return;
+        }
+        showSuccessToast(error?.response?.data?.message || "Sync failed");
+    } finally {
+        syncingAdjustmentId.value = null;
+    }
 };
 
 async function openModal() {

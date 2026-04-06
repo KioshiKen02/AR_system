@@ -124,7 +124,7 @@
                     <button
                         :disabled="
                             (!isLoading &&
-                                filteredLedgers.data.length === 0 &&
+                                filteredRows.length === 0 &&
                                 generateTableData) ||
                             !generateTableData
                         "
@@ -248,101 +248,6 @@
                                     </div>
                                 </div>
 
-                                <!-- table filter  -->
-                                <div>
-                                    <h3 class="text-sm font-medium mb-2">
-                                        Type
-                                    </h3>
-                                    <div class="grid grid-cols-1 gap-2">
-                                        <label
-                                            class="flex items-center space-x-2"
-                                        >
-                                            <label
-                                                class="inline-flex items-center cursor-pointer group"
-                                            >
-                                                <input
-                                                    type="radio"
-                                                    v-model="typeFilters"
-                                                    value="With Floating Deducted"
-                                                    class="hidden peer"
-                                                />
-                                                <div
-                                                    class="relative flex items-center justify-center"
-                                                >
-                                                    <!-- Radio button -->
-                                                    <div
-                                                        class="relative w-4 h-4 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
-                                                        :class="{
-                                                            'border-[var(--color-border)]':
-                                                                typeFilters ===
-                                                                'With Floating Deducted',
-                                                        }"
-                                                    >
-                                                        <div
-                                                            class="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[var(--color-border)] transition-opacity"
-                                                            :class="{
-                                                                'opacity-100':
-                                                                    typeFilters ===
-                                                                    'With Floating Deducted',
-                                                                'opacity-0':
-                                                                    typeFilters !==
-                                                                    'With Floating Deducted',
-                                                            }"
-                                                        ></div>
-                                                    </div>
-                                                    <span class="text-sm z-10"
-                                                        >With Floating
-                                                        Deducted</span
-                                                    >
-                                                </div>
-                                            </label>
-                                        </label>
-
-                                        <label
-                                            class="flex items-center space-x-2"
-                                        >
-                                            <label
-                                                class="inline-flex items-center cursor-pointer group"
-                                            >
-                                                <input
-                                                    type="radio"
-                                                    v-model="typeFilters"
-                                                    value="Without Floating Deducted"
-                                                    class="hidden peer"
-                                                />
-                                                <div
-                                                    class="relative flex items-center justify-center"
-                                                >
-                                                    <!-- Radio button -->
-                                                    <div
-                                                        class="relative w-4 h-4 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
-                                                        :class="{
-                                                            'border-[var(--color-border)]':
-                                                                typeFilters ===
-                                                                'Without Floating Deducted',
-                                                        }"
-                                                    >
-                                                        <div
-                                                            class="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-[var(--color-border)] transition-opacity"
-                                                            :class="{
-                                                                'opacity-100':
-                                                                    typeFilters ===
-                                                                    'Without Floating Deducted',
-                                                                'opacity-0':
-                                                                    typeFilters !==
-                                                                    'Without Floating Deducted',
-                                                            }"
-                                                        ></div>
-                                                    </div>
-                                                    <span class="text-sm z-10"
-                                                        >Without Floating
-                                                        Deducted</span
-                                                    >
-                                                </div>
-                                            </label>
-                                        </label>
-                                    </div>
-                                </div>
                             </div>
 
                             <div
@@ -371,6 +276,25 @@
         <div
             class="bg-[var(--color-bg-secondary)]/20 p-4 rounded-md shadow-[0_0_20px_var(--color-shadow)]/20 mt-4"
         >
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+                <label class="inline-flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
+                    <input
+                        type="checkbox"
+                        v-model="hideFloatingDeducted"
+                        data-testid="hide-floating"
+                        class="h-4 w-4 rounded border border-[var(--color-border)] bg-transparent"
+                        :disabled="!generateTableData || isLoading"
+                    />
+                    <span>Hide floating-deducted transactions</span>
+                </label>
+                <div
+                    v-if="generateTableData && shouldUseInfiniteScroll && filteredRows.length > 0"
+                    class="text-xs text-[var(--color-text-secondary)]"
+                >
+                    Showing {{ renderedRows.length }} of {{ filteredRows.length }}
+                </div>
+            </div>
+            <div ref="scrollContainer" class="max-h-[65vh] overflow-auto rounded-xl">
             <table
                 class="w-full text-sm text-[var(--color-text-primary)] rounded-xl overflow-hidden mb-2"
             >
@@ -423,11 +347,7 @@
                 <tbody>
                     <!-- Loading State -->
                     <tr
-                        v-if="
-                            isLoading &&
-                            filteredLedgers.data.length !== 0 &&
-                            generateTableData
-                        "
+                        v-if="isLoading && generateTableData"
                     >
                         <td colspan="8" class="text-center py-8">
                             <div class="flex justify-center items-center">
@@ -480,11 +400,12 @@
                     <tr
                         v-else-if="
                             !isLoading &&
-                            filteredLedgers.data.length !== 0 &&
+                            filteredRows.length !== 0 &&
                             generateTableData
                         "
-                        v-for="customerledger in filteredLedgers.data"
+                        v-for="customerledger in renderedRows"
                         :key="customerledger.id"
+                        data-testid="ledger-row"
                         class="hover:bg-[var(--color-primary)]/20 transition-colors duration-150 group h-10"
                     >
                         <td class="px-3 py-1 font-medium">
@@ -600,13 +521,29 @@
                             </div>
                         </td>
                     </tr>
+                    <tr
+                        v-if="
+                            !isLoading &&
+                            generateTableData &&
+                            shouldUseInfiniteScroll &&
+                            renderedRows.length < filteredRows.length
+                        "
+                    >
+                        <td colspan="8" class="px-5 py-4 text-center">
+                            <div
+                                ref="loadMoreSentinel"
+                                class="text-xs text-[var(--color-text-secondary)]"
+                            >
+                                Loading more rows...
+                            </div>
+                        </td>
+                    </tr>
                     <!-- Empty State -->
                     <tr
                         v-if="
-                            (!isLoading &&
-                                filteredLedgers.data.length === 0 &&
-                                generateTableData) ||
-                            !generateTableData
+                            !isLoading &&
+                            (!generateTableData ||
+                                (generateTableData && filteredRows.length === 0))
                         "
                     >
                         <td colspan="8" class="px-5 py-6 text-center">
@@ -627,23 +564,14 @@
                                         d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                                     />
                                 </svg>
-                                <p class="font-medium">No data found</p>
+                                <p class="font-medium">
+                                    {{ generateTableData ? "No data found" : "Apply filters to load data" }}
+                                </p>
                             </div>
                         </td>
                     </tr>
                 </tbody>
             </table>
-
-            <!-- Pagination Links -->
-            <div
-                v-if="
-                    isLoading ||
-                    filteredLedgers.data.length === 0 ||
-                    !generateTableData
-                "
-            />
-            <div v-else>
-                <PaginationLinks :paginator="filteredLedgers" />
             </div>
         </div>
     </div>
@@ -651,9 +579,7 @@
 
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from "vue";
-import PaginationLinks from "@/Pages/Components/PaginationLinks.vue";
 import { router, usePage } from "@inertiajs/vue3";
-import { debounce } from "lodash";
 import ToastAlert from "@/Pages/Components/ToastAlert.vue";
 import ConfirmationDialog from "@/Pages/Components/ConfirmationDialog.vue";
 import TextInput from "@/Pages/Components/TextInput.vue";
@@ -698,14 +624,14 @@ const showCustomerModal = ref(false);
 // Filter functionality (new)
 const showFilters = ref(false);
 const cus_code = ref(props.filters?.customer_code || null);
-const typeFilters = ref(props.filters?.type_filters || null);
 const dateRange = ref({
     start: props.filters?.date_start || null,
     end: props.filters?.date_end || null,
 });
 const generateTableData = ref(props.generateTableData ?? false);
 
-const search = ref(props.searchTerm);
+const search = ref(props.searchTerm || "");
+const hideFloatingDeducted = ref(false);
 
 const showSuccessToast = (message) => {
     toastMessage.value = message;
@@ -827,65 +753,103 @@ const clearSearch = () => {
 };
 
 const isLoading = ref(false);
-let debounceTimeout = null;
-const filteredLedgers = ref({ ...props.customerledgers });
-const performSearch = debounce((q) => {
-    const filters = {
-        search: q,
-        customer_code: cus_code.value,
-        type_filters: typeFilters.value,
-        date_start: dateRange.value.start,
-        date_end: dateRange.value.end,
-        generateTableData: true,
-    };
-
-    router.get(route("customerledger", { tenant: page.props.tenant }), filters, {
-        preserveState: true,
-        replace: true,
-        onFinish: () => {
-            isLoading.value = false;
-        },
-    });
-    generateTableData.value = true;
-}, 1000);
-// watch(search, (q) => {
-//     isLoading.value = true;
-//     performSearch(q);
-// });
+const allLedgers = ref(props.customerledgers?.data ?? []);
 watch(
     () => props.customerledgers,
-    (newValue, oldValue) => {
-        if (newValue !== oldValue) {
-            filteredLedgers.value = { ...props.customerledgers };
-        }
+    (newValue) => {
+        allLedgers.value = newValue?.data ?? [];
     }
 );
-watch(
-    () => search.value,
-    (query) => {
-        isLoading.value = true;
-        if (debounceTimeout) clearTimeout(debounceTimeout);
 
-        debounceTimeout = setTimeout(() => {
-            if (!query.trim()) {
-                filteredLedgers.value = { ...props.customerledgers };
-            } else {
-                filteredLedgers.value.data = props.customerledgers.data.filter(
-                    (customer) =>
-                        (customer.invoice_number ?? "")
-                            .toString()
-                            .toLowerCase()
-                            .includes(query.toLowerCase())
-                );
-                // Optional: reset pagination links, since it's now a filtered local list
-                filteredLedgers.value.links = [];
-                filteredLedgers.value.total = filteredLedgers.value.data.length;
-                filteredLedgers.value.current_page = 1;
-                filteredLedgers.value.last_page = 1;
+const filteredRows = computed(() => {
+    const rows = Array.isArray(allLedgers.value) ? allLedgers.value : [];
+    const q = (search.value || "").trim().toLowerCase();
+
+    return rows.filter((row) => {
+        if (hideFloatingDeducted.value) {
+            const floatingAmount = Number(row?.floating_amount ?? 0);
+            if (row?.has_floating_deduction === true || floatingAmount > 0) {
+                return false;
             }
-            isLoading.value = false;
-        }, 400);
+        }
+
+        if (!q) return true;
+
+        const haystack = [
+            row?.invoice_number,
+            row?.customer_name,
+            row?.customer_code,
+            row?.type,
+        ]
+            .filter(Boolean)
+            .join(" ")
+            .toString()
+            .toLowerCase();
+
+        return haystack.includes(q);
+    });
+});
+
+const renderLimit = ref(250);
+const shouldUseInfiniteScroll = computed(() => filteredRows.value.length > 1000);
+const renderedRows = computed(() => {
+    if (!shouldUseInfiniteScroll.value) return filteredRows.value;
+    return filteredRows.value.slice(0, renderLimit.value);
+});
+
+watch([() => search.value, () => hideFloatingDeducted.value, filteredRows], () => {
+    renderLimit.value = 250;
+});
+
+const scrollContainer = ref(null);
+const loadMoreSentinel = ref(null);
+let loadMoreObserver = null;
+
+const loadMoreRows = () => {
+    if (!shouldUseInfiniteScroll.value) return;
+    if (renderLimit.value >= filteredRows.value.length) return;
+    renderLimit.value = Math.min(renderLimit.value + 250, filteredRows.value.length);
+};
+
+const setupLoadMoreObserver = () => {
+    if (loadMoreObserver) {
+        loadMoreObserver.disconnect();
+        loadMoreObserver = null;
     }
+
+    if (typeof IntersectionObserver === "undefined") return;
+    if (!shouldUseInfiniteScroll.value) return;
+    if (!scrollContainer.value || !loadMoreSentinel.value) return;
+
+    loadMoreObserver = new IntersectionObserver(
+        (entries) => {
+            if (entries.some((e) => e.isIntersecting)) {
+                loadMoreRows();
+            }
+        },
+        {
+            root: scrollContainer.value,
+            rootMargin: "400px",
+            threshold: 0,
+        }
+    );
+
+    loadMoreObserver.observe(loadMoreSentinel.value);
+};
+
+watch(
+    [
+        () => scrollContainer.value,
+        () => loadMoreSentinel.value,
+        shouldUseInfiniteScroll,
+        filteredRows,
+    ],
+    () => {
+        nextTick(() => {
+            setupLoadMoreObserver();
+        });
+    },
+    { immediate: true }
 );
 
 // Filter functionality (new)
@@ -895,9 +859,10 @@ const toggleFilters = () => {
 
 const resetFilters = () => {
     cus_code.value = null;
-    typeFilters.value = null;
     dateRange.value = { start: null, end: null };
     generateTableData.value = false;
+    hideFloatingDeducted.value = false;
+    search.value = "";
 
     router.get(
         route("customerledger", { tenant: page.props.tenant }),
@@ -925,7 +890,6 @@ const clearDates = () => {
 const applyFilters = () => {
     const filters = {
         customer_code: cus_code.value,
-        type_filters: typeFilters.value,
         date_start: dateRange.value.start,
         date_end: dateRange.value.end,
         generateTableData: true,
@@ -947,7 +911,6 @@ const applyFilters = () => {
 const activeFiltersCount = computed(() => {
     let count = 0;
     if (cus_code.value) count++;
-    if (typeFilters.value) count++;
     if (dateRange.value.start || dateRange.value.end) count++;
     return count;
 });
@@ -968,13 +931,16 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    if (loadMoreObserver) {
+        loadMoreObserver.disconnect();
+        loadMoreObserver = null;
+    }
     // document.removeEventListener("click", handleClickOutside);
 });
 
 const hasActiveFilters = computed(() => {
     return (
         cus_code.value &&
-        typeFilters.value &&
         dateRange.value.start &&
         dateRange.value.end
     );
@@ -1001,11 +967,8 @@ const showWarningToast = (message) => {
 
 const exportToExcel = async () => {
     try {
-        if (
-            !filteredLedgers.value ||
-            !filteredLedgers.value.data ||
-            filteredLedgers.value.data.length === 0
-        ) {
+        const exportRows = filteredRows.value;
+        if (!exportRows || exportRows.length === 0) {
             showWarningToast("No data available to export.");
             return;
         }
@@ -1040,7 +1003,7 @@ const exportToExcel = async () => {
             cell.alignment = { horizontal: "center", vertical: "middle" };
         });
 
-        filteredLedgers.value.data.forEach((customerledger) => {
+        exportRows.forEach((customerledger) => {
             const row = worksheet.addRow([
                 customerledger.invoice_number || "",
                 customerledger.date ? formatDate(customerledger.date) : "",
@@ -1092,7 +1055,7 @@ const exportToExcel = async () => {
         worksheet.insertRow(2, ["Generated on:", new Date().toLocaleString()]);
         worksheet.insertRow(3, [
             "Total Records:",
-            filteredLedgers.value.data.length,
+            exportRows.length,
         ]);
         worksheet.insertRow(4, ["Payment Forwarded:", props.paymentForwarded]);
         worksheet.insertRow(5, []);
@@ -1107,7 +1070,7 @@ const exportToExcel = async () => {
         worksheet.getCell("A4").font = { bold: true };
 
         worksheet.getCell("B3").numFmt = "0";
-        worksheet.getCell("B3").value = filteredLedgers.value.data.length;
+        worksheet.getCell("B3").value = exportRows.length;
 
         worksheet.getCell("B4").numFmt = "#,##0.00";
         worksheet.getCell("B4").value = props.paymentForwarded;
@@ -1123,7 +1086,7 @@ const exportToExcel = async () => {
             fgColor: { argb: "027937" },
         };
 
-        const dataRange = `A6:H${6 + filteredLedgers.value.data.length}`;
+        const dataRange = `A6:H${6 + exportRows.length}`;
         worksheet.autoFilter = dataRange;
 
         worksheet.views = [{ state: "frozen", xSplit: 0, ySplit: 6 }];
@@ -1134,8 +1097,8 @@ const exportToExcel = async () => {
         if (cus_code.value) {
             filename += `_${cus_code.value}`;
         }
-        if (typeFilters.value) {
-            filename += `_${typeFilters.value.replace(/\s+/g, "_")}`;
+        if (hideFloatingDeducted.value) {
+            filename += `_HideFloatingDeducted`;
         }
 
         filename += ".xlsx";
@@ -1148,7 +1111,7 @@ const exportToExcel = async () => {
         saveAs(blob, filename);
 
         showSuccessToast(
-            `Excel File Exported Successfully With ${filteredLedgers.value.data.length} Records`
+            `Excel File Exported Successfully With ${exportRows.length} Records`
         );
     } catch (error) {
         console.error("Error generating Excel file:", error);
