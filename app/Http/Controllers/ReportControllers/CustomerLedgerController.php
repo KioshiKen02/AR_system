@@ -72,11 +72,11 @@ class CustomerLedgerController extends Controller
         $adjustmentsPosNeg = $adjustmentsPosNegQuery->get()->groupBy(['invoice_no', 'apply_to']);
 
         $paidAmountsQuery = PaymentDetails::where('customer_code', $request->customer_code)
-            ->where('status', 'Paid')
+            ->whereIn('status', ['Paid', 'Cleared'])
             ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
             ->groupBy('document_no', 'type');
         if ($dateEnd) {
-            $paidAmountsQuery->whereDate('payment_date', '<=', $dateEnd);
+            $paidAmountsQuery->whereDate('payment_receipt_date', '<=', $dateEnd);
         }
         $paidAmounts = $paidAmountsQuery->get()->groupBy(['document_no', 'type']);
 
@@ -86,7 +86,7 @@ class CustomerLedgerController extends Controller
             ->groupBy('document_no', 'type');
         if ($dateEnd) {
             $floatingAmountsQuery->where(function ($q) use ($dateEnd) {
-                $q->whereDate('payment_date', '<=', $dateEnd)
+                $q->whereDate('payment_receipt_date', '<=', $dateEnd)
                     ->orWhereDate('document_date', '<=', $dateEnd);
             });
         }
@@ -334,7 +334,7 @@ class CustomerLedgerController extends Controller
 
         // 3. Get Payments
         $paymentsQuery = PaymentDetails::where('document_no', $invoiceNo)
-            ->orderBy('payment_date', 'asc');
+            ->orderBy('payment_receipt_date', 'asc');
 
         // Enforce strict type matching while allowing common synonyms for Beginning Balance
         if (in_array($type, ['BG', 'Beginning Balance'], true)) {
