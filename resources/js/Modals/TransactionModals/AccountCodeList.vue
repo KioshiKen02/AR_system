@@ -296,19 +296,32 @@ watch(
                     default:
                         console.error(`Unknown app/tenant name: ${switchKey}`);
                 }
-                const response = await axios.get(
-                    `${baseUrl}`
-                );
+                if (!baseUrl) {
+                    throw new Error("GL Account Code API URL is empty.");
+                }
+
+                const response = await fetch(baseUrl, {
+                    method: "GET",
+                    credentials: "omit",
+                });
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Failed to fetch account codes (HTTP ${response.status})`
+                    );
+                }
+
+                const data = await response.json();
 
                 // Handle different response formats
                 glAccCodeResults.value = Array.isArray(
-                    response.data.gl_account_code
+                    data.gl_account_code
                 )
-                    ? response.data.gl_account_code.map((code) => ({
+                    ? data.gl_account_code.map((code) => ({
                         gl_account_navcode: code.gl_account_navcode,
                         gl_account_name: code.gl_account_name,
                     }))
-                    : response.data.gl_account_code?.data?.map((code) => ({
+                    : data.gl_account_code?.data?.map((code) => ({
                         gl_account_navcode: code.gl_account_navcode,
                         gl_account_name: code.gl_account_name,
                     })) || [];
