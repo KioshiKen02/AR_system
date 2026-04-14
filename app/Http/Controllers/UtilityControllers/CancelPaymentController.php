@@ -99,9 +99,24 @@ class CancelPaymentController extends Controller
             }
             $ledger = CustomerLedger::on('tenant')->where('invoice_number', $validated['document_no'])->where('type', $validated['type'])->firstOrFail();
 
+            $totalPaid = (float) DB::connection('tenant')->table('payment_details')
+                ->where('document_no', $validated['document_no'])
+                ->where('type', $validated['type'])
+                ->where('status', '!=', 'Cancelled')
+                ->sum('amount_paid');
+
+            $baseAdjusted = (float) ($ledger->adjusted_amount ?? 0);
+            $overage = (float) ($ledger->overage ?? 0);
+            $shrinkage = (float) ($ledger->shrinkage ?? 0);
+            $return = (float) ($ledger->return ?? 0);
+            $newRunningBalance = max(
+                0,
+                $baseAdjusted - $totalPaid + ($overage - $shrinkage) - $return
+            );
+
             $ledger->update([
-                'running_balance' => ($ledger->amount + $ledger->adjusted_amount) + ($ledger->overage - $ledger->shrinkage) - $ledger->return,
-                'amount_paid' => 0.00,
+                'running_balance' => $newRunningBalance,
+                'amount_paid' => $totalPaid,
             ]);
 
             $cust = Customer::on('tenant')->where('cus_code', $validated['customer_code'])
@@ -186,6 +201,7 @@ class CancelPaymentController extends Controller
 
             CancelPaymentItems::on('tenant')->insert($cancelPaymentItems);
 
+            $affectedLedgers = [];
             foreach ($validated['payment_details'] as $payment) {
                 $paymentRow = DB::connection('tenant')->table('payment_details')->where('id', $payment['id'])->first();
 
@@ -201,17 +217,48 @@ class CancelPaymentController extends Controller
                         'remarks' => 'Cancelled',
                     ]);
 
-                if ($paymentRow->status === 'Paid') {
-                    $ledger = CustomerLedger::on('tenant')->where('invoice_number', $payment['document_no'])->where('type', $payment['type'])->firstOrFail();
-
-                    $ledger->update([
-                        'running_balance' => ($ledger->amount + $ledger->adjusted_amount) + ($ledger->overage - $ledger->shrinkage) - $ledger->return,
-                        'amount_paid' => $ledger->amount_paid - $payment['amount'],
-                    ]);
-                }
-
                 $cust->update([
                     'advanced_payment_balance' => $payment['advpy_amount_paid'] + $cust->advanced_payment_balance,
+                ]);
+
+                $affectedLedgers[] = [
+                    'document_no' => $payment['document_no'],
+                    'type' => $payment['type'],
+                ];
+            }
+
+            $affectedLedgers = collect($affectedLedgers)
+                ->unique(fn ($x) => $x['document_no'] . '|' . $x['type'])
+                ->values();
+
+            foreach ($affectedLedgers as $ref) {
+                $ledger = CustomerLedger::on('tenant')
+                    ->where('invoice_number', $ref['document_no'])
+                    ->where('type', $ref['type'])
+                    ->first();
+
+                if (!$ledger) {
+                    continue;
+                }
+
+                $totalPaid = (float) DB::connection('tenant')->table('payment_details')
+                    ->where('document_no', $ref['document_no'])
+                    ->where('type', $ref['type'])
+                    ->where('status', '!=', 'Cancelled')
+                    ->sum('amount_paid');
+
+                $baseAdjusted = (float) ($ledger->adjusted_amount ?? 0);
+                $overage = (float) ($ledger->overage ?? 0);
+                $shrinkage = (float) ($ledger->shrinkage ?? 0);
+                $return = (float) ($ledger->return ?? 0);
+                $newRunningBalance = max(
+                    0,
+                    $baseAdjusted - $totalPaid + ($overage - $shrinkage) - $return
+                );
+
+                $ledger->update([
+                    'running_balance' => $newRunningBalance,
+                    'amount_paid' => $totalPaid,
                 ]);
             }
 

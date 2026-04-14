@@ -334,7 +334,13 @@ class CustomerLedgerController extends Controller
 
         // 3. Get Payments
         $paymentsQuery = PaymentDetails::where('document_no', $invoiceNo)
+            ->where('status', '!=', 'Cancelled')
             ->orderBy('payment_receipt_date', 'asc');
+        if (\Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('payment_details', 'wht_status')) {
+            $paymentsQuery->where(function ($q) {
+                $q->whereNull('wht_status')->orWhere('wht_status', '!=', 'Cancelled');
+            });
+        }
 
         // Enforce strict type matching while allowing common synonyms for Beginning Balance
         if (in_array($type, ['BG', 'Beginning Balance'], true)) {
