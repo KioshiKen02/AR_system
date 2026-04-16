@@ -18,6 +18,7 @@ use App\Services\InvoiceNumberService;
 use App\Services\InvoiceService;
 use App\Services\PaymentNumberService;
 use Exception;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -1199,7 +1200,7 @@ class PaymentController extends Controller
     {
         DB::transaction(function () use ($validated, $request, $invoiceNumberService) {
             $customer = CustomerService::getCustomerByCode($validated['cust_code']);
-            $invoiceNumber = $invoiceNumberService->generate();
+            $invoiceNumber = $invoiceNumberService->generate(true);
 
             CustomerLedger::create([
                 'invoice_number' => $invoiceNumber,
@@ -1254,7 +1255,7 @@ class PaymentController extends Controller
             // Get the latest payment number from external API
             try {
                 //DYNAMIC API LINK
-                $user = auth()->user();
+                $user = Auth::user();
                 $tenantSlug = request()->route('tenant');
                 $targetSetting = AppSetting::on('mysql')
                     ->where('is_active', true)
@@ -1368,7 +1369,7 @@ class PaymentController extends Controller
 
         // Get the latest payment number from external API
         try {
-            $user = auth()->user();
+            $user = Auth::user();
             $tenantSlug = request()->route('tenant');
             $targetSetting = AppSetting::on('mysql')
                 ->where('is_active', true)

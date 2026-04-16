@@ -19,7 +19,7 @@ vi.mock("@inertiajs/vue3", () => {
     };
 });
 
-const saveAs = vi.fn();
+const { saveAs } = vi.hoisted(() => ({ saveAs: vi.fn() }));
 vi.mock("file-saver", () => ({ saveAs }));
 
 vi.mock("exceljs", () => {

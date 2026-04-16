@@ -65,3 +65,6 @@ coverage/
 
 # Package-lock
 package-lock.json
+
+#trea
+.trae/
