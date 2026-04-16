@@ -109,7 +109,7 @@ class CustomerLedgerController extends Controller
 
         $computeNetDebit = function ($record) use ($val) {
             if ($record->type === 'Payment') {
-                return 0.0;
+                return $val($record->amount);
             }
 
             $amount = $val($record->amount);
@@ -122,7 +122,7 @@ class CustomerLedgerController extends Controller
 
         $computeCredit = function ($record, $netDebit, $paidAmounts, $floatingAmounts) use ($val) {
             if ($record->type === 'Payment') {
-                return $val($record->amount);
+                return 0.0;
             }
 
             $paidRow = $paidAmounts
