@@ -68,6 +68,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // 'bilar_breeder_ar/api/insertpayment',
             'api/*', // Or wildcard for all API routes
             '*/adjustment/*/sync-sales',
+            '*/preferences/theme',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
