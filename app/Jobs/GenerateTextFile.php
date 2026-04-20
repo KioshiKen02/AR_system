@@ -1633,7 +1633,7 @@ class GenerateTextFile
                 $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=13';
                 break;
             case 'Gp Jagna':
-                $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=50';
+                $baseUrl = 'http://172.16.112.51:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=50';
                 break;
             case 'Ice Plant':
                 $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=25';
@@ -1754,7 +1754,7 @@ class GenerateTextFile
                 $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=13';
                 break;
             case 'Gp Jagna':
-                $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=50';
+                $baseUrl = 'http://172.16.112.51:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=50';
                 break;
             case 'Ice Plant':
                 $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=25';

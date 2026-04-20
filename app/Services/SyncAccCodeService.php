@@ -6,6 +6,7 @@ use App\Models\AccCode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class SyncAccCodeService
 {
@@ -14,7 +15,7 @@ class SyncAccCodeService
         try {
             // Fetch data from the API
             //DYNAMIC API LINK
-            $user = auth()->user();
+            $user = Auth::user();
             $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
             switch ($appName) {
                 case 'Bilar Breeder Local':
@@ -24,7 +25,7 @@ class SyncAccCodeService
                     $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=13';
                     break;
                 case 'Gp Jagna':
-                    $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50';
+                    $baseUrl = 'http://172.16.112.51:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50';
                     break;
                 case 'Ice Plant':
                     $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=25';

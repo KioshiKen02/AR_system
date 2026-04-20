@@ -188,10 +188,10 @@ watch(
                         baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=13";
                         break;
                     case "gp jagna":
-                        baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50";
+                        baseUrl = "http://172.16.112.51:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50";
                         break;
                     case "gpjagna":
-                        baseUrl = "http://172.16.220.1:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50";
+                        baseUrl = "http://172.16.112.51:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=50";
                         break;
                     case "ice plant":
                         baseUrl = "http://172.16.184.49:81/centralized-invoicing/masterfileController/GlAccountCodeController/fetchGlAccountCode?noSession=true&bu=25";
