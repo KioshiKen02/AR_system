@@ -832,13 +832,44 @@ const manualSelectIdentifier = ref(false);
 const handleSelectedInvoices = (selectedData) => {
     console.log(selectedData);
     showDocumentNumberListModal.value = false;
+    const toNumber = (val) => {
+        if (val === null || val === undefined) return 0;
+        if (typeof val === "number") return Number.isFinite(val) ? val : 0;
+        if (typeof val === "string") {
+            const n = parseFloat(val.replace(/[^\d.-]/g, "").replace(/,/g, ""));
+            return Number.isFinite(n) ? n : 0;
+        }
+        const n = Number(val);
+        return Number.isFinite(n) ? n : 0;
+    };
+    const selectedDocs = Array.isArray(selectedData?.selectedDocuments)
+        ? selectedData.selectedDocuments
+        : [];
+    const summedWhtAmount = selectedDocs.reduce(
+        (sum, doc) => sum + toNumber(doc?.wht_amount),
+        0
+    );
+    const summedTotalLessWht = selectedDocs.reduce((sum, doc) => {
+        const explicit = doc?.total_amount_less_wht;
+        if (explicit !== null && explicit !== undefined && explicit !== "") {
+            return sum + toNumber(explicit);
+        }
+        const base = toNumber(doc?.balance ?? doc?.amount ?? doc?.amountToPay);
+        return sum + Math.max(0, base - toNumber(doc?.wht_amount));
+    }, 0);
     if (!selectedData.totalAmountPaid) {
         console.log('if');
         manualSelectIdentifier.value = false;
         form.document_no = selectedData.invoiceNumber;
         form.total_amount = formatCurrency(selectedData.totalAmount);
-        form.wht_amount = formatCurrency(selectedData.wht_amount);
-        form.total_amount_less_wht = formatCurrency(selectedData.total_amount_less_wht);
+        form.wht_amount = formatCurrency(
+            selectedDocs.length ? summedWhtAmount : toNumber(selectedData.wht_amount)
+        );
+        form.total_amount_less_wht = formatCurrency(
+            selectedDocs.length
+                ? summedTotalLessWht
+                : toNumber(selectedData.total_amount_less_wht)
+        );
         form.amount_paid = "";
         form.document_date = selectedData.date;
         floatingAmount.value = selectedData.floatingAmount;
@@ -846,16 +877,12 @@ const handleSelectedInvoices = (selectedData) => {
         form.selectedDocuments = [];
     } else {
         console.log('else');
-        if (selectedData.selectedDocuments && selectedData.selectedDocuments.length > 0) {
-            console.log('else if');
-            const doc = selectedData.selectedDocuments[0];
-            form.wht_amount = formatCurrency(doc.wht_amount || 0);
-            form.total_amount_less_wht = formatCurrency(doc.total_amount_less_wht || 0);
-        } else {
-            console.log('else else');
-            form.wht_amount = formatCurrency(0);
-            form.total_amount_less_wht = formatCurrency(0);
-        }
+        form.wht_amount = formatCurrency(
+            selectedDocs.length ? summedWhtAmount : 0
+        );
+        form.total_amount_less_wht = formatCurrency(
+            selectedDocs.length ? summedTotalLessWht : 0
+        );
         form.document_no = selectedData.invoiceNumber;
         form.total_amount = formatCurrency(selectedData.totalAmount);
         if (
