@@ -495,6 +495,9 @@ class GenerateTextFile
             $auto_increment = 0;
             $cashInBanks = CashInBank::all()->keyBy('bank_name');
             $customers = Customer::all()->keyBy('cus_code');
+            $customersByNavCode = $customers
+                ->filter(fn ($customer) => trim((string) ($customer->nav_code ?? '')) !== '')
+                ->keyBy(fn ($customer) => trim((string) $customer->nav_code));
             $accCodes = AccCode::all()->keyBy('gl_account_navcode');
             $locCodeByCustomer = $this->getLocCodeByCustomer($customers);
 
@@ -515,6 +518,7 @@ class GenerateTextFile
                 $auto_increment,
                 $cashInBanks,
                 $customers,
+                $customersByNavCode,
                 $accCodes,
                 $locCodeByCustomer,
                 $paymentAccountCode,
@@ -529,6 +533,7 @@ class GenerateTextFile
                     &$auto_increment,
                     $cashInBanks,
                     $customers,
+                    $customersByNavCode,
                     $accCodes,
                     $locCodeByCustomer,
                     $paymentAccountCode,
@@ -543,9 +548,17 @@ class GenerateTextFile
                         $bankCode = $cashInBanks->get($payment->cash_in_bank)?->bank_code ?? '';
                         $bankName = $cashInBanks->get($payment->cash_in_bank)?->bank_name ?? '';
 
-                        $customerNavCode = $customers->get($payment->customer_code)?->nav_code ?? '';
-                        $customerCusPosting = $customers->get($payment->customer_code)?->cus_posting ?? '';
-                        $customerLocCode = $locCodeByCustomer[$payment->customer_code] ?? null;
+                        $paymentCustomerCode = trim((string) ($payment->customer_code ?? ''));
+                        if ($paymentCustomerCode === '') {
+                            $paymentCustomerCode = trim((string) ($payment->paymentDetails->first()?->customer_code ?? ''));
+                        }
+
+                        $paymentCustomer = $customers->get($paymentCustomerCode) ?? $customersByNavCode->get($paymentCustomerCode);
+                        $paymentCustomerCusCode = trim((string) ($paymentCustomer?->cus_code ?? $paymentCustomerCode));
+                        $paymentCustomerNavCode = trim((string) ($paymentCustomer?->nav_code ?? ''));
+                        $paymentCustomerExportCode = $paymentCustomerNavCode !== '' ? $paymentCustomerNavCode : $paymentCustomerCusCode;
+                        $paymentCustomerCusPosting = $paymentCustomer?->cus_posting ?? '';
+                        $paymentCustomerLocCode = $locCodeByCustomer[$paymentCustomerCusCode] ?? null;
 
                         $customerName = $payment->customer_name ?? $payment->name ?? '';
                         $accCode = $payment->acc_code ?? '';
@@ -554,6 +567,28 @@ class GenerateTextFile
                         $accCodeName = $accCodes->get($payment->acc_code)?->gl_account_name ?? '';
 
                         foreach ($payment->paymentDetails as $detail) {
+                            $detailCustomerCode = trim((string) ($detail->customer_code ?? ''));
+                            $lineCustomer = $paymentCustomer;
+                            $lineCustomerCusCode = $paymentCustomerCusCode;
+                            $lineCustomerNavCode = $paymentCustomerNavCode;
+                            $lineCustomerCusPosting = $paymentCustomerCusPosting;
+                            $lineCustomerLocCode = $paymentCustomerLocCode;
+
+                            if ($detailCustomerCode !== '' && $detailCustomerCode !== $paymentCustomerCode) {
+                                $detailCustomer = $customers->get($detailCustomerCode) ?? $customersByNavCode->get($detailCustomerCode);
+                                if ($detailCustomer) {
+                                    $lineCustomer = $detailCustomer;
+                                    $lineCustomerCusCode = trim((string) ($detailCustomer->cus_code ?? $detailCustomerCode));
+                                    $lineCustomerNavCode = trim((string) ($detailCustomer->nav_code ?? ''));
+                                    $lineCustomerCusPosting = $detailCustomer->cus_posting ?? '';
+                                    $lineCustomerLocCode = $locCodeByCustomer[$lineCustomerCusCode] ?? null;
+                                } else {
+                                    $lineCustomerCusCode = $detailCustomerCode;
+                                    $lineCustomerLocCode = $locCodeByCustomer[$lineCustomerCusCode] ?? null;
+                                }
+                            }
+
+                            $lineCustomerExportCode = $lineCustomerNavCode !== '' ? $lineCustomerNavCode : $lineCustomerCusCode;
                             $docCode = $this->getPaymentDocumentCodeFromPaymentType($payment->type ?? $detail->type ?? '');
                             $paymentReferenceNo = trim((string) ($payment->ds_no ?: ($payment->reference_no ?: $detail->document_no)));
                             if ($payment->payment_type === '5A - Cash') {
@@ -562,9 +597,9 @@ class GenerateTextFile
                                     $bankCode,
                                     $detail,
                                     $bankName,
-                                    $customerNavCode,
+                                    $lineCustomerExportCode,
                                     $docCode,
-                                    $customerLocCode
+                                    $lineCustomerLocCode
                                 );
                             } elseif ($payment->payment_type === '5B - Journal Voucher') {
                                 $lines[] = $this->generateJournalVoucherLine(
@@ -572,15 +607,15 @@ class GenerateTextFile
                                     $detail,
                                     $bankCode,
                                     $bankName,
-                                    $customerCusPosting,
+                                    $lineCustomerCusPosting,
                                     $accCode,
                                     $custCode,
-                                    $payment->customer_code,
+                                    $lineCustomerExportCode,
                                     $customerName,
                                     $accCodeName,
                                     $paymentReferenceNo,
                                     $docCode,
-                                    $customerLocCode
+                                    $lineCustomerLocCode
                                 );
                             } elseif ($payment->payment_type === '5C - Online Deposit') {
                                 $lines[] = $this->generateOnlineDepositLine(
@@ -588,15 +623,15 @@ class GenerateTextFile
                                     $detail,
                                     $bankCode,
                                     $bankName,
-                                    $customerCusPosting,
+                                    $lineCustomerCusPosting,
                                     $accCode,
                                     $custCode,
-                                    $payment->customer_code,
+                                    $lineCustomerExportCode,
                                     $customerName,
                                     $accCodeName,
                                     $paymentReferenceNo,
                                     $docCode,
-                                    $customerLocCode
+                                    $lineCustomerLocCode
                                 );
                             } elseif ($payment->payment_type === '5E - Creditable(WHT)') {
                                 if ($detail->status === 'Floating') {
@@ -609,14 +644,14 @@ class GenerateTextFile
                                     $paymentAccountCodeDescription,
                                     $bankCode,
                                     $bankName,
-                                    $customerNavCode,
-                                    $customerCusPosting,
-                                    $payment->customer_code,
+                                    $lineCustomerExportCode,
+                                    $lineCustomerCusPosting,
+                                    $lineCustomerExportCode,
                                     $customerName,
                                     $accCode,
                                     $accCodeName,
                                     $docCode,
-                                    $customerLocCode
+                                    $lineCustomerLocCode
                                 );
                             }
                             $processedRows++;
@@ -1450,7 +1485,7 @@ class GenerateTextFile
             $this->fmt($detail->amount_paid * -1),
             $this->fmt($detail->amount_paid * -1),
             '1',
-            '',
+            $customerNavCode,
             $customerCusPosting,
             $companyCode,
             $deptCode,
@@ -1463,7 +1498,7 @@ class GenerateTextFile
             $formattedDate,
             $prefix . $docCode . '#' . $detail->document_no,
             'Customer',
-            '',
+            $customerNavCode,
             $this->fmt($detail->amount_paid * -1),
             $this->fmt($detail->amount_paid)
         ];

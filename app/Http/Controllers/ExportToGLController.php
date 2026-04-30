@@ -122,16 +122,27 @@ class ExportToGLController extends Controller
         // Check primary path (Network)
         if (!file_exists($path)) {
             // Check fallback path (Local)
-            $localPath = storage_path('app/private/exports/' . $filename);
-            
-            if (file_exists($localPath)) {
-                $path = $localPath;
+            $localPathsToCheck = [
+                storage_path('app/private/exports/' . $filename),
+                storage_path('app/exports/' . $filename),
+            ];
+
+            $resolvedLocalPath = null;
+            foreach ($localPathsToCheck as $localPath) {
+                if (file_exists($localPath)) {
+                    $resolvedLocalPath = $localPath;
+                    break;
+                }
+            }
+
+            if ($resolvedLocalPath) {
+                $path = $resolvedLocalPath;
             } else {
                 Log::warning('Nav textfile download failed. File not found in network or local.', [
                     'tenant' => $tenantSlug,
                     'app_name' => $appName,
                     'network_path' => $path,
-                    'local_path' => $localPath,
+                    'local_paths_checked' => $localPathsToCheck,
                     'root' => $root,
                 ]);
                 
@@ -143,7 +154,7 @@ class ExportToGLController extends Controller
                         'resolved_app_name' => $appName,
                         'filename_requested' => $filename,
                         'network_path_checked' => $path,
-                        'local_path_checked' => $localPath,
+                        'local_paths_checked' => $localPathsToCheck,
                         'root_path_from_config' => $root,
                         'file_exists_check' => false
                     ]
@@ -152,7 +163,7 @@ class ExportToGLController extends Controller
         }
 
         return response()->download($path, $filename, [
-            'Content-Type' => 'text/plain',
+            'Content-Type' => str_ends_with(strtolower($filename), '.csv') ? 'text/csv' : 'text/plain',
         ]);
     }
 

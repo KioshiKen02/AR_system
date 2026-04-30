@@ -799,6 +799,7 @@ class PaymentController extends Controller
 
                         $floatingValue = $floatingAmount?->total_floating ?? 0;
                         $amountToApply = $ledger->running_balance * $wht;
+                        $whtAmount = $ledger->running_balance - $amountToApply;
 
                         $processedDocuments[] = [
                             'document_no' => $doc['docunumber'],
@@ -806,6 +807,8 @@ class PaymentController extends Controller
                             'amount' => $doc['amount'],
                             'balance' => $ledger->running_balance - $amountToApply,
                             'amount_applied' => $amountToApply,
+                            'wht_amount' => $whtAmount,
+                            'total_amount_less_wht' => $amountToApply,
                             'document_date' => $ledger->date,
                             'floating_deducted' => $floatingValue,
                             'overage_shortage' => $ledger->running_balance - $amountToApply,
@@ -858,15 +861,20 @@ class PaymentController extends Controller
                         //     ]);
                         // }
 
+                        $whtPerDoc = (float) ($doc['wht_amount'] ?? 0);
+                        $totalApplied = $amountToApply + $whtPerDoc;
+
                         $processedDocuments[] = [
                             'document_no' => $doc['docunumber'],
                             'type' => $doc['type'],
                             'amount' => $doc['amount'],
-                            'balance' => max(0, $ledger->running_balance - $amountToApply),
+                            'balance' => max(0, $ledger->running_balance - $totalApplied),
                             'amount_applied' => $amountToApply,
+                            'wht_amount' => $whtPerDoc,
+                            'total_amount_less_wht' => (float) ($doc['total_amount_less_wht'] ?? 0),
                             'document_date' => $ledger->date,
                             'floating_deducted' => $floatingValue,
-                            'overage_shortage' => $ledger->running_balance - $amountToApply,
+                            'overage_shortage' => $ledger->running_balance - $totalApplied,
                         ];
                     }
                 }
@@ -908,6 +916,7 @@ class PaymentController extends Controller
                             $wht = 0.05;
                         }
                         $amountToApply = $ledger->running_balance * $wht;
+                        $whtAmount = $ledger->running_balance - $amountToApply;
 
                         $processedDocuments[] = [
                             'document_no' => $ledger->invoice_number,
@@ -915,6 +924,8 @@ class PaymentController extends Controller
                             'amount' => $ledger->amount,
                             'balance' => $ledger->running_balance - $amountToApply,
                             'amount_applied' => $amountToApply,
+                            'wht_amount' => $whtAmount,
+                            'total_amount_less_wht' => $amountToApply,
                             'document_date' => $ledger->date,
                             'floating_deducted' => $floatingAmount?->total_floating ?? 0,
                             'overage_shortage' => $ledger->running_balance - $amountToApply,
@@ -926,6 +937,16 @@ class PaymentController extends Controller
 
                     $remainingAdvPayment = $cust->advanced_payment_balance;
                     $remainingAmountPaid = $validated['amount_paid'];
+
+                    $whtAmount = !empty($validated['wht_amount'])
+                        ? (float) preg_replace('/[^0-9.]/', '', $validated['wht_amount'])
+                        : 0;
+
+                    $totalAmountLessWht = !empty($validated['total_amount_less_wht'])
+                        ? (float) preg_replace('/[^0-9.]/', '', $validated['total_amount_less_wht'])
+                        : 0;
+
+                    $hasWht = $whtAmount > 0;
 
                     // Get all customer ledgers ordered by date and ID (oldest first)
                     $ledgers = CustomerLedger::where('customer_code', $validated['customer_code'])
@@ -973,16 +994,26 @@ class PaymentController extends Controller
                             $amountToApply = $fromAdv + $fromPaid;
 
                             if ($amountToApply > 0) {
+                                $whtPerDoc = $hasWht
+                                    ? ($totalAmountLessWht > 0
+                                        ? ($amountToApply / $totalAmountLessWht) * $whtAmount
+                                        : 0)
+                                    : 0;
+
+                                $totalApplied = $amountToApply + $whtPerDoc;
+
                                 $processedDocuments[] = [
                                     'document_no' => $ledger->invoice_number,
                                     'type' => $ledger->type,
                                     'amount' => $ledger->amount,
-                                    'balance' => $ledger->running_balance - $amountToApply,
+                                    'balance' => max(0, $ledger->running_balance - $totalApplied),
                                     'amount_applied' => $amountToApply,
                                     'advpy_amount_applied' => $fromAdv,
+                                    'wht_amount' => $whtPerDoc,
+                                    'total_amount_less_wht' => $hasWht ? $amountToApply : 0,
                                     'document_date' => $ledger->date,
                                     'floating_deducted' => $floatingAmount?->total_floating ?? 0,
-                                    'overage_shortage' => $ledger->running_balance - $amountToApply,
+                                    'overage_shortage' => $ledger->running_balance - $totalApplied,
                                 ];
                             }
                         }
