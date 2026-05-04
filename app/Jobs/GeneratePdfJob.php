@@ -1012,7 +1012,7 @@ class GeneratePdfJob
             $groupedData = [];
             $grandTotal = 0;
 
-            $query->with('paymentDetails')->chunkById(500, function ($paymentsChunk) use (
+            $query->with('paymentDetails')->chunk(500, function ($paymentsChunk) use (
                 &$groupedData,
                 &$grandTotal,
                 &$processedRows,
@@ -1076,6 +1076,7 @@ class GeneratePdfJob
 
                             $customerData['customer_total'] += $paymentTotal;
                             $paymentTypeData['type_total'] += $paymentTotal;
+                            $grandTotal += $paymentTotal;
 
                             $processedRows++;
                             $progress = intval(($processedRows / $totalRows) * 100);
@@ -1098,8 +1099,6 @@ class GeneratePdfJob
                     } else {
                         $groupedData[] = $paymentTypeData;
                     }
-
-                    $grandTotal += $paymentTypeData['type_total'];
                 }
             });
 
@@ -1142,7 +1141,7 @@ class GeneratePdfJob
         } else {
             $formattedPayments = collect();
 
-            $query->with('paymentDetails')->chunkById(200, function ($paymentsChunk) use (
+            $query->with('paymentDetails')->chunk(200, function ($paymentsChunk) use (
                 &$formattedPayments,
                 &$processedRows,
                 $totalRows,
@@ -1290,7 +1289,7 @@ class GeneratePdfJob
             $groupedData = [];
             $grandTotal = 0;
 
-            $query->with('paymentDetails')->chunkById(500, function ($paymentsChunk) use (
+            $query->with('paymentDetails')->chunk(500, function ($paymentsChunk) use (
                 &$groupedData,
                 &$grandTotal,
                 &$processedRows,
@@ -1354,6 +1353,7 @@ class GeneratePdfJob
 
                             $customerData['customer_total'] += $paymentTotal;
                             $paymentTypeData['type_total'] += $paymentTotal;
+                            $grandTotal += $paymentTotal;
 
                             $processedRows++;
                             $progress = intval(($processedRows / $totalRows) * 100);
@@ -1376,8 +1376,6 @@ class GeneratePdfJob
                     } else {
                         $groupedData[] = $paymentTypeData;
                     }
-
-                    $grandTotal += $paymentTypeData['type_total'];
                 }
             });
 
@@ -1397,7 +1395,7 @@ class GeneratePdfJob
             // Summary Report
             $formattedPayments = collect();
 
-            $query->with('paymentDetails')->chunkById(200, function ($paymentsChunk) use (
+            $query->with('paymentDetails')->chunk(200, function ($paymentsChunk) use (
                 &$formattedPayments,
                 &$processedRows,
                 $totalRows,
