@@ -484,6 +484,7 @@ class GenerateTextFile
                 ->where('exported', false)
                 ->orderBy('receipt_date');
 
+
             /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
 
@@ -618,6 +619,22 @@ class GenerateTextFile
                                     $lineCustomerLocCode
                                 );
                             } elseif ($payment->payment_type === '5C - Online Deposit') {
+                                $lines[] = $this->generateOnlineDepositLine(
+                                    $auto_increment,
+                                    $detail,
+                                    $bankCode,
+                                    $bankName,
+                                    $lineCustomerCusPosting,
+                                    $accCode,
+                                    $custCode,
+                                    $lineCustomerExportCode,
+                                    $customerName,
+                                    $accCodeName,
+                                    $paymentReferenceNo,
+                                    $docCode,
+                                    $lineCustomerLocCode
+                                );
+                            } elseif ($payment->payment_type === '5D - Check') {
                                 $lines[] = $this->generateOnlineDepositLine(
                                     $auto_increment,
                                     $detail,
