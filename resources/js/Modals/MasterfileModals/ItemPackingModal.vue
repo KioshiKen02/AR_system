@@ -435,7 +435,7 @@ const fetchPriceGroup = async () => {
         const tenant = page.props.tenant;
         const endpoints = {
             bilarbreeder: "http://172.16.220.1:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=13",
-            gpjagna: "http://172.16.220.1:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=50",
+            gpjagna: "http://172.16.112.51:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=50",
             iceplant: "http://172.16.184.49:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=25",
             peanutkisses: "http://172.16.184.49:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=26",
             cortespoultry: "http://172.16.192.68:81/centralized-invoicing/index.php/masterfileController/PriceGroupController/fetchPriceGroup?noSession=true&bu=12",

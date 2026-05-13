@@ -470,7 +470,7 @@ class AdjustmentControllers extends Controller
         $map = [
             'Bilar Breeder Local' => 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=13',
             'Bilar Breeder' => 'http://172.16.220.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=13',
-            'Gp Jagna' => 'http://172.16.220.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=50',
+            'Gp Jagna' => 'http://172.16.112.51:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=50',
             'Ice Plant' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=25',
             'Peanut Kisses' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=26',
             'Cortes Poultry' => 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=12',

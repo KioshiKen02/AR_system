@@ -4,7 +4,7 @@ return [
     'textfile_paths' => [
         'Bilar Breeder Local' => '\\\\172.16.220.1\\Programs\\NAV_TEXTFILE_AR\\BILAR_BREEDER',
         'Bilar Breeder'       => '\\\\172.16.220.1\\Programs\\NAV_TEXTFILE_AR\\BILAR_BREEDER',
-        'Gp Jagna'            => '\\\\172.16.220.1\\Programs\\NAV_TEXTFILE_AR\\GP_JAGNA',
+        'Gp Jagna'            => '\\\\172.16.112.51\\NAV_TEXTFILE_AR\\GP_JAGNA',
         'Ice Plant'           => '\\\\172.16.184.49\\textfile\\NAV_TEXTFILE_AR\\ICE_PLANT',
         'Peanut Kisses'       => '\\\\172.16.184.49\\textfile\\NAV_TEXTFILE_AR\\PEANUT_KISSES',
         'Cortes Poultry'      => '\\\\172.16.192.68\\nav-textfile\\NAV_TEXTFILE_AR\\CORTES_POULTRY',
