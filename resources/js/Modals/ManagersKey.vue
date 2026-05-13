@@ -85,6 +85,7 @@ import axios from "axios";
 import TextInput from "../Pages/Components/TextInput.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 import { usePage } from "@inertiajs/vue3";
+import { route } from "../../../vendor/tightenco/ziggy/src/js";
 
 const props = defineProps({
     show: Boolean,
@@ -133,6 +134,12 @@ const confirm = async (choice) => {
                     route("validateManagerKey", { tenant: page.props.tenant }),
                     {
                         managerskeycode: managersKeyCode.value,
+                    }
+                    ,
+                    {
+                        headers: {
+                            Accept: "application/json",
+                        },
                     }
                 );
 

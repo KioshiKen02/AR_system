@@ -512,13 +512,13 @@ const closeEditSuccessModal = () => {
 };
 
 function openManagerModal() {
-    //showManagerModal.value = true;
-    openModal();
+    showManagerModal.value = true;
 }
 
 function onManagerSuccess() {
-    openModal();
     showManagerModal.value = false;
+    openModal();
+    openModal();
 }
 
 function onManagerCancel() {

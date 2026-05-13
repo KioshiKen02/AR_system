@@ -467,7 +467,7 @@ class UserController extends Controller
             $decodedName = urldecode($name);
             Log::info("Decoded name: " . $decodedName);
             
-            $apiUrl = "http://172.16.161.34/api/farms/filter/employee/name?q=" . $decodedName;
+            $apiUrl = "http://172.16.161.34/api/farms/filter/employee/name?q=" . urlencode($decodedName);
             Log::info("Fetching employee data from: " . $apiUrl);
             
             $apiResponse = Http::get($apiUrl)->json();
@@ -548,7 +548,24 @@ class UserController extends Controller
             Log::error('Failed to fetch HRMS image: ' . $e->getMessage());
         }
 
-        abort(404, 'Image not found');
+        $fallbackName = trim((string) ($decodedName ?? $name));
+        $initial = mb_strtoupper(mb_substr($fallbackName, 0, 1));
+        if ($initial === '') {
+            $initial = 'U';
+        }
+
+        $safeInitial = htmlspecialchars($initial, ENT_QUOTES, 'UTF-8');
+
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">'
+            . '<rect width="128" height="128" rx="64" fill="#334155"/>'
+            . '<text x="64" y="74" text-anchor="middle" font-family="Arial, sans-serif" font-size="56" fill="#FFFFFF">'
+            . $safeInitial
+            . '</text>'
+            . '</svg>';
+
+        return response($svg, 200)
+            ->header('Content-Type', 'image/svg+xml')
+            ->header('Cache-Control', 'private, max-age=300');
     }
 
     public function getEmployeeData(Request $request)
@@ -558,7 +575,7 @@ class UserController extends Controller
             if (!$name) {
                 return response()->json(['error' => 'Name is required'], 400);
             }
-            $apiUrl = "http://172.16.161.34/api/farms/filter/employee/name?q=" . $name;
+            $apiUrl = "http://172.16.161.34/api/farms/filter/employee/name?q=" . urlencode($name);
             $response = Http::get($apiUrl);
 
             if ($response->successful()) {

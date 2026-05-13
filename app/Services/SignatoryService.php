@@ -40,7 +40,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'peanut') && str_contains($identifier, 'kisses')) {
-            return '';
+            return 'Gabato, Dennis T.';
         }
 
         if (str_contains($identifier, 'cortes') && str_contains($identifier, 'poultry')) {
