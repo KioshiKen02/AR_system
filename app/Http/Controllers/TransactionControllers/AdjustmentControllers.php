@@ -4,6 +4,7 @@ namespace App\Http\Controllers\TransactionControllers;
 
 use App\Events\NewCreated;
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
 use App\Models\MasterfileModels\AdjustmentReasonSetup;
 use App\Models\ReportModels\CustomerLedger;
 use App\Models\TransactionModels\Adjustment;
@@ -375,6 +376,25 @@ class AdjustmentControllers extends Controller
         $userAppSetting = $request->user()->appSetting;
         $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
 
+        $currentSettingId = config('tenant.current_app_setting_id');
+        if ($currentSettingId) {
+            $currentSetting = AppSetting::on('mysql')->find($currentSettingId);
+            if ($currentSetting?->app_name) {
+                $appName = $currentSetting->app_name;
+            }
+        }
+        if (is_string($appName) && strcasecmp($appName, 'ar system') === 0) {
+            $appName = 'Ar System';
+        }
+
+        $tenant = (string) $request->route('tenant');
+        if ((!$userAppSetting || $appName === 'Ar System') && $tenant !== '') {
+            $appNameFromTenant = $this->appNameFromTenant($tenant);
+            if ($appNameFromTenant) {
+                $appName = $appNameFromTenant;
+            }
+        }
+
         $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
         if ($baseUrl === null && $appName !== 'Ar System') {
             return response()->json([
@@ -493,6 +513,36 @@ class AdjustmentControllers extends Controller
         ];
 
         return $map[$appName] ?? null;
+    }
+
+    private function appNameFromTenant(string $tenant): ?string
+    {
+        $key = strtolower(trim($tenant));
+
+        return match ($key) {
+            'bilarbreeder' => 'Bilar Breeder',
+            'bilarbreederlocal' => 'Bilar Breeder Local',
+            'gpjagna' => 'Gp Jagna',
+            'iceplant' => 'Ice Plant',
+            'peanutkisses' => 'Peanut Kisses',
+            'cortespoultry' => 'Cortes Poultry',
+            'cortespiggery' => 'Cortes Piggery',
+            'canhayuponbreeder' => 'Canhayupon Breeder',
+            'bilarhatchery' => 'Bilar Hatchery',
+            'lapsaonbreeder' => 'Lapsaon Breeder',
+            'rizalbreeder' => 'Rizal Breeder',
+            'feedmill' => 'Feedmill',
+            'growout' => 'Growout',
+            'mficortesfertilizer' => 'Cortes Fertilizer',
+            'mfiubayfertilizer' => 'Ubay Fertilizer',
+            'piggeryuntaga' => 'Piggery Untaga',
+            'demofarm' => 'Demo Farm',
+            'dressingplant' => 'Dressing Plant',
+            'farmersmarket' => 'Farmers Market',
+            'meatprocessing' => 'Meat Processing',
+            'rendering' => 'Rendering',
+            default => null,
+        };
     }
 
     public function destroy($id)
