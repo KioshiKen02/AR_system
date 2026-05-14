@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -188,7 +189,20 @@ class AuthController extends Controller
                     }
                 }
 
-                return redirect()->intended($redirectUrl);
+                $redirectPath = is_string($redirectUrl) ? trim($redirectUrl) : '';
+                if ($redirectPath === '') {
+                    $redirectPath = 'arsystem/dashboard';
+                }
+
+                if (! Str::startsWith($redirectPath, ['http://', 'https://', '/'])) {
+                    $redirectPath = '/'.$redirectPath;
+                }
+
+                if ($request->header('X-Inertia')) {
+                    return Inertia::location(url($redirectPath));
+                }
+
+                return redirect()->intended($redirectPath);
             } catch (Exception $e) {
                 Log::error('Status API error during login: ' . $e->getMessage());
 
