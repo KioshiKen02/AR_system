@@ -11,6 +11,15 @@ import SvgIcon from "@jamescoyle/vue-icon";
 
 import useTheme from "./Pages/Composables/useTheme";
 
+const ziggyConfig =
+    typeof window !== "undefined" && window.Ziggy
+        ? {
+              ...window.Ziggy,
+              url: window.location.origin,
+              port: window.location.port ? Number(window.location.port) : null,
+          }
+        : undefined;
+
 createInertiaApp({
     title: (title) => `AR System ${title}`,
     resolve: (name) => {
@@ -24,7 +33,7 @@ createInertiaApp({
     setup({ el, App, props, plugin }) {
         const app = createApp({ render: () => h(App, props) })
             .use(plugin)
-            .use(ZiggyVue)
+            .use(ZiggyVue, ziggyConfig)
             .component("Head", Head) // No need to import Head and Link in every vue file
             .component("Link", Link) //
             .component("svg-icon", SvgIcon)

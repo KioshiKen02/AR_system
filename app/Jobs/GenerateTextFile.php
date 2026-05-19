@@ -590,7 +590,7 @@ class GenerateTextFile
                             }
 
                             $lineCustomerExportCode = $lineCustomerNavCode !== '' ? $lineCustomerNavCode : $lineCustomerCusCode;
-                            $docCode = $this->getPaymentDocumentCodeFromPaymentType($payment->type ?? $detail->type ?? '');
+                            $docCode = $this->getPaymentDocumentCodeFromPaymentType($detail->type ?? $payment->type ?? '');
                             $paymentReferenceNo = trim((string) ($payment->ds_no ?: ($payment->reference_no ?: $detail->document_no)));
                             if ($payment->payment_type === '5A - Cash') {
                                 $lines[] = $this->generateCashPaymentLine(
