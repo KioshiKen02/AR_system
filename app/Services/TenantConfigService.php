@@ -115,7 +115,7 @@ class TenantConfigService
             'Peanut Kisses' => '04.10',
             'Cortes Poultry' => '03.01.2.01',
             'Cortes Piggery' => '03.01.1.1',
-            'Canhayupon Breeder' => '03.01.2.02.1',
+            'Canhayupon Breeder' => '03.01.2.02.2',
             'Bilar Hatchery' => '03.01.2.03',
             'Lapsaon Breeder' => '03.01.2.02.1',
             'Rizal Breeder' => '03.01.2.02.4',
