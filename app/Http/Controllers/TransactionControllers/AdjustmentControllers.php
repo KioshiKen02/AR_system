@@ -114,7 +114,9 @@ class AdjustmentControllers extends Controller
                     'required',
                     'numeric',
                     function ($attribute, $value, $fail) use ($request) {
-                        if ($request->type === 'Negative' && $value > $request->balance) {
+                        $amount = round((float) $value, 2);
+                        $balance = round((float) $request->balance, 2);
+                        if ($request->type === 'Negative' && $amount > $balance) {
                             $fail('Amount Should Not Be Greater Than Available Balance');
                         }
                     },
@@ -191,7 +193,7 @@ class AdjustmentControllers extends Controller
                     $prospectiveNegative = $existingNegative + $validated['amount'];
                     $prospectiveAdjusted = $amount + $newPositive - $prospectiveNegative;
 
-                    if (($prospectiveAdjusted - $floatingPaid) < 0) {
+                    if (round((float) $prospectiveAdjusted - (float) $floatingPaid, 2) < 0) {
                         throw ValidationException::withMessages([
                             'amount' => 'Amount Exceeds Available Balance. Selected Document Has A Total Payment (Paid + Floating) of ' . number_format($floatingPaid, 2),
                         ]);
@@ -227,7 +229,9 @@ class AdjustmentControllers extends Controller
                 ->where('status', 'Floating')
                 ->sum('amount_paid');
 
-            if (strtolower($validated['type']) === 'negative' && ($ledger->running_balance - $floatingPaid) - $validated['amount'] < 0) {
+            $availableBalance = round((float) $ledger->running_balance - (float) $floatingPaid, 2);
+            $adjustmentAmount = round((float) $validated['amount'], 2);
+            if (strtolower($validated['type']) === 'negative' && round($availableBalance - $adjustmentAmount, 2) < 0) {
                 throw ValidationException::withMessages([
                     'amount' => 'Amount Exceeds Available Balance. Selected Document Has A Total Floating Payment of ' . $floatingPaid,
                 ]);

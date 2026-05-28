@@ -32,6 +32,41 @@ class GenerateTextFile
 
     protected $tenantConfig;
     protected string $appName;
+    protected ?array $walkInCustomerCodes = null;
+
+    protected function normalizedSql(string $column): string
+    {
+        return "REPLACE(REPLACE(LOWER(COALESCE({$column}, '')), '-', ''), ' ', '')";
+    }
+
+    protected function getWalkInCustomerCodes(): array
+    {
+        if ($this->walkInCustomerCodes !== null) {
+            return $this->walkInCustomerCodes;
+        }
+
+        $codes = Customer::query()
+            ->whereRaw($this->normalizedSql('cus_name') . " LIKE ?", ['%walkin%'])
+            ->pluck('cus_code')
+            ->filter(fn ($code) => trim((string) $code) !== '')
+            ->values()
+            ->all();
+
+        $codes[] = 'TAG-00972';
+
+        $this->walkInCustomerCodes = array_values(array_unique(array_filter($codes, fn ($code) => trim((string) $code) !== '')));
+
+        return $this->walkInCustomerCodes;
+    }
+
+    protected function excludeWalkInFromQuery($query)
+    {
+        $walkInCustomerCodes = $this->getWalkInCustomerCodes();
+
+        return $query->whereNotIn('customer_code', $walkInCustomerCodes)
+            ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
+            ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%']);
+    }
 
     public function __construct(
         protected array $validatedData,
@@ -100,6 +135,8 @@ class GenerateTextFile
                 ])
                 ->where('exported', false)
                 ->orderBy('receipt_date');
+
+            $this->excludeWalkInFromQuery($query);
 
            /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
@@ -274,11 +311,15 @@ class GenerateTextFile
             /* $privateUrl = route('exports.download', ['filename' => $filename]); */
             $privateUrl = null;
 
+            $walkInCustomerCodes = $this->getWalkInCustomerCodes();
             DB::table('invoice')
                 ->whereBetween('receipt_date', [
                     $this->validatedData['start_date'],
                     $this->validatedData['end_date']
                 ])
+                ->whereNotIn('customer_code', $walkInCustomerCodes)
+                ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
+                ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%'])
                 ->update(['exported' => true]);
 
             $this->updateProgress(100, 'Ready to Download!');
@@ -333,6 +374,8 @@ class GenerateTextFile
             ])
                 ->where('exported', false)
                 ->orderBy('receipt_date');
+
+            $this->excludeWalkInFromQuery($query);
 
             /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
@@ -447,11 +490,15 @@ class GenerateTextFile
             /* $privateUrl = route('exports.download', ['filename' => $filename]); */
             $privateUrl = null;
 
+            $walkInCustomerCodes = $this->getWalkInCustomerCodes();
             DB::table('adjustment')
                 ->whereBetween('receipt_date', [
                     $this->validatedData['start_date'],
                     $this->validatedData['end_date']
                 ])
+                ->whereNotIn('customer_code', $walkInCustomerCodes)
+                ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
+                ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%'])
                 ->update(['exported' => true]);
 
             $this->updateProgress(100, 'Ready to Download!');
@@ -483,6 +530,8 @@ class GenerateTextFile
                 ])
                 ->where('exported', false)
                 ->orderBy('receipt_date');
+
+            $this->excludeWalkInFromQuery($query);
 
 
             /* Commented out to prevent local file creation - direct network save only */
@@ -552,6 +601,10 @@ class GenerateTextFile
                         $paymentCustomerCode = trim((string) ($payment->customer_code ?? ''));
                         if ($paymentCustomerCode === '') {
                             $paymentCustomerCode = trim((string) ($payment->paymentDetails->first()?->customer_code ?? ''));
+                        }
+
+                        if (in_array($paymentCustomerCode, $this->getWalkInCustomerCodes(), true)) {
+                            continue;
                         }
 
                         $paymentCustomer = $customers->get($paymentCustomerCode) ?? $customersByNavCode->get($paymentCustomerCode);

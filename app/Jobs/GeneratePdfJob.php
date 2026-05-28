@@ -312,12 +312,16 @@ class GeneratePdfJob
         $formattedStartDate = date('m/d/Y', strtotime($this->validatedData['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($this->validatedData['end_date']));
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
             'groupedData' => array_values($groupedData),
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
             'grandTotalVat' => $grandTotalVat,
@@ -585,12 +589,16 @@ class GeneratePdfJob
         $formattedStartDate = date('m/d/Y', strtotime($this->validatedData['start_date']));
         $formattedEndDate = date('m/d/Y', strtotime($this->validatedData['end_date']));
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'date_type' => 'Receipt',
             'invoices' => $flatInvoices,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
             'grandTotalBase' => $grandTotalBase,
@@ -816,12 +824,16 @@ class GeneratePdfJob
 
         $this->updateProgress(98, 'Generating Report...');
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
             'groupedData' => array_values($groupedData),
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
@@ -1563,12 +1575,16 @@ class GeneratePdfJob
 
         $this->updateProgress(98, 'Generating Report...');
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'date_type' => $this->validatedData['date_type'] === 'Payment Date' ? 'Payment' : 'Due',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
@@ -2208,11 +2224,15 @@ class GeneratePdfJob
 
             $this->updateProgress(98, 'Generating Report...');
 
+            $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+            $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
             $data = [
                 'dateRange' => "$formattedAsOfDate",
                 'currency' => 'PHP',
                 'groupedData' => $groupedData,
                 'preparedBy' => $this->preparedBy,
+                'notedBy' => $notedBy,
                 'grandTotals' => $grandTotals,
                 'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             ];
@@ -2409,11 +2429,15 @@ class GeneratePdfJob
 
             $this->updateProgress(98, 'Generating Report...');
 
+            $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+            $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
             $data = [
                 'dateRange' => "$formattedAsOfDate",
                 'currency' => 'PHP',
                 'groupedData' => $groupedData,
                 'preparedBy' => $this->preparedBy,
+                'notedBy' => $notedBy,
                 'grandTotals' => $grandTotals,
                 'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
             ];
@@ -2547,12 +2571,16 @@ class GeneratePdfJob
 
         $this->updateProgress(98, 'Generating Report...');
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'begBals' => $formattedBegBals,
             'totalAmount' => $totalAmount,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
@@ -2784,11 +2812,15 @@ class GeneratePdfJob
 
         $this->updateProgress(98, 'Generating Report...');
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedAsOfDate",
             'currency' => 'PHP',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
@@ -2972,11 +3004,15 @@ class GeneratePdfJob
 
         $this->updateProgress(98, 'Generating Report...');
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
@@ -3527,11 +3563,15 @@ class GeneratePdfJob
 
         $this->updateProgress(98, 'Generating Report...');
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'salesperItems' => $formattedSalesPerItem,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'totalAmount' => $totalAmount,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
@@ -3841,6 +3881,9 @@ class GeneratePdfJob
 
         $this->updateProgress(98, 'Generating Report...');
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'grandTotal' => $grandTotal,
             'dateRange' => "$formattedStartDate to $formattedEndDate",
@@ -3848,6 +3891,7 @@ class GeneratePdfJob
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
 
@@ -4388,10 +4432,14 @@ class GeneratePdfJob
 
         $this->updateProgress(98, 'Generating Report...');
 
+        $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
+        $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];

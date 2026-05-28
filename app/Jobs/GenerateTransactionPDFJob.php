@@ -206,6 +206,7 @@ class GenerateTransactionPDFJob
         $this->updateProgress(98, 'Generating Report...');
 
         $this->passedData['preparedBy'] = $this->preparedBy;
+        $this->passedData['notedBy'] = SignatoryService::getNotedBy($this->passedData['tenant'] ?? null);
 
         $paymentQuery = Payment::where('payment_no', $this->passedData['payment_no'])->firstOrFail();
         $this->passedData['payment_type'] = 'Cash';
@@ -258,6 +259,7 @@ class GenerateTransactionPDFJob
         if ($this->passedData['type'] === 'Negative') {
             $this->passedData['remaining_balance'] = $this->passedData['balance'] - $this->passedData['amount'];
             $this->passedData['amount_in_words'] = $this->amountToWords($this->passedData['amount']);
+            $this->passedData['notedBy'] = SignatoryService::getNotedBy($this->passedData['tenant'] ?? null);
             $this->passedData['reportName'] = ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId));
 
 
@@ -274,6 +276,7 @@ class GenerateTransactionPDFJob
         } else if ($this->passedData['type'] === 'Positive') {
             $this->passedData['remaining_balance'] = $this->passedData['balance'] + $this->passedData['amount'];
             $this->passedData['amount_in_words'] = $this->amountToWords($this->passedData['amount']);
+            $this->passedData['notedBy'] = SignatoryService::getNotedBy($this->passedData['tenant'] ?? null);
             $this->passedData['reportName'] = ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId));
 
             $data = $this->passedData;

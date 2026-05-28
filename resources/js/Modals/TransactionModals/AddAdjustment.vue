@@ -261,8 +261,9 @@ const ledgerType = ref(null);
 const bal = ref(null);
 const handleSelectedInvoices = (selectedData) => {
     form.invoice_no = selectedData.invoiceNumber;
-    bal.value = formatCurrency(selectedData.totalAmount);
-    form.balance = selectedData.totalAmount;
+    const totalAmount = Number(selectedData.totalAmount);
+    bal.value = formatCurrency(totalAmount);
+    form.balance = totalAmount;
     ledgerType.value = selectedData.type;
 };
 

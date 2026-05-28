@@ -344,7 +344,7 @@
             </td>
             <td>
                 <div class="signatory-label">Note By:</div>
-                <div class="signatory-signature-line"></div>
+                <div class="signatory-signature-line">{{ $notedBy ?? '' }}</div>
                 <div class="signatory-caption">(Signature Over Printed Name)</div>
                 <div class="signatory-field-label">Date:</div>
                 <div class="signatory-field-line"></div>

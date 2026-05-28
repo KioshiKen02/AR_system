@@ -32,6 +32,7 @@ class PDFGeneratorController extends Controller
         $data['deducted_vat'] = (float)preg_replace('/[^0-9.]/', '', $data['deducted_vat']);
         $data['freight'] = (float)preg_replace('/[^0-9.]/', '', $data['freight']);
         $data['net_total'] = (float)preg_replace('/[^0-9.]/', '', $data['net_total']);
+        $data['tenant'] = $request->route('tenant');
 
         $channel = 'transaction-pdf-generation.' . $request->user()->id;
         $filename = 'InvoiceSlip_' . time() . '_' . Str::random(6) . '.pdf';
@@ -74,6 +75,7 @@ class PDFGeneratorController extends Controller
         $data['deductVat'] = (float)preg_replace('/[^0-9.]/', '', $data['deducted_vat']);
         $data['freight'] = (float)preg_replace('/[^0-9.]/', '', $data['freight']);
         $data['netTotal'] = (float)preg_replace('/[^0-9.]/', '', $data['net_total']);
+        $data['tenant'] = $request->route('tenant');
 
 
         $channel = 'transaction-pdf-generation.' . $request->user()->id;
@@ -111,6 +113,7 @@ class PDFGeneratorController extends Controller
         $data['receipt_date'] = Carbon::parse($data['receipt_date'])->format('m/d/Y');
         $data['transaction_date'] = Carbon::parse($data['transaction_date'])->format('m/d/Y');
         $data['preparedBy'] = strtoupper($request->user()->name);
+        $data['tenant'] = $request->route('tenant');
 
         $channel = 'transaction-pdf-generation.' . $request->user()->id;
         $filename = 'AdjustmentSlip_' . time() . '_' . Str::random(6) . '.pdf';
@@ -177,6 +180,7 @@ class PDFGeneratorController extends Controller
         $data = $request->all();
         $reprintconfirmation = $request->input('_reprint_confirmation', false);
         $personauthored = $request->input('_person_authored', null);
+        $data['tenant'] = $request->route('tenant');
 
         $channel = 'transaction-pdf-generation.' . $request->user()->id;
         $filename = 'CheckCleared_' . time() . '_' . Str::random(6) . '.pdf';
@@ -209,6 +213,7 @@ class PDFGeneratorController extends Controller
         $data = $request->all();
         $reprintconfirmation = $request->input('_reprint_confirmation', false);
         $personauthored = $request->input('_person_authored', null);
+        $data['tenant'] = $request->route('tenant');
 
         $channel = 'transaction-pdf-generation.' . $request->user()->id;
         $filename = 'WhtCleared_' . time() . '_' . Str::random(6) . '.pdf';

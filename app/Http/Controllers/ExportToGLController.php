@@ -20,6 +20,25 @@ use Illuminate\Validation\ValidationException;
 
 class ExportToGLController extends Controller
 {
+    protected function normalizedSql(string $column): string
+    {
+        return "REPLACE(REPLACE(LOWER(COALESCE({$column}, '')), '-', ''), ' ', '')";
+    }
+
+    protected function walkInCustomerCodes(): array
+    {
+        $codes = Customer::query()
+            ->whereRaw($this->normalizedSql('cus_name') . " LIKE ?", ['%walkin%'])
+            ->pluck('cus_code')
+            ->filter(fn ($code) => trim((string) $code) !== '')
+            ->values()
+            ->all();
+
+        $codes[] = 'TAG-00972';
+
+        return array_values(array_unique(array_filter($codes, fn ($code) => trim((string) $code) !== '')));
+    }
+
     public function export(Request $request)
     {
         try {
@@ -57,6 +76,11 @@ class ExportToGLController extends Controller
                     ->where('exported', false)
                     ->orderBy('receipt_date');
             }
+
+            $walkInCustomerCodes = $this->walkInCustomerCodes();
+            $query->whereNotIn('customer_code', $walkInCustomerCodes)
+                ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
+                ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%']);
 
             if (!$query->exists()) {
                 return response()->json([

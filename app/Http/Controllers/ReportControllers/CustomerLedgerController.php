@@ -67,7 +67,7 @@ class CustomerLedgerController extends Controller
             ")
             ->groupBy('invoice_no', 'apply_to');
         if ($dateEnd) {
-            $adjustmentsPosNegQuery->whereDate('created_at', '<=', $dateEnd);
+            $adjustmentsPosNegQuery->whereDate('receipt_date', '<=', $dateEnd);
         }
         $adjustmentsPosNeg = $adjustmentsPosNegQuery->get()->groupBy(['invoice_no', 'apply_to']);
 
@@ -302,6 +302,7 @@ class CustomerLedgerController extends Controller
 
             $adjustments = Adjustment::where('invoice_no', $invoiceNo)
             ->where('apply_to', $applyTo)
+            ->orderBy('receipt_date', 'asc')
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -322,7 +323,7 @@ class CustomerLedgerController extends Controller
             }
 
             $transactions[] = [
-                'date' => $adj->created_at->format('Y-m-d'), // Or receipt_date if preferred
+                'date' => $adj->receipt_date,
                 'transaction_no' => $adj->adjustment_no,
                 'description' => $description,
                 'type' => 'Adjustment',
