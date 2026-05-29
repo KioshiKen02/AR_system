@@ -78,26 +78,6 @@ return [
              */
             'databases' => [
                 env('DB_CONNECTION', 'mysql'),
-                'bilar_breeder',
-                'gp_jagna',
-                'ice_plant',
-                'peanut_kisses',
-                'cortes_poultry',
-                'cortes_piggery',
-                'canhayupon',
-                'hatchery',
-                'lapsaon',
-                'rizal',
-                'feedmill',
-                'growout',
-                'cortes_fertilizer',
-                'ubay_fertilizer',
-                'piggery_untaga',
-                'demofarm',
-                'dressing_plant',
-                'farmers_market',
-                'meat_processing',
-                'rendering',
             ],
         ],
 
@@ -160,7 +140,7 @@ return [
              *
              * Setting of 0 for some algorithms may switch to the strongest compression.
              */
-            'compression_level' => 9,
+            'compression_level' => (int) env('BACKUP_ZIP_COMPRESSION_LEVEL', 6),
 
             /*
              * The filename prefix used for the backup zip file.
@@ -171,8 +151,7 @@ return [
              * The disk names on which the backups will be stored.
              */
             'disks' => [
-                'local',
-                'network_backup',
+                ...array_values(array_filter(array_map('trim', explode(',', (string) env('BACKUP_DISKS', 'backups'))))),
             ],
         ],
 
@@ -194,7 +173,7 @@ return [
          * When set to 'default', we'll use ZipArchive::EM_AES_256 if it is
          * available on your system.
          */
-        'encryption' => 'default',
+        'encryption' => env('BACKUP_ARCHIVE_ENCRYPTION', 'default'),
 
         /*
          * The number of attempts, in case the backup command encounters an exception
@@ -220,9 +199,6 @@ return [
             \Spatie\Backup\Notifications\Notifications\BackupHasFailedNotification::class => ['mail'],
             \Spatie\Backup\Notifications\Notifications\UnhealthyBackupWasFoundNotification::class => ['mail'],
             \Spatie\Backup\Notifications\Notifications\CleanupHasFailedNotification::class => ['mail'],
-            \Spatie\Backup\Notifications\Notifications\BackupWasSuccessfulNotification::class => ['mail'],
-            \Spatie\Backup\Notifications\Notifications\HealthyBackupWasFoundNotification::class => ['mail'],
-            \Spatie\Backup\Notifications\Notifications\CleanupWasSuccessfulNotification::class => ['mail'],
         ],
 
         /*
@@ -232,7 +208,7 @@ return [
         'notifiable' => \Spatie\Backup\Notifications\Notifiable::class,
 
         'mail' => [
-            'to' => 'your@example.com',
+            'to' => env('BACKUP_NOTIFICATION_TO', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
 
             'from' => [
                 'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
@@ -311,40 +287,40 @@ return [
             /*
              * The number of days for which backups must be kept.
              */
-            'keep_all_backups_for_days' => 7,
+            'keep_all_backups_for_days' => (int) env('BACKUP_KEEP_ALL_DAYS', 90),
 
             /*
              * After the "keep_all_backups_for_days" period is over, the most recent backup
              * of that day will be kept. Older backups within the same day will be removed.
              * If you create backups only once a day, no backups will be removed yet.
              */
-            'keep_daily_backups_for_days' => 16,
+            'keep_daily_backups_for_days' => (int) env('BACKUP_KEEP_DAILY_DAYS', 0),
 
             /*
              * After the "keep_daily_backups_for_days" period is over, the most recent backup
              * of that week will be kept. Older backups within the same week will be removed.
              * If you create backups only once a week, no backups will be removed yet.
              */
-            'keep_weekly_backups_for_weeks' => 8,
+            'keep_weekly_backups_for_weeks' => (int) env('BACKUP_KEEP_WEEKLY_WEEKS', 0),
 
             /*
              * After the "keep_weekly_backups_for_weeks" period is over, the most recent backup
              * of that month will be kept. Older backups within the same month will be removed.
              */
-            'keep_monthly_backups_for_months' => 4,
+            'keep_monthly_backups_for_months' => (int) env('BACKUP_KEEP_MONTHLY_MONTHS', 120),
 
             /*
              * After the "keep_monthly_backups_for_months" period is over, the most recent backup
              * of that year will be kept. Older backups within the same year will be removed.
              */
-            'keep_yearly_backups_for_years' => 2,
+            'keep_yearly_backups_for_years' => (int) env('BACKUP_KEEP_YEARLY_YEARS', 20),
 
             /*
              * After cleaning up the backups remove the oldest backup until
              * this amount of megabytes has been reached.
              * Set null for unlimited size.
              */
-            'delete_oldest_backups_when_using_more_megabytes_than' => 5000,
+            'delete_oldest_backups_when_using_more_megabytes_than' => (int) env('BACKUP_MAX_STORAGE_MB', 0) ?: null,
         ],
 
         /*

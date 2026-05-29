@@ -73,6 +73,13 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'bu_backup' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/laravel.log'),
+            'level' => env('BACKUP_LOG_LEVEL', env('LOG_LEVEL', 'info')),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),
