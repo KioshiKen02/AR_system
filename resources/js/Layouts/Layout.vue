@@ -15,7 +15,13 @@
             </div>
 
             <Notifications v-if="showNotifications" :show="showNotifications" @close="showNotifications = false" />
-            <Messages v-if="showMessages" :show="showMessages" :users="users" @close="showMessages = false" />
+            <Messages
+                v-if="showMessages"
+                :show="showMessages"
+                :users="users"
+                @close="showMessages = false"
+                @refresh-users="fetchUsers"
+            />
             <ToastAlertWarning :show="showToast" :message="toastMessage" />
             <div id="app" class="flex h-screen" v-cloak>
                 <!-- Sidebar -->
@@ -672,15 +678,21 @@ const totalUnreadCount = computed(() => {
 
 const fetchUsers = async () => {
     try {
-        const { data } = await axios.get(route("messages.users", { tenant: page.props.tenant }));
-        users.value = data;
+        const { data } = await axios.get(
+            route("messages.users", {
+                tenant: page.props.tenant,
+                _t: Date.now(),
+            })
+        );
+        users.value = Array.isArray(data) ? data : [];
     } catch (error) {
         console.error("Error fetching users:", error);
         showWarningToast("Failed to load users");
     }
 };
 
-const showMessageModal = () => {
+const showMessageModal = async () => {
+    await fetchUsers();
     showMessages.value = true;
 };
 

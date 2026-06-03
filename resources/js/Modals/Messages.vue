@@ -375,11 +375,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick, onUnmounted } from "vue";
+import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 import axios from "axios";
 import { usePage } from "@inertiajs/vue3";
-import Echo from "laravel-echo";
-import Pusher from "pusher-js";
 import {
     mdiMessage,
     mdiMessageOutline,
@@ -400,7 +398,7 @@ const props = defineProps({
     users: Array,
 });
 
-const emit = defineEmits(["close"]);
+const emit = defineEmits(["close", "refresh-users"]);
 
 // Get current user from Inertia
 const page = usePage();
@@ -423,11 +421,6 @@ const inputHeight = ref(44);
 const isTyping = ref(false);
 const userTyping = ref(null);
 const searchInput = ref(null);
-let typingTimer = null;
-
-// Echo instance for real-time messaging
-let echo = null;
-let privateChannel = null;
 
 const showImage = ref(true);
 const profilePhotoUrl = (name) => {
@@ -450,31 +443,64 @@ const filteredUsers = computed(() => {
         user.name.toLowerCase().includes(searchQuery.value.toLowerCase())
     );
 });
+
+const cloneUsers = (userList = []) =>
+    Array.isArray(userList) ? userList.map((user) => ({ ...user })) : [];
+
+const syncUsersFromProps = (userList = []) => {
+    const selectedUserId = selectedUser.value?.id ?? null;
+    users.value = cloneUsers(userList);
+
+    if (!selectedUserId) return;
+
+    const refreshedSelectedUser = users.value.find(
+        (user) => user.id === selectedUserId
+    );
+
+    if (refreshedSelectedUser) {
+        selectedUser.value = refreshedSelectedUser;
+    }
+};
+
+const syncUnreadCount = (userId, unreadCount = 0) => {
+    const user = users.value.find((item) => item.id === userId);
+
+    if (user) {
+        user.unread_count = unreadCount;
+    }
+
+    if (selectedUser.value?.id === userId) {
+        selectedUser.value = user ?? {
+            ...selectedUser.value,
+            unread_count: unreadCount,
+        };
+    }
+};
+
+const applyReadState = (conversationUserId, readAt) => {
+    if (!readAt) return;
+
+    messages.value = messages.value.map((message) => {
+        if (
+            message.sender_id === conversationUserId &&
+            message.receiver_id === currentUser.value.id &&
+            !message.read_at
+        ) {
+            return {
+                ...message,
+                read_at: readAt,
+            };
+        }
+
+        return message;
+    });
+};
 const clearSearch = () => {
     searchQuery.value = ""; // Clear search input
 
     nextTick(() => {
         searchInput.value?.focus();
     });
-};
-
-const initializeEcho = () => {};
-
-// Fetch users
-const fetchUsers = async () => {
-    usersLoading.value = true;
-    try {
-        const { data } = await axios.get(route("messages.users", { 
-            tenant: page.props.tenant,
-            _t: Date.now()
-        }));
-        users.value = data;
-    } catch (error) {
-        console.error("Error fetching users:", error);
-        showWarningToast("Failed to load users");
-    } finally {
-        usersLoading.value = false;
-    }
 };
 
 // Select user and load messages
@@ -485,8 +511,11 @@ const selectUser = async (user) => {
         return;
     }
 
-    selectedUser.value = user;
-    user.unread_count = 0; // Reset unread count
+    const nextSelectedUser =
+        users.value.find((item) => item.id === user.id) ?? user;
+
+    selectedUser.value = nextSelectedUser;
+    syncUnreadCount(nextSelectedUser.id, 0);
 
     if (messageInput.value) {
         messageInput.value.style.height = "44px";
@@ -515,17 +544,19 @@ const selectUser = async (user) => {
 const fetchMessages = async () => {
     if (!selectedUser.value) return;
 
+    const requestedUserId = selectedUser.value.id;
+
     // Don't set loading true if we are just refreshing silently or if it's already loading
     // But for initial load on selectUser, we want it.
     // Let's rely on the spinner check in template.
     messagesLoading.value = true;
     
     try {
-        console.log("Fetching messages for user:", selectedUser.value.id);
+        console.log("Fetching messages for user:", requestedUserId);
         const { data } = await axios.get(
             route("messages.conversation", { 
                 tenant: page.props.tenant, 
-                user: selectedUser.value.id,
+                user: requestedUserId,
                 _t: Date.now() // Cache buster
             })
         );
@@ -534,7 +565,7 @@ const fetchMessages = async () => {
         const fetchedMessages = Array.isArray(data) ? data : (data.data ? data.data : []);
         
         // Only update if we are still looking at the same user
-        if (selectedUser.value) {
+        if (selectedUser.value?.id === requestedUserId) {
              messages.value = Array.isArray(fetchedMessages) ? fetchedMessages : [];
              nextTick(() => scrollToBottom());
         }
@@ -591,10 +622,22 @@ const sendMessage = async () => {
 const markMessagesAsRead = async () => {
     if (!selectedUser.value) return;
 
+    const conversationUserId = selectedUser.value.id;
+
     try {
-        await axios.post(route("messages.markAsRead", { tenant: page.props.tenant, user: selectedUser.value.id }));
+        const { data } = await axios.post(
+            route("messages.markAsRead", {
+                tenant: page.props.tenant,
+                user: conversationUserId,
+            })
+        );
+
+        applyReadState(conversationUserId, data?.read_at);
+        syncUnreadCount(conversationUserId, 0);
+        emit("refresh-users");
     } catch (error) {
         console.error("Error marking messages as read:", error);
+        showWarningToast("Failed to update read status");
     }
 };
 
@@ -706,22 +749,16 @@ const showWarningToast = (message) => {
 
 // Close modal
 const closeModal = () => {
-    selectedUser.value = "";
+    selectedUser.value = null;
     emit("close");
 };
-
-// Lifecycle
-onMounted(() => {
-    users.value = props.users;
-    // fetchUsers();
-});
 
 onUnmounted(() => { });
 
 // Watch for modal visibility
 watch(
     () => props.show,
-    (newVal) => {
+    () => {
         // if (newVal) {
         //     fetchUsers();
         // } else {
@@ -729,6 +766,14 @@ watch(
         messages.value = [];
         // }
     }
+);
+
+watch(
+    () => props.users,
+    (newUsers) => {
+        syncUsersFromProps(newUsers);
+    },
+    { immediate: true, deep: true }
 );
 
 const handleInput = () => {

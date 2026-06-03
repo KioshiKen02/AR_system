@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\MessageRead;
-use App\Events\MessageSent;
 use App\Models\MasterfileModels\User;
 use App\Models\Message;
 use Illuminate\Http\Request;
@@ -91,7 +89,10 @@ class MessageController extends Controller
             ->sortByDesc('latest_message_at')
             ->values(); // Reset keys
 
-        return response()->json($users);
+        return response()->json($users)
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     /**
@@ -221,21 +222,21 @@ class MessageController extends Controller
     /**
      * Mark messages as read
      */
-    public function markAsRead(Request $request, $user)
+    public function markAsRead(Request $request, string $tenant, User $user)
     {
-        $user = User::findOrFail($user);
         $currentUserId = Auth::id();
-        $currentUser = Auth::user();
-
+        $readAt = now();
 
         $updatedCount = Message::where('sender_id', $user->id)
             ->where('receiver_id', $currentUserId)
             ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+            ->update(['read_at' => $readAt]);
 
         return response()->json([
             'success' => true,
-            'marked_count' => $updatedCount
+            'marked_count' => $updatedCount,
+            'conversation_user_id' => $user->id,
+            'read_at' => $updatedCount > 0 ? $readAt->toISOString() : null,
         ]);
     }
 

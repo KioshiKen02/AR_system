@@ -789,6 +789,7 @@ class GenerateTextFile
     protected function generateOtherIncomeLine($invoice, &$auto_increment, $bankCode, $itemName, $itemCode, $locCode = null)
     {
         $formattedDate = $this->formatDate($invoice->receipt_date);
+        $amountValue = (float) $invoice->total_amount + (float) ($invoice->added_vat ?? 0);
         
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $companyCode = $this->tenantConfig->getCompanyCode();
@@ -806,23 +807,23 @@ class GenerateTextFile
             $prefix . 'CI' . $invoice->invoice_no,
             'COH - PESO DENOMINATIONS',
             'PHP',
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue),
             '',
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue),
             '1',
             $companyCode,
             $deptCode,
             $journalCode,
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount * -1),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue * -1),
             $formattedDate,
             'CASH SALES',
             'Bank Account',
             $bankCode ?: 'B006',
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount * -1)
+            $this->fmt($amountValue),
+            $this->fmt($amountValue * -1)
         ];
 
         $detailLine = [
@@ -836,23 +837,23 @@ class GenerateTextFile
             $prefix . 'CI' . $invoice->invoice_no,
             trim((string) $itemName),
             'PHP',
-            $this->fmt($invoice->total_amount * -1),
+            $this->fmt($amountValue * -1),
             '',
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount * -1),
-            $this->fmt($invoice->total_amount * -1),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue * -1),
+            $this->fmt($amountValue * -1),
             '1',
             $companyCode,
             $deptCode,
             $journalCode,
-            $this->fmt($invoice->total_amount * -1),
-            $this->fmt($invoice->total_amount),
+            $this->fmt($amountValue * -1),
+            $this->fmt($amountValue),
             $formattedDate,
             'CASH SALES',
             '',
             '',
-            $this->fmt($invoice->total_amount * -1),
-            $this->fmt($invoice->total_amount)
+            $this->fmt($amountValue * -1),
+            $this->fmt($amountValue)
         ];
 
         return $this->formatLines($headerLine, $detailLine);
@@ -861,6 +862,7 @@ class GenerateTextFile
     protected function generateOtherIncomeLineNoncash($invoice, &$auto_increment, $customerCusNavCode, $customerCusNavCodeDescription, $itemCode, $customerCusPosting, $itemName, $locCode = null)
     {
         $formattedDate = $this->formatDate($invoice->receipt_date);
+        $amountValue = (float) $invoice->total_amount + (float) ($invoice->added_vat ?? 0);
 
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $companyCode = $this->tenantConfig->getCompanyCode();
@@ -882,11 +884,11 @@ class GenerateTextFile
             '0',
             '',
             'PHP',
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue),
             '',
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue),
             '1',
             $invoice->customer_code,
             $customerCusPosting,
@@ -895,8 +897,8 @@ class GenerateTextFile
             $journalCode,
             'Customer',
             $glAccount,
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount)
+            $this->fmt($amountValue),
+            $this->fmt($amountValue)
         ];
 
         $detailLine = [
@@ -912,11 +914,11 @@ class GenerateTextFile
             '0',
             '',
             'PHP',
-            $this->fmt($invoice->total_amount * -1),
+            $this->fmt($amountValue * -1),
             '',
-            $this->fmt($invoice->total_amount),
-            $this->fmt($invoice->total_amount * -1),
-            $this->fmt($invoice->total_amount * -1),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue * -1),
+            $this->fmt($amountValue * -1),
             '1',
             '',
             '',
@@ -925,8 +927,8 @@ class GenerateTextFile
             $journalCode,
             '',
             '',
-            $this->fmt($invoice->total_amount * -1),
-            $this->fmt($invoice->total_amount * -1)
+            $this->fmt($amountValue * -1),
+            $this->fmt($amountValue * -1)
         ];
 
         return $this->formatLines($headerLine, $detailLine);
