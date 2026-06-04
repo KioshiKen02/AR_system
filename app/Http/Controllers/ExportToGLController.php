@@ -77,10 +77,12 @@ class ExportToGLController extends Controller
                     ->orderBy('receipt_date');
             }
 
-            $walkInCustomerCodes = $this->walkInCustomerCodes();
-            $query->whereNotIn('customer_code', $walkInCustomerCodes)
-                ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
-                ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%']);
+            if ($validated["export_type"] !== "Other Income") {
+                $walkInCustomerCodes = $this->walkInCustomerCodes();
+                $query->whereNotIn('customer_code', $walkInCustomerCodes)
+                    ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
+                    ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%']);
+            }
 
             if (!$query->exists()) {
                 return response()->json([
