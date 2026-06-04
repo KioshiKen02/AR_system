@@ -1363,14 +1363,17 @@ class GenerateTextFile
         $code = $bankCode;
         $codeDetails = $bankName;
         $accountType = 'Customer';
+        $transfer = 'Payment';
 
         if ($accCode !== '') {
             $code = $accCode;
             $codeDetails = $accCodeName ?: $bankName;
             $accountType = 'G/L Account';
+            $transfer = '';
         } elseif ($custCode !== '') {
             $code = $custCode;
             $codeDetails = trim((string) $custCodeHolderName) !== '' ? $custCodeHolderName : $bankName;
+            $transfer = '';
         } else {
             $accountType = 'Bank Account';
         }
@@ -1392,7 +1395,7 @@ class GenerateTextFile
             $accountType,
             $code,
             $formattedDate,
-            'Payment',
+            $transfer,
             $prefix . 'PY' . $detail->payment_no,
             $codeDetails,
             'PHP',
@@ -1427,7 +1430,7 @@ class GenerateTextFile
             'Customer',
             $customerCode,
             $formattedDate,
-            'Payment',
+            $transfer,
             $prefix . 'PY' . $detail->payment_no,
             $customerName,
             'PHP',
@@ -1464,7 +1467,7 @@ class GenerateTextFile
                 'G/L Account',
                 '10.07.01.01',
                 $formattedDate,
-                'Payment',
+                $transfer,
                 $prefix . 'PY' . $detail->payment_no,
                 'Withholding Tax Receivable Customer',
                 'PHP',

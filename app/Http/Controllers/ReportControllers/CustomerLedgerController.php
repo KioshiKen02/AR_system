@@ -665,15 +665,6 @@ class CustomerLedgerController extends Controller
         $document_no = $request->input('document_no');
         $type = $request->input('type');
 
-        $validatedDocumentNo = CustomerLedger::where('invoice_number', $document_no)
-            ->where('type', 'Sales Invoice')
-            ->where('si_payment_type', 'Cash')
-            ->first();
-
-        if ($validatedDocumentNo) {
-            return response()->json([]);
-        }
-
         // Now get all ledger entries for these invoice numbers
         $payments = PaymentDetails::where('customer_code', $customerCode)
             ->where('document_no', $document_no)
@@ -710,17 +701,6 @@ class CustomerLedgerController extends Controller
         $paymentInfo = Payment::where('payment_no', $payment_no)
             ->select('document_no', 'customer_code', 'name', 'type')
             ->first();
-
-        if ($paymentInfo) {
-            $validatedDocumentNo = CustomerLedger::where('invoice_number', $paymentInfo->document_no)
-                ->where('type', 'Sales Invoice')
-                ->where('si_payment_type', 'Cash')
-                ->first();
-
-            if ($validatedDocumentNo) {
-                return response()->json([]);
-            }
-        }
 
         // Now get all ledger entries for these invoice numbers
         $payments = PaymentDetails::where('payment_no', $payment_no)
