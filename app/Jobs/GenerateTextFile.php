@@ -136,8 +136,6 @@ class GenerateTextFile
                 ->where('exported', false)
                 ->orderBy('receipt_date');
 
-            $this->excludeWalkInFromQuery($query);
-
            /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
 
@@ -311,15 +309,11 @@ class GenerateTextFile
             /* $privateUrl = route('exports.download', ['filename' => $filename]); */
             $privateUrl = null;
 
-            $walkInCustomerCodes = $this->getWalkInCustomerCodes();
             DB::table('invoice')
                 ->whereBetween('receipt_date', [
                     $this->validatedData['start_date'],
                     $this->validatedData['end_date']
                 ])
-                ->whereNotIn('customer_code', $walkInCustomerCodes)
-                ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
-                ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%'])
                 ->update(['exported' => true]);
 
             $this->updateProgress(100, 'Ready to Download!');
