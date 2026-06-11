@@ -23,7 +23,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'bilar') && str_contains($identifier, 'breeder')) {
-            return 'Marcela M. Orot';
+            return 'MARCELA M. ORTOT';
         }
 
         if (str_contains($identifier, 'gp') && str_contains($identifier, 'jagna')) {
@@ -35,7 +35,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'peanut') && str_contains($identifier, 'kisses')) {
-            return '';
+            return 'GABATO, DENNIS T.';
         }
 
         if (str_contains($identifier, 'cortes') && str_contains($identifier, 'poultry')) {
@@ -130,7 +130,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'peanut') && str_contains($identifier, 'kisses')) {
-            return 'Gabato, Dennis T.';
+            return 'GABATO, DENNIS T.';
         }
 
         if (str_contains($identifier, 'cortes') && str_contains($identifier, 'poultry')) {

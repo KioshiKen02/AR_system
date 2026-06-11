@@ -39,12 +39,13 @@ class AuthController extends Controller
                     ])->onlyInput('username');
                 }
 
-                // Make API request using Laravel HTTP client
-                $response = Http::get("http://172.16.161.34/api/hrms/get/employee/status", [
-                    'q' => $employeeId
-                ]);
+                $skipStatusCheck = app()->environment(['local', 'testing'])
+                    || filter_var(env('SKIP_HRMS_STATUS_CHECK', false), FILTER_VALIDATE_BOOLEAN);
 
-                if ($employeeId !== 'Administrator') {
+                if (!$skipStatusCheck && $employeeId !== 'Administrator') {
+                    $response = Http::timeout(3)->get("http://172.16.161.34/api/hrms/get/employee/status", [
+                        'q' => $employeeId
+                    ]);
 
                     if ($response->successful()) {
                         $statusData = $response->json();

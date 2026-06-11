@@ -15,6 +15,19 @@ use App\Services\ReportIndicatorService;
 
 class ProfileController extends Controller
 {
+    private function resolveNumericRouteId(Request $request, $fallbackId): int
+    {
+        $targetId = $request->route('id') ?? $request->route('user') ?? $request->route('userId') ?? $fallbackId;
+
+        if (!is_numeric($targetId)) {
+            $params = array_values($request->route()->parameters());
+            if (count($params) >= 2 && is_numeric($params[1])) {
+                $targetId = $params[1];
+            }
+        }
+
+        return (int) $targetId;
+    }
 
     public function profile()
     {
@@ -113,7 +126,8 @@ class ProfileController extends Controller
             ]
         );
 
-        $user = User::findOrFail($id);
+        $targetId = $this->resolveNumericRouteId($request, $id);
+        $user = User::findOrFail($targetId);
 
         // If the username is not changed, don't update it
         if ($user->username !== $request->username) {
@@ -121,6 +135,7 @@ class ProfileController extends Controller
         }
 
         $user->update($validated);
+        return back()->with('success', 'Username updated successfully.');
     }
 
     public function updatePassword(Request $request, $id)
@@ -145,7 +160,8 @@ class ProfileController extends Controller
 
 
         // Find the user
-        $user = User::findOrFail($id);
+        $targetId = $this->resolveNumericRouteId($request, $id);
+        $user = User::findOrFail($targetId);
 
         // Check if current password matches
         if (!Hash::check($request->current_password, $user->password)) {
