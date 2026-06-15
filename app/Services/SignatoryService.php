@@ -23,7 +23,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'bilar') && str_contains($identifier, 'breeder')) {
-            return 'MARCELA M. ORTOT';
+            return 'MARCELA M. OROT';
         }
 
         if (str_contains($identifier, 'gp') && str_contains($identifier, 'jagna')) {
@@ -118,11 +118,11 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'bilar') && str_contains($identifier, 'breeder')) {
-            return '';
+            return 'MARCELA M. OROT';
         }
 
         if (str_contains($identifier, 'gp') && str_contains($identifier, 'jagna')) {
-            return '';
+            return 'LOURDES JALOR';
         }
 
         if (str_contains($identifier, 'ice') && str_contains($identifier, 'plant')) {
@@ -142,19 +142,19 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'canhayupon') && str_contains($identifier, 'breeder')) {
-            return '';
+            return 'MELISSA QUIÑANOLA';
         }
 
         if (str_contains($identifier, 'bilar') && str_contains($identifier, 'hatchery')) {
-            return '';
+            return 'ANTONIO ATAN';
         }
 
         if (str_contains($identifier, 'lapsaon') && str_contains($identifier, 'breeder')) {
-            return '';
+            return 'EMMANUEL DORIA';
         }
 
         if (str_contains($identifier, 'rizal') && str_contains($identifier, 'breeder')) {
-            return '';
+            return 'JENNIFER BALBIDO';
         }
 
         if (str_contains($identifier, 'feedmill')) {
