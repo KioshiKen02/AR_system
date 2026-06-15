@@ -67,7 +67,7 @@ class TenantConfigService
             'Demo Farm' => 'DF',
             'Dressing Plant' => 'DP',
             'Farmers Market' => 'DP',
-            'Meat Processing' => 'DP',
+            'Meat Processing' => 'MP',
             'Rendering' => 'RP',
              default => 'BB', // Default fallback
         };
@@ -207,7 +207,7 @@ class TenantConfigService
                 'charges invoice ar' => 'CFP_OCRDTSALES',
             ],
             'Meat Processing' => [
-                'payment' => 'UMP_DPCOLL',
+                'payment' => 'UMP_MPCOLL',
                 'adjustment' => 'UMP_ADJSALES',
                 'charge invoice cash' => 'UMP_OCASHSALES',
                 'charges invoice cash' => 'UMP_OCASHSALES',

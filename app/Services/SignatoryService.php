@@ -39,7 +39,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'cortes') && str_contains($identifier, 'poultry')) {
-            return '';
+            return 'SAMUEL LUCIP';
         }
 
         if (str_contains($identifier, 'cortes') && str_contains($identifier, 'piggery')) {
