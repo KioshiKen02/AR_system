@@ -262,6 +262,9 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         Route::get('/clearing', [CheckClearedController::class, 'index'])->middleware('check.permission:0401-CHKCLR,view')->name('clearing');
         Route::get('/getFloatingChecks', [CustomerLedgerController::class, 'getFloatingChecks'])->name('getFloatingChecks');
         Route::post('/check-clearing', [CheckClearedController::class, 'clearChecks'])->name('checkclearing');
+        Route::post('/check-clearing/{clearing_no}/apply-ledger', [CheckClearedController::class, 'applyToLedger'])
+            ->middleware('check.permission:0401-CHKCLR,update')
+            ->name('checkclearing.applyLedger');
         Route::get('/getlatestclearingno', [CheckClearedController::class, 'latest'])->name('getlatestclearingno');
         Route::get('/check-cleared-items/{clearing_no}', [CheckClearedItemsController::class, 'getByClearingNo'])->name('getCheckClearedItems');
         Route::get('/clearing-latest-clearingNumber', function () { //GETTING CLEARING NUMBER FOR PDF PRINT PURPOSES (NOT REPRINTING!)

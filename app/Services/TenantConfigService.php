@@ -105,7 +105,7 @@ class TenantConfigService
     {
         if ($this->appName === 'Feedmill') {
             $loc = strtoupper(trim((string) $locCode));
-            return $loc === 'FEED2' ? '03.01.3.02' : '03.01.3.01';
+            return $loc === 'FEED2' ? '03.01.3.01' : '03.01.3.01';
         }
 
         return match ($this->appName) {

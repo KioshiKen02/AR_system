@@ -18,6 +18,7 @@
             />
         </Transition>
 
+        <ToastAlert :show="showSuccessToastVisible" :message="successToastMessage" />
         <ToastAlertWarning :show="showToast" :message="toastMessage" />
 
         <Transition
@@ -644,6 +645,31 @@
                         </div>
                         <div class="flex gap-2">
                             <button
+                                v-if="canUpdate('0401-CHKCLR')"
+                                type="button"
+                                @click="applyToLedger"
+                                class="submitButton group"
+                                :disabled="isApplyingToLedger"
+                            >
+                                <div
+                                    class="flex justify-center items-center gap-2"
+                                >
+                                    <span
+                                        class="transition-transform duration-300 group-hover:rotate-405"
+                                    >
+                                        <svg-icon
+                                            type="mdi"
+                                            :path="mdiRefresh"
+                                            class="w-5 h-5"
+                                        />
+                                    </span>
+                                    <span v-if="isApplyingToLedger"
+                                        >Applying...</span
+                                    >
+                                    <span v-else>Apply To Ledger</span>
+                                </div>
+                            </button>
+                            <button
                                 type="button"
                                 @click="closeModal"
                                 class="closeButton group"
@@ -700,9 +726,10 @@ import { computed, nextTick, ref, watch, onMounted, onUnmounted } from "vue";
 import { useForm, usePage } from "@inertiajs/vue3";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
+import ToastAlert from "../../Pages/Components/ToastAlert.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import ManagersKey from "../ManagersKey.vue";
-import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
+import { mdiClose, mdiNavigationVariantOutline, mdiRefresh } from "@mdi/js";
 import PdfPreviewModal from "../PdfPreviewModal.vue";
 import usePermissions from "../../Pages/Composables/usePermissions";
 
@@ -723,10 +750,11 @@ const form = useForm({
     payment_details: [],
 });
 
-const { canReprint } = usePermissions();
+const { canReprint, canUpdate } = usePermissions();
 
 const modalLoading = ref(false);
 const isLoading = ref(false);
+const isApplyingToLedger = ref(false);
 
 const showManagerModal = ref(false);
 const person_authored = ref(null);
@@ -749,6 +777,34 @@ const emit = defineEmits(["close"]);
 
 const closeModal = () => {
     emit("close");
+};
+
+const applyToLedger = async () => {
+    if (!props.selected?.clearing_no || isApplyingToLedger.value) {
+        return;
+    }
+
+    isApplyingToLedger.value = true;
+
+    try {
+        const response = await axios.post(
+            route("checkclearing.applyLedger", {
+                tenant: page.props.tenant,
+                clearing_no: props.selected.clearing_no,
+            })
+        );
+
+        showSuccessToast(
+            response.data?.message || "Customer ledger has been updated."
+        );
+    } catch (error) {
+        showWarningToast(
+            error.response?.data?.message ||
+                "Failed to apply the clearing transaction to the customer ledger."
+        );
+    } finally {
+        isApplyingToLedger.value = false;
+    }
 };
 
 const formatDate = (dateString) => {
@@ -782,7 +838,25 @@ const isPastDue = (dateString) => {
 ////////////////TOAST///////////////////////////////////////////////////////////////////////////////////////////////////////
 const showToast = ref(false);
 const toastMessage = ref("");
+const showSuccessToastVisible = ref(false);
+const successToastMessage = ref("");
 let toastTimeout = null; // to keep track of the timeout
+let successToastTimeout = null;
+
+const showSuccessToast = (message) => {
+    successToastMessage.value = message;
+    showSuccessToastVisible.value = false;
+    if (successToastTimeout) clearTimeout(successToastTimeout);
+
+    setTimeout(() => {
+        showSuccessToastVisible.value = true;
+    }, 0);
+
+    successToastTimeout = setTimeout(() => {
+        showSuccessToastVisible.value = false;
+        successToastTimeout = null;
+    }, 3000);
+};
 
 const showWarningToast = (message) => {
     toastMessage.value = message;

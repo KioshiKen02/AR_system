@@ -22,6 +22,53 @@ use Illuminate\Support\Str;
 
 class CheckClearedController extends Controller
 {
+    private function syncLedgerForPayment(string $customerCode, string $documentNo, string $type): void
+    {
+        $ledgerQuery = CustomerLedger::on('tenant')
+            ->where('customer_code', $customerCode)
+            ->where('invoice_number', $documentNo)
+            ->where('type', $type)
+            ->lockForUpdate();
+
+        $ledgerCount = (clone $ledgerQuery)->count();
+
+        if ($ledgerCount === 0) {
+            throw ValidationException::withMessages([
+                'customer_ledger' => "Customer ledger entry not found for document {$documentNo} ({$type}).",
+            ]);
+        }
+
+        if ($ledgerCount > 1) {
+            throw ValidationException::withMessages([
+                'customer_ledger' => "Duplicate customer ledger entries found for document {$documentNo} ({$type}).",
+            ]);
+        }
+
+        $ledger = $ledgerQuery->firstOrFail();
+
+        $totalPaid = (float) PaymentDetails::on('tenant')
+            ->where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $type)
+            ->whereIn('status', ['Paid', 'Cleared'])
+            ->sum('amount_paid');
+
+        $baseAmount = (float) ($ledger->adjusted_amount ?? $ledger->amount ?? 0);
+        $overage = (float) ($ledger->overage ?? 0);
+        $shrinkage = (float) ($ledger->shrinkage ?? 0);
+        $returnAmount = (float) ($ledger->return ?? 0);
+
+        $runningBalance = max(
+            0,
+            $baseAmount - $totalPaid + $overage - $shrinkage - $returnAmount
+        );
+
+        $ledger->update([
+            'amount_paid' => $totalPaid,
+            'running_balance' => $runningBalance,
+        ]);
+    }
+
     public function index(Request $request)
     {
         $query = CheckCleared::on('tenant');
@@ -132,7 +179,6 @@ class CheckClearedController extends Controller
             CheckClearedItems::on('tenant')->insert($checkClearedItems);
 
             foreach ($validated['payment_details'] as $payment) {
-                // Update the original payment status
                 $pd = PaymentDetails::on('tenant')->where([
                     'payment_no' => $payment['payment_no'],
                     'check_no'   => $payment['check_no'],
@@ -141,26 +187,23 @@ class CheckClearedController extends Controller
                     'document_no' => $payment['document_no'],
                 ])->lockForUpdate()->first();
 
-                if ($pd) {
-                    $pd->update([
-                        'status' => $payment['status'],
-                        'clearing_date' => $validated['clearing_date'],
+                if (!$pd) {
+                    throw ValidationException::withMessages([
+                        'payment_details' => "Floating cheque record not found for payment {$payment['payment_no']} / document {$payment['document_no']}.",
                     ]);
                 }
 
+                $pd->update([
+                    'status' => $payment['status'],
+                    'clearing_date' => $validated['clearing_date'],
+                ]);
+
                 if ($payment['status'] === 'Cleared') {
-                    $ledger = CustomerLedger::on('tenant')->where('invoice_number', $payment['document_no'])->where('type', $payment['type'])->firstOrFail();
-                    $newAmount = max($ledger->running_balance - $payment['amount'], 0);
-                    if ($newAmount < 0) {
-                        throw ValidationException::withMessages([
-                            'clearing_no' => 'Error Please Try Again',
-                        ]);
-                    }
-                    $newAmountPaid = $ledger->amount_paid + $payment['amount'];
-                    $ledger->update([
-                        'running_balance' => $newAmount,
-                        'amount_paid' => $newAmountPaid,
-                    ]);
+                    $this->syncLedgerForPayment(
+                        $validated['customer_code'],
+                        $payment['document_no'],
+                        $payment['type']
+                    );
                 }
 
                 if ($payment['status'] === 'Cancelled') {
@@ -168,7 +211,7 @@ class CheckClearedController extends Controller
                         ->lockForUpdate()
                         ->first();
 
-                    if ($cust && $pd) {
+                    if ($cust) {
                         $cust->update([
                             'advanced_payment_balance' => $pd->advpy_amount_paid + $cust->advanced_payment_balance,
                         ]);
@@ -193,6 +236,70 @@ class CheckClearedController extends Controller
 
         session()->put('clearing_number', $clrNo);
         return redirect()->back();
+    }
+
+    public function applyToLedger(Request $request, $tenant, string $clearing_no)
+    {
+        $syncedCount = DB::connection('tenant')->transaction(function () use ($clearing_no) {
+            $clearing = CheckCleared::on('tenant')
+                ->where('clearing_no', trim($clearing_no))
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $items = CheckClearedItems::on('tenant')
+                ->where('clearing_no', $clearing->clearing_no)
+                ->lockForUpdate()
+                ->get();
+
+            if ($items->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'clearing_no' => 'No cleared cheque items were found for this transaction.',
+                ]);
+            }
+
+            $paymentQuery = PaymentDetails::on('tenant')
+                ->where('customer_code', $clearing->customer_code)
+                ->where('status', 'Cleared')
+                ->where(function ($query) use ($items) {
+                    foreach ($items as $item) {
+                        $query->orWhere(function ($paymentQuery) use ($item) {
+                            $paymentQuery->where('payment_no', $item->payment_no)
+                                ->where('document_no', $item->document_no)
+                                ->where('check_no', $item->check_no);
+                        });
+                    }
+                });
+
+            $documentsToSync = $paymentQuery
+                ->get(['document_no', 'type'])
+                ->unique(function ($payment) {
+                    return $payment->document_no . '|' . $payment->type;
+                })
+                ->values();
+
+            if ($documentsToSync->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'payment_details' => 'No cleared payment details were found for this clearing transaction.',
+                ]);
+            }
+
+            foreach ($documentsToSync as $payment) {
+                $this->syncLedgerForPayment(
+                    $clearing->customer_code,
+                    $payment->document_no,
+                    $payment->type
+                );
+            }
+
+            return $documentsToSync->count();
+        });
+
+        event(new NewCreated('customerledger'));
+
+        return response()->json([
+            'message' => 'Customer ledger has been re-applied successfully.',
+            'synced_documents' => $syncedCount,
+        ]);
     }
 
     public function latest()

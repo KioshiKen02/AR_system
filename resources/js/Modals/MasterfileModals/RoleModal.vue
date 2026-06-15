@@ -354,7 +354,7 @@ const roles = ref([
     {
         id: "0401-CHKCLR",
         description: "Check Clearing",
-        enabledActions: ["can_view", "can_insert", "can_print", "can_reprint"],
+        enabledActions: ["can_view", "can_insert", "can_update", "can_print", "can_reprint"],
     },
     {
         id: "0402-WHTCLR",

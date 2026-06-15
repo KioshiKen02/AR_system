@@ -604,7 +604,7 @@ class GenerateTextFile
                         $paymentCustomer = $customers->get($paymentCustomerCode) ?? $customersByNavCode->get($paymentCustomerCode);
                         $paymentCustomerCusCode = trim((string) ($paymentCustomer?->cus_code ?? $paymentCustomerCode));
                         $paymentCustomerNavCode = trim((string) ($paymentCustomer?->nav_code ?? ''));
-                        $paymentCustomerExportCode = $paymentCustomerNavCode !== '' ? $paymentCustomerNavCode : $paymentCustomerCusCode;
+                        $paymentCustomerExportCode = $paymentCustomerCusCode;
                         $paymentCustomerCusPosting = $paymentCustomer?->cus_posting ?? '';
                         $paymentCustomerLocCode = $locCodeByCustomer[$paymentCustomerCusCode] ?? null;
 
@@ -642,9 +642,19 @@ class GenerateTextFile
                                 }
                             }
 
-                            $lineCustomerExportCode = $lineCustomerNavCode !== '' ? $lineCustomerNavCode : $lineCustomerCusCode;
+                            $lineCustomerExportCode = $lineCustomerCusCode;
                             $docCode = $this->getPaymentDocumentCodeFromPaymentType($detail->type ?? $payment->type ?? '');
-                            $paymentReferenceNo = trim((string) ($payment->ds_no ?: ($payment->reference_no ?: $detail->document_no)));
+                            $normalizeReference = static function ($value): ?string {
+                                $v = trim((string) ($value ?? ''));
+                                if ($v === '' || strcasecmp($v, 'N/A') === 0) {
+                                    return null;
+                                }
+                                return $v;
+                            };
+                            $paymentReferenceNo = $normalizeReference($payment->ds_no)
+                                ?? $normalizeReference($payment->reference_no)
+                                ?? $normalizeReference($detail->document_no)
+                                ?? '';
                             if ($payment->payment_type === '5A - Cash') {
                                 $lines[] = $this->generateCashPaymentLine(
                                     $auto_increment,
@@ -1212,7 +1222,7 @@ class GenerateTextFile
         $accountType = 'Customer';
 
         if ($accCode !== '') {
-            $code = $accCode;
+            $code =  $accCode;
             $codeDetails = $accCodeName ?: $bankName;
             $accountType = 'G/L Account';
         } elseif ($custCode !== '') {

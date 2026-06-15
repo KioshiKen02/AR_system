@@ -561,7 +561,7 @@ class InvoiceController extends Controller
 
                 $paidAmounts = PaymentDetails::on('tenant')
                     ->where('customer_code', $customerCode)
-                    ->where('status', 'Paid')
+                    ->whereIn('status', ['Paid', 'Cleared'])
                     ->whereIn('document_no', $invoiceNumbers)
                     ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
                     ->groupBy('document_no', 'type')
