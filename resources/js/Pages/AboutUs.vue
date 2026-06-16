@@ -324,6 +324,15 @@ const teamMembersAnalyst = [
         skills: ["Active"],
         role: "",
     },
+    {
+        id: 4,
+        name: "Lovelle Bianca Felizaria Berou",
+        position: "System Analyst II",
+        bio: "Dedicated System Analyst of the Farms Team in system development and support.",
+        image: "/storage/aboutus/Berou, Lovelle Bianca Felizaria.jpg",
+        skills: ["Active"],
+        role: "",
+    },
 ];
 
 const teamMembers = [
@@ -389,7 +398,7 @@ const teamMembersTwo = [
         position: "System Programmer I",
         bio: "Dedicated programmer of the Farms Team in system development.",
         image: "/storage/aboutus/Roxas, Erl Christian.jpg",
-        skills: ["Active"],
+        skills: ["Resigned"],
         role: "",
     },
 ];

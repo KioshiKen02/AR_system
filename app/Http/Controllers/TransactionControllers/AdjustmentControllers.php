@@ -181,7 +181,7 @@ class AdjustmentControllers extends Controller
 
                 $floatingPaid = PaymentDetails::where('document_no', $ledger->invoice_number)
                     ->where('type', $ledger->type)
-                    ->whereIn('status', ['Floating', 'Paid'])
+                    ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
                     ->sum('amount_paid');
 
                 $newPositive = $existingPositive;

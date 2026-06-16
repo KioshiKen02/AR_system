@@ -354,7 +354,16 @@ class InvoiceController extends Controller
                 ->where('amount', '>', 0)
                 ->get();
 
-            $result = $ledgers->map(function ($ledger) use ($applyTo) {
+            $invoiceNumbers = $ledgers->pluck('invoice_number')->unique()->values();
+            $paidAmounts = PaymentDetails::where('customer_code', $customerCode)
+                ->whereIn('status', ['Paid', 'Cleared'])
+                ->whereIn('document_no', $invoiceNumbers)
+                ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
+                ->groupBy('document_no', 'type')
+                ->get()
+                ->groupBy(['document_no', 'type']);
+
+            $result = $ledgers->map(function ($ledger) use ($applyTo, $paidAmounts) {
                 $existingPositive = Adjustment::where('invoice_no', $ledger->invoice_number)
                     ->where('apply_to', $applyTo)
                     ->where('type', 'Positive')
@@ -371,18 +380,25 @@ class InvoiceController extends Controller
 
                 $netAdjustment = $existingPositive - $existingNegative;
                 $debit = ($ledger->amount ?? 0) + $netAdjustment - $shrinkage + $overage - $returnAmount;
-                $syncedRunningBalance = max(0, $debit - ($ledger->amount_paid ?? 0));
+                $paidRow = $paidAmounts
+                    ->get($ledger->invoice_number, collect())
+                    ->get($ledger->type, collect())
+                    ->first();
+                $paid = (float) ($paidRow->total_paid ?? $ledger->amount_paid ?? 0);
+                $syncedRunningBalance = max(0, $debit - $paid);
 
                 if (
                     $ledger->adjusted_amount != (($ledger->amount ?? 0) + $netAdjustment) ||
                     $ledger->positive_adjustment_amount != $existingPositive ||
                     $ledger->negative_adjustment_amount != $existingNegative ||
+                    $ledger->amount_paid != $paid ||
                     $ledger->running_balance != $syncedRunningBalance
                 ) {
                     $ledger->update([
                         'adjusted_amount' => ($ledger->amount ?? 0) + $netAdjustment,
                         'positive_adjustment_amount' => $existingPositive,
                         'negative_adjustment_amount' => $existingNegative,
+                        'amount_paid' => $paid,
                         'running_balance' => $syncedRunningBalance,
                     ]);
                 }
@@ -392,7 +408,7 @@ class InvoiceController extends Controller
                     'receipt_date' => $ledger->date,
                     'type' => $ledger->type,
                     'amount' => $ledger->amount,
-                    'amount_paid' => $ledger->amount_paid,
+                    'amount_paid' => $paid,
                     'running_balance' => $syncedRunningBalance,
                 ];
             })->filter(fn ($row) => ($row['running_balance'] ?? 0) > 0)->values();
@@ -402,7 +418,16 @@ class InvoiceController extends Controller
                 ->where('running_balance', '>', 0)
                 ->get();
 
-            $result = $ledgers->map(function ($ledger) {
+            $invoiceNumbers = $ledgers->pluck('invoice_number')->unique()->values();
+            $paidAmounts = PaymentDetails::where('customer_code', $customerCode)
+                ->whereIn('status', ['Paid', 'Cleared'])
+                ->whereIn('document_no', $invoiceNumbers)
+                ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
+                ->groupBy('document_no', 'type')
+                ->get()
+                ->groupBy(['document_no', 'type']);
+
+            $result = $ledgers->map(function ($ledger) use ($paidAmounts) {
                 $beginningBalance = BeginningBalance::where('beginningbalance_no', $ledger->invoice_number)->first();
 
                 if ($beginningBalance && $ledger->amount != $beginningBalance->balance_amount) {
@@ -422,13 +447,23 @@ class InvoiceController extends Controller
 
                 $amount = $ledger->amount;
                 $currentAdjusted = $amount + $existingPositive - $existingNegative;
-                $syncedRunningBalance = $currentAdjusted - $ledger->amount_paid;
+                $paidRow = $paidAmounts
+                    ->get($ledger->invoice_number, collect())
+                    ->get($ledger->type, collect())
+                    ->first();
+                $paid = (float) ($paidRow->total_paid ?? $ledger->amount_paid ?? 0);
+                $syncedRunningBalance = max(0, $currentAdjusted - $paid);
 
-                if ($ledger->adjusted_amount != $currentAdjusted || $ledger->running_balance != $syncedRunningBalance) {
+                if (
+                    $ledger->adjusted_amount != $currentAdjusted ||
+                    $ledger->amount_paid != $paid ||
+                    $ledger->running_balance != $syncedRunningBalance
+                ) {
                     $ledger->update([
                         'adjusted_amount' => $currentAdjusted,
                         'positive_adjustment_amount' => $existingPositive,
                         'negative_adjustment_amount' => $existingNegative,
+                        'amount_paid' => $paid,
                         'running_balance' => $syncedRunningBalance
                     ]);
                 }
@@ -438,7 +473,7 @@ class InvoiceController extends Controller
                     'receipt_date' => $ledger->date,
                     'type' => 'Beginning Balance',
                     'amount' => $syncedRunningBalance,
-                    'amount_paid' => $ledger->amount_paid,
+                    'amount_paid' => $paid,
                     'running_balance' => $syncedRunningBalance,
                 ];
             });

@@ -34,7 +34,7 @@ class PaymentController extends Controller
 
     public function index(Request $request)
     {
-        $query = Payment::query();
+        $query = Payment::query()->with(['paymentDetails:id,payment_no,status']);
 
         // Search functionality
         if ($request->search) {
@@ -78,8 +78,18 @@ class PaymentController extends Controller
             $query->orderBy('payment_no', 'desc');
         }
 
+        $payments = $query->paginate(10)->withQueryString();
+        $payments->setCollection(
+            $payments->getCollection()->map(function ($payment) {
+                $payment->status = $this->resolvePaymentStatus($payment);
+                $payment->unsetRelation('paymentDetails');
+
+                return $payment;
+            })
+        );
+
         return Inertia::render('Payment', [
-            'payments' => $query->paginate(10)->withQueryString(),
+            'payments' => $payments,
             'searchTerm' => $request->search,
             'filters' => [
                 'code_sort' => $request->code_sort,
@@ -98,6 +108,29 @@ class PaymentController extends Controller
             ],
             'broadcastChannel' => 'payments',
         ]);
+    }
+
+    private function resolvePaymentStatus(Payment $payment): string
+    {
+        $statuses = $payment->paymentDetails
+            ->pluck('status')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($statuses->contains('Floating')) {
+            return 'Floating';
+        }
+
+        if ($statuses->contains('Cleared')) {
+            return 'Cleared';
+        }
+
+        if ($statuses->contains('Paid')) {
+            return 'Paid';
+        }
+
+        return $statuses->first() ?? 'N/A';
     }
 
     public function addPayment(Request $request, PaymentNumberService $paymentNumberService, InvoiceNumberService $invoiceNumberService)
@@ -317,6 +350,8 @@ class PaymentController extends Controller
             ? $totalAmountLessWht
             : $validated['net_total'];
 
+        $this->validateSubmittedPaymentBalances($validated);
+
         $notificationsController = new NotificationsController();
 
         // Payment Process
@@ -415,6 +450,88 @@ class PaymentController extends Controller
 
         session()->put('payment_number', $pyNo);
         return redirect()->back();
+    }
+
+    private function validateSubmittedPaymentBalances(array $validated): void
+    {
+        if (!empty($validated['selectedDocuments'])) {
+            foreach ($validated['selectedDocuments'] as $document) {
+                $documentNo = $document['docunumber'] ?? null;
+                $documentType = $document['type'] ?? null;
+
+                if (!$documentNo || !$documentType) {
+                    continue;
+                }
+
+                $availableBalance = $this->getAvailableDocumentBalance(
+                    $validated['customer_code'],
+                    $documentNo,
+                    $documentType
+                );
+
+                $requestedAmount = round(
+                    (float) ($document['amountToPay'] ?? 0) +
+                        (float) ($document['wht_amount'] ?? 0),
+                    2
+                );
+
+                if ($availableBalance <= 0) {
+                    throw ValidationException::withMessages([
+                        'document_no' => "Document {$documentNo} is already fully paid.",
+                    ]);
+                }
+
+                if ($requestedAmount > ($availableBalance + 0.009)) {
+                    throw ValidationException::withMessages([
+                        'amount_paid' => "Document {$documentNo} no longer has enough available balance for this payment.",
+                    ]);
+                }
+            }
+
+            return;
+        }
+
+        if (($validated['document_no'] ?? null) !== 'Oldest to Newest Applied') {
+            return;
+        }
+
+        $openLedgers = CustomerLedger::where('customer_code', $validated['customer_code'])
+            ->where('running_balance', '>', 0)
+            ->get(['invoice_number', 'type']);
+
+        $hasPayableDocument = $openLedgers->contains(function ($ledger) use ($validated) {
+            return $this->getAvailableDocumentBalance(
+                $validated['customer_code'],
+                $ledger->invoice_number,
+                $ledger->type
+            ) > 0;
+        });
+
+        if (!$hasPayableDocument) {
+            throw ValidationException::withMessages([
+                'document_no' => 'Selected transaction is already fully paid.',
+            ]);
+        }
+    }
+
+    private function getAvailableDocumentBalance(string $customerCode, string $documentNo, string $documentType): float
+    {
+        $ledger = CustomerLedger::where('customer_code', $customerCode)
+            ->where('invoice_number', $documentNo)
+            ->where('type', $documentType)
+            ->first();
+
+        if (!$ledger) {
+            return 0;
+        }
+
+        $floatingAmount = (float) PaymentDetails::where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $documentType)
+            ->where('status', 'Floating')
+            ->sum('amount_paid');
+
+        return max(0, round((float) $ledger->running_balance - $floatingAmount, 2));
     }
 
     //THERE IS UPDATE IN CUSTOMER LEDGER

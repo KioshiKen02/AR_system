@@ -322,6 +322,9 @@
                             AMOUNT
                         </th>
                         <th class="px-3 py-3 w-[10%] text-center font-semibold tracking-wider">
+                            STATUS
+                        </th>
+                        <th class="px-3 py-3 w-[10%] text-center font-semibold tracking-wider">
                             ACTION
                         </th>
                     </tr>
@@ -329,7 +332,7 @@
                 <!-- Loading State -->
                 <tbody v-if="isLoading">
                     <tr>
-                        <td colspan="7" class="text-center py-8">
+                        <td colspan="8" class="text-center py-8">
                             <div class="flex justify-center items-center">
                                 <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
                                     fill="var(--color-icon)">
@@ -410,6 +413,22 @@
                         <td class="px-3 py-2 text-right">
                             {{ formatCurrency(payment.amount_paid) }}
                         </td>
+                        <td class="px-3 py-2 text-center uppercase">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                :class="[
+                                    payment.status === 'Paid'
+                                        ? 'bg-emerald-700 text-emerald-300'
+                                        : payment.status === 'Floating'
+                                            ? 'bg-amber-700 text-amber-300'
+                                            : payment.status === 'Cleared'
+                                                ? 'bg-sky-700 text-sky-300'
+                                                : payment.status === 'Cancelled'
+                                                    ? 'bg-rose-700 text-rose-300'
+                                                    : 'bg-[var(--color-bg-avatar)] text-white',
+                                ]">
+                                {{ payment.status || "N/A" }}
+                            </span>
+                        </td>
                         <td class="px-3 py-2">
                             <div class="flex justify-center gap-2">
                                 <button @click="openViewModal(payment)"
@@ -421,7 +440,7 @@
                     </tr>
                     <!-- Empty State -->
                     <tr v-if="!isLoading && payments.data.length === 0">
-                        <td colspan="7" class="px-5 py-6 text-center">
+                        <td colspan="8" class="px-5 py-6 text-center">
                             <div class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2" fill="none"
                                     viewBox="0 0 24 24" stroke="currentColor">
