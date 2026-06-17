@@ -199,7 +199,9 @@
                                                         form.payment_type ===
                                                         '5A - Cash' ||
                                                         form.payment_type ===
-                                                        '5C - Online Deposit'
+                                                        '5C - Online Deposit' ||
+                                                        form.payment_type ===
+                                                        '5D - Check'
                                                     " label="DS Number" v-model="dsNumberWithPrefix
                                                         " type="text" :message="form.errors.ds_no
                                                             " prefixType="DS" @keydown="
@@ -1282,7 +1284,6 @@ const submit = () => {
         _check_confirmation: check_confirmation.value,
         _cl_type: ledgerType.value,
     };
-
     if (form.payment_type === '5D - Check' && form.check_type === 'Dated Check') {
         delete submissionData.aging_basis;
         delete submissionData.aging_days;

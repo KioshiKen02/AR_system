@@ -274,6 +274,7 @@ class PaymentController extends Controller
                 'cash_in_bank' => 'required|string',
             ],
             '5D - Check' => $checkConfirmed ? [
+                'ds_no' => ['nullable', 'string'],
                 'reference_no' => [
                     'required',
                     'string',
@@ -292,6 +293,7 @@ class PaymentController extends Controller
                 'acc_number' => 'required|string',
                 'due_date' => 'required|date',
             ] : [
+                'ds_no' => ['nullable', 'string'],
                 'reference_no' => [
                     'required',
                     'string',
