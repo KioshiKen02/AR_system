@@ -202,6 +202,14 @@
     <p><strong>As of Date:</strong> {{ $dateRange }}</p>
 
     @foreach ($groupedData as $group)
+        @php
+            $outstandingBalances = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
+                return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
+            }));
+        @endphp
+        @if (empty($outstandingBalances))
+            @continue
+        @endif
         <table style="width: 100%; margin-bottom: 2px;">
             <tr>
                 <td>
@@ -227,7 +235,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach ($group['outstandingBalances'] as $outstandingBalance)
+                @foreach ($outstandingBalances as $outstandingBalance)
                     <tr>
                         <td class="col-trans-no">{{ $outstandingBalance['document_no'] }}</td>
                         <td class="col-date">{{ $outstandingBalance['type'] }}</td>

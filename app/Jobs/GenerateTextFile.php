@@ -882,7 +882,9 @@ class GenerateTextFile
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
         $journalCode = $this->tenantConfig->getJournalCode();
         $glAccount = !empty($invoice->customer_code) ? $invoice->customer_code : $customerCusNavCode;
-        $glAccountDesc = !empty($invoice->name) ? $invoice->name : $customerCusNavCodeDescription;
+        $glAccountDesc = !empty($invoice->name)
+            ? $this->sanitizeCustomerName($invoice->name)
+            : $this->sanitizeCustomerName($customerCusNavCodeDescription);
 
         $headerLine = [
             'SALES',
@@ -1005,7 +1007,7 @@ class GenerateTextFile
             $formattedDate,
             'Credit Memo',
             $prefix . 'ARCM' . $adjustment->adjustment_no,
-            $adjustment->name,
+            $this->sanitizeCustomerName($adjustment->name),
             'PHP',
             $this->fmt($adjustment->amount * -1),
             $this->fmt($adjustment->amount),
@@ -1175,7 +1177,7 @@ class GenerateTextFile
             $formattedDate,
             'Payment',
             $prefix . 'PY' . $detail->payment_no,
-            $detail->customer_name,
+            $this->sanitizeCustomerName($detail->customer_name),
             'PHP',
             $this->fmt($detail->amount_paid * -1),
             '',
@@ -1325,7 +1327,7 @@ class GenerateTextFile
             $formattedDate,
             'Payment',
             $prefix . 'PY' . $detail->payment_no,
-            $customerName,
+            $this->sanitizeCustomerName($customerName),
             'PHP',
             $this->fmt($detail->amount_paid * -1),
             '',
@@ -1442,7 +1444,7 @@ class GenerateTextFile
             $formattedDate,
             $transfer,
             $prefix . 'PY' . $detail->payment_no,
-            $customerName,
+            $this->sanitizeCustomerName($customerName),
             'PHP',
             $amountNegative,
             '',
@@ -1595,7 +1597,7 @@ class GenerateTextFile
             $formattedDate,
             'Payment',
             $prefix . 'PY' . $detail->payment_no,
-            $customerName,
+            $this->sanitizeCustomerName($customerName),
             'PHP',
             $amountNegative,
             '',
@@ -1718,7 +1720,7 @@ class GenerateTextFile
             $formattedDate,
             'Payment',
             $prefix . 'PY' . $detail->payment_no,
-            $customerName,
+            $this->sanitizeCustomerName($customerName),
             'PHP',
             $this->fmt($detail->amount_paid * -1),
             '',
@@ -1768,6 +1770,14 @@ class GenerateTextFile
         }
 
         return Str::lower($collapsed);
+    }
+
+    protected function sanitizeCustomerName($value): string
+    {
+        $sanitized = str_replace(',', '', trim((string) $value));
+        $collapsed = preg_replace('/\s+/', ' ', $sanitized);
+
+        return $collapsed === null ? $sanitized : $collapsed;
     }
 
     protected function getPaymentDocumentCodeFromPaymentType($type): string

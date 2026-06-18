@@ -263,6 +263,14 @@
 <body>
 
     @foreach ($groupedData as $group)
+        @php
+            $paymentDetails = array_values(array_filter($group['paymentDetails'] ?? [], function ($row) {
+                return round((float) ($row['balance'] ?? 0), 2) != 0;
+            }));
+        @endphp
+        @if (empty($paymentDetails))
+            @continue
+        @endif
         <div class="page-break">
             <div class="top-right">
                 <div>Run Date/Time: {{ \Carbon\Carbon::now()->format('m/d/Y h:i:s A') }}</div>
@@ -319,7 +327,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($group['paymentDetails'] as $paymentDetail)
+                    @foreach ($paymentDetails as $paymentDetail)
                         <tr>
                             <td>
                                 {{ \Carbon\Carbon::parse($paymentDetail['date'])->format('m/d/Y') }}</td>

@@ -258,6 +258,20 @@
 
 
     @foreach ($groupedData as $group)
+        @php
+            $paymentDetailsByType = [];
+            foreach (($group['paymentDetails'] ?? []) as $type => $details) {
+                $filtered = array_values(array_filter($details ?? [], function ($row) {
+                    return round((float) ($row['amount'] ?? 0), 2) != 0;
+                }));
+                if (!empty($filtered)) {
+                    $paymentDetailsByType[$type] = $filtered;
+                }
+            }
+        @endphp
+        @if (empty($paymentDetailsByType))
+            @continue
+        @endif
         <table style="width: 100%; margin-bottom: 2px;">
             <tr>
                 <td>
@@ -278,7 +292,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach ($group['paymentDetails'] as $type => $details)
+                @foreach ($paymentDetailsByType as $type => $details)
                     {{-- Document type header --}}
                     <tr class="totals">
                         <td colspan="4"><strong>Document Type:</strong> {{ $type }}</td>

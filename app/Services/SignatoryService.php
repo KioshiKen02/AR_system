@@ -87,19 +87,19 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'dressing') && str_contains($identifier, 'plant')) {
-            return '';
+            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
         }
 
         if (str_contains($identifier, 'farmers') && str_contains($identifier, 'market')) {
-            return '';
+            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
         }
 
         if (str_contains($identifier, 'meat') && str_contains($identifier, 'processing')) {
-            return '';
+            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
         }
 
         if (str_contains($identifier, 'rendering')) {
-            return '';
+            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
         }
 
         return null;
@@ -186,7 +186,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'farmers') && str_contains($identifier, 'market')) {
-            return '';
+            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
         }
 
         if (str_contains($identifier, 'meat') && str_contains($identifier, 'processing')) {
@@ -194,7 +194,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'rendering')) {
-            return '';
+            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
         }
 
         return null;
