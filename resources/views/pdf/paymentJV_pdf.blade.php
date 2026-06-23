@@ -203,7 +203,11 @@
                 <th>S.I / C.I Amount</th>
                 <th>Balance</th>
                 <th>WHT Amount</th>
-                <th>Amount</th>
+                <th>Amount (w/o WHT)</th>
+                @if ($data['show_overpayment'] ?? true)
+                    <th>Overpayment</th>
+                @endif
+                <th>Total Amount</th>
             </tr>
         </thead>
         <tbody>
@@ -211,26 +215,36 @@
                 <tr>
                     <td>{{ \Carbon\Carbon::parse($doc->document_date)->format('m/d/Y') }}</td>
                     <td>{{ $doc->document_no }}</td>
-                    <td>{{ number_format($doc->amount, 2) }}</td>
-                    <td>{{ number_format($doc->balance, 2) }}</td>
+                    <td>{{ number_format($doc->slip_amount ?? $doc->amount, 2) }}</td>
+                    <td>{{ number_format($doc->slip_balance ?? $doc->balance, 2) }}</td>
                     <td>{{ number_format($doc->wht_amount, 2) }}</td>
+                    <td>{{ number_format($doc->total_amount_less_wht ?? (($doc->amount_paid ?? 0) - ($doc->wht_amount ?? 0)), 2) }}</td>
+                    @if ($data['show_overpayment'] ?? true)
+                        <td>{{ number_format($doc->overpayment_amount ?? 0, 2) }}</td>
+                    @endif
                     <td>{{ number_format($doc->amount_paid, 2) }}</td>
                 </tr>
             @endforeach
         </tbody>
         <tfoot class="tfoot">
             <tr>
-                <td colspan="5" style="text-align: right;">Total Amount >>></td>
+                <td colspan="{{ ($data['show_overpayment'] ?? true) ? 7 : 6 }}" style="text-align: right;">Overall Total Amount >>></td>
                 <td>{{ number_format($data['amount_paid'], 2) }}</td>
             </tr>
             <tr>
-                <td colspan="5" style="text-align: right;">Total WHT Amount >>></td>
+                <td colspan="{{ ($data['show_overpayment'] ?? true) ? 7 : 6 }}" style="text-align: right;">Overall Total WHT Amount >>></td>
                 <td>{{ number_format($data['wht_amount'], 2) }}</td>
             </tr>
             <tr>
-                <td colspan="5" style="text-align: right;">Total Amount Less WHT >>></td>
+                <td colspan="{{ ($data['show_overpayment'] ?? true) ? 7 : 6 }}" style="text-align: right;">Overall Total Amount Less WHT >>></td>
                 <td>{{ number_format($data['total_amount_less_wht'], 2) }}</td>
             </tr>
+            @if ($data['show_overpayment'] ?? true)
+                <tr>
+                    <td colspan="7" style="text-align: right;">Overall Total Overpayment >>></td>
+                    <td>{{ number_format($data['overpayment_amount'] ?? 0, 2) }}</td>
+                </tr>
+            @endif
         </tfoot>
     </table>
 

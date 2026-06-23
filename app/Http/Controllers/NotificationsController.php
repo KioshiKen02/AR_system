@@ -80,8 +80,15 @@ class NotificationsController extends Controller
             ->whereDate('due_date', '<=', $today)
             ->count();
 
-        $currentWHT = PaymentDetails::where('payment_type', 'Creditable(WHT)')
-            ->where('status', 'floating')
+        $currentWHT = PaymentDetails::query()
+            ->where('wht_amount', '>', 0)
+            ->where(function ($query) {
+                $query->where('wht_status', 'Floating')
+                    ->orWhere(function ($fallback) {
+                        $fallback->whereNull('wht_status')
+                            ->where('status', 'floating');
+                    });
+            })
             ->count();
 
         // Compare with system state

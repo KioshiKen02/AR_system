@@ -9,8 +9,7 @@
             margin: 10mm !important;
             size: A4 portrait;
         }
-
-        <style>* {
+        * {
             box-sizing: border-box;
         }
 
@@ -231,7 +230,7 @@
                 <tr>
                     <th class="col-document_no">DOC. NO.</th>
                     <th class="col-payment_no">PAYMENT NO.</th>
-                    <th class="col-check_no">WHT NO.</th>
+                    <!-- <th class="col-check_no">WHT NO.</th> -->
                     <th class="col-due_date">RECEIPT DATE</th>
                     <th class="col-amount">AMOUNT</th>
                     <th class="col-status">STATUS</th>
@@ -243,7 +242,7 @@
                     <tr>
                         <td>{{ $item['document_no'] }}</td>
                         <td>{{ $item['payment_no'] }}</td>
-                        <td>{{ $item['wht_no'] }}</td>
+                        <!-- <td>{{ $item['wht_no'] }}</td> -->
                         <td>{{ $item['receipt_date'] }}</td>
                         <td class="col-amount-td">{{ $item['amount'] }}</td>
                         <td>{{ $item['status'] }}</td>

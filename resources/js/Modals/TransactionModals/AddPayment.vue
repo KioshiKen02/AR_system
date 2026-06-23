@@ -9,13 +9,9 @@
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
             enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
             leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
-            <ConfirmationDialog :show="showDialogWHT" :message="confirmationMessageWHT" @close="handleConfirmWHT" />
-        </Transition>
-        <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
-            enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
-            leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
             <DocumentNumberList v-if="showDocumentNumberListModal" :customer_code="form.customer_code"
                 :date="form.receipt_date" :paymentType="form.payment_type" :editable_wht="editwhtconfirm"
+                :whtEnabled="isWhtSubjectPaymentType" :autoApplyWht="isWhtSubjectPaymentType"
                 @close="closeDocumentNumberList" @submit="handleSelectedInvoices" />
         </Transition>
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
@@ -152,13 +148,8 @@
                                     <div v-if="form.payment_type" class="col-span-4">
                                         <div class="col-span-4 row-span-1 row-start-3">
                                             <div class="w-full grid grid-cols-4 gap-x-[16px]">
-                                                <TextInput label="Document Number" @click="
-                                                    editable_wht &&
-                                                        form.payment_type ===
-                                                        '5E - Creditable(WHT)'
-                                                        ? openWhtConfirmation()
-                                                        : onDocuNumberClick()
-                                                    " v-model="form.document_no" type="textarea" :message="form.errors.document_no
+                                                <TextInput label="Document Number" @click="onDocuNumberClick()"
+                                                    v-model="form.document_no" type="textarea" :message="form.errors.document_no
                                                         " :readonly="!form.payment_type
                                                             " :default-placeholder="'Click to Select'"
                                                     :modified-placeholder="'Select Type First'" selectable="yes"
@@ -176,9 +167,7 @@
                                                         form.payment_type ===
                                                         '5B - Journal Voucher' ||
                                                         form.payment_type ===
-                                                        '5D - Check' ||
-                                                        form.payment_type ===
-                                                        '5E - Creditable(WHT)'
+                                                        '5D - Check'
                                                     " label="Reference Number" v-model="refNumberWithPrefix
                                                         " type="text" :message="form.errors
                                                             .reference_no
@@ -188,10 +177,7 @@
                                                                 : form.payment_type ===
                                                                     '5D - Check'
                                                                     ? 'CHK'
-                                                                    : form.payment_type ===
-                                                                        '5E - Creditable(WHT)'
-                                                                        ? 'WHT'
-                                                                        : ''
+                                                                : ''
                                                                 " @keydown="
                                                                     handleKeyDownREF
                                                                 " @click="handleClickREF" />
@@ -215,45 +201,78 @@
                                                             .advanced_payment_balance
                                                             " readonly />
                                                     <div :class="[
-                                                        !manualSelectIdentifier &&
-                                                            form.document_no
-                                                            ? 'w-full col-span-3 grid grid-cols-2 gap-x-[16px]'
-                                                            : 'w-full col-span-2 grid grid-cols-2 gap-x-[16px]',
+                                                        manualSelectIdentifier
+                                                            ? 'w-full col-span-3 grid grid-cols-2 gap-x-[16px] gap-y-[12px]'
+                                                            : !manualSelectIdentifier &&
+                                                                form.document_no
+                                                                ? 'w-full col-span-3 grid grid-cols-2 gap-x-[16px]'
+                                                                : 'w-full col-span-2 grid grid-cols-2 gap-x-[16px]',
                                                     ]">
-                                                        <TextInput label="Total Amount" v-model="form.total_amount
+                                                        <TextInput :label="manualSelectIdentifier
+                                                            ? 'Collectible Amount'
+                                                            : 'Total Amount'" v-model="form.total_amount
                                                             " type="text" :message="form.errors
                                                                 .total_amount
                                                                 " readonly />
                                                         <TextInput v-if="
                                                             manualSelectIdentifier
-                                                        " label="Amount Paid" v-model="form.amount_paid
-                                                            " type="text" :readonly="(form.payment_type ===
-                                                                '5E - Creditable(WHT)' &&
-                                                                !editable_wht) ||
-                                                                (form.payment_type !==
-                                                                    '5E - Creditable(WHT)' &&
-                                                                    (!form.total_amount ||
-                                                                        manualSelectIdentifier))
+                                                        " :label="isWhtSubjectPaymentType
+                                                            ? 'Gross Payment'
+                                                            : 'Payment Amount'" v-model="form.amount_paid
+                                                            " type="text" :readonly="!form.total_amount ||
+                                                                manualSelectIdentifier
                                                                 " :message="form.errors
                                                                     .amount_paid
                                                                     " :modified-placeholder="form.payment_type ===
-                                                                        '5E - Creditable(WHT)'
-                                                                        ? ''
+                                                                        '5A - Cash'
+                                                                        ? 'Total Amount Required'
                                                                         : 'Total Amount Required'
                                                                         " />
-                                                        <TextInput v-else label="Amount Paid" v-model="form.amount_paid
-                                                            " type="decimal" :readonly="(form.payment_type ===
-                                                                '5E - Creditable(WHT)' &&
-                                                                !editable_wht.value) ||
-                                                                (form.payment_type !==
-                                                                    '5E - Creditable(WHT)' &&
-                                                                    (!form.total_amount ||
-                                                                        manualSelectIdentifier))
+                                                        <TextInput v-else label="Total Payment Amount" v-model="form.amount_paid
+                                                            " type="decimal" :readonly="!form.total_amount ||
+                                                                manualSelectIdentifier
                                                                 " :message="form.errors
                                                                     .amount_paid
                                                                     " :modified-placeholder="'Total Amnt Required'" />
-                                                        <TextInput label="WHT Amount" v-model="form.wht_amount"
+                                                        <TextInput v-if="manualSelectIdentifier" label="Net Amount"
+                                                            v-model="form.total_amount_less_wht" type="text" readonly
+                                                            :message="form.errors.total_amount_less_wht" />
+                                                        <TextInput :label="manualSelectIdentifier
+                                                            ? 'WHT Amount'
+                                                            : 'WHT Amount'" v-model="form.wht_amount"
                                                             type="text" readonly :message="form.errors.wht_amount" />
+                                                    </div>
+                                                    <!-- <div v-if="manualSelectIdentifier && form.document_no"
+                                                        class="col-span-3 grid grid-cols-2 gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)]/50 p-3 text-xs text-[var(--color-text-secondary)]">
+                                                        <div>
+                                                            <span class="font-semibold text-[var(--color-text-primary)]">Collectible Amount:</span>
+                                                            Current balance available for payment.
+                                                        </div>
+                                                        <div>
+                                                            <span class="font-semibold text-[var(--color-text-primary)]">Gross Payment:</span>
+                                                            Total payment applied to the document, including WHT.
+                                                        </div>
+                                                        <div>
+                                                            <span class="font-semibold text-[var(--color-text-primary)]">Net Amount:</span>
+                                                            Actual cash amount after deducting WHT.
+                                                        </div>
+                                                        <div>
+                                                            <span class="font-semibold text-[var(--color-text-primary)]">WHT Amount:</span>
+                                                            Withholding tax amount reserved until WHT clearing.
+                                                        </div>
+                                                    </div> -->
+                                                    <div v-if="hasOverpaymentDisplay"
+                                                        class="col-span-3 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm dark:border-amber-300 dark:bg-amber-100 dark:text-amber-950">
+                                                        <div class="flex items-center gap-2 font-bold uppercase tracking-wide text-amber-800 dark:text-amber-950">
+                                                            <span
+                                                                class="inline-flex rounded-md bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">
+                                                                Notice
+                                                            </span>
+                                                            <span>Overpayment Summary</span>
+                                                        </div>
+                                                        <div class="mt-2 font-semibold text-amber-900 dark:text-amber-950">
+                                                            Total Overpayment: {{ formatCurrency(totalOverpaymentAmount) }}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -326,44 +345,6 @@
                                                     :readonly="!form.aging_basis || (form.aging_basis === 'Receipt Date' && !form.receipt_date) || (form.aging_basis === 'SI Date' && !form.document_date)" 
                                                     :modified-placeholder="form.aging_basis === 'Receipt Date' ? 'Receipt Date Required' : form.aging_basis === 'SI Date' ? 'Document Number Required' : 'Aging Basis Required'" 
                                                 />
-
-                                                <div v-if="
-                                                    form.payment_type ===
-                                                    '5E - Creditable(WHT)'
-                                                " class="flex items-center gap-2 mt-8 mb-[26px]">
-                                                    <div class="relative inline-block w-6 h-6">
-                                                        <input type="checkbox" v-model="form.withBIR
-                                                            "
-                                                            class="peer w-6 h-6 appearance-none border-2 border-[var(--color-border)] rounded-md checked:bg-[var(--color-bg-avatar)] checked:border-transparent cursor-pointer" />
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                                            class="absolute p-0.5 top-0 left-0 w-6 h-6 text-white hidden peer-checked:block pointer-events-none"
-                                                            fill="white">
-                                                            <path
-                                                                d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
-                                                        </svg>
-                                                    </div>
-                                                    <label class="block font-semibold mb-1">
-                                                        With BIR 2307 Provided
-                                                    </label>
-                                                </div>
-
-                                                <DropdownInput v-if="
-                                                    form.payment_type ===
-                                                    '5E - Creditable(WHT)'
-                                                " label="With Holding Tax" v-model="form.witholdingtax" :options="editwhtconfirm
-                                                    ? [
-                                                        '1%',
-                                                        '2%',
-                                                        '5%',
-                                                        'Custom Amount',
-                                                    ]
-                                                    : ['1%', '2%', '5%']
-                                                    " :message="form.errors
-                                                        .witholdingtax
-                                                        " :disabled="!form.document_no ||
-                                                            editwhtconfirm
-                                                            " placeholder="Click to Select"
-                                                    disabledPlaceholder="Select Doc No First" />
                                             </div>
                                             <transition @before-enter="beforeEnter" @enter="enter"
                                                 @after-enter="afterEnter" @before-leave="beforeLeave" @leave="leave">
@@ -467,6 +448,8 @@ const form = useForm({
     amount_paid: null,
     wht_amount: null,
     total_amount_less_wht: null,
+    apply_bir_2307: null,
+    tax_rate: null,
     acc_code: null,
     cust_code: null,
     cash_in_bank: null,
@@ -482,6 +465,12 @@ const form = useForm({
 
     selectedDocuments: [],
 });
+
+const isWhtSubjectPaymentType = computed(() =>
+    ["5A - Cash", "5B - Journal Voucher", "5C - Online Deposit", "5D - Check"].includes(
+        form.payment_type
+    )
+);
 
 const { canPrint } = usePermissions();
 
@@ -518,6 +507,7 @@ function onManagerCancel() {
 }
 
 function onDocuNumberClick() {
+    editwhtconfirm.value = editable_wht.value && isWhtSubjectPaymentType.value;
     showDocumentNumberListModal.value = true;
 }
 
@@ -706,10 +696,6 @@ const refNumberWithPrefix = computed({
             return form.reference_no?.startsWith("CHK#")
                 ? form.reference_no
                 : `CHK#${form.reference_no || ""}`;
-        } else if (form.payment_type === "5E - Creditable(WHT)") {
-            return form.reference_no?.startsWith("WHT#")
-                ? form.reference_no
-                : `WHT#${form.reference_no || ""}`;
         }
     },
     set(value) {
@@ -719,10 +705,6 @@ const refNumberWithPrefix = computed({
             form.reference_no = value.startsWith("CHK#")
                 ? value
                 : `CHK#${value}`;
-        } else if (form.payment_type === "5E - Creditable(WHT)") {
-            form.reference_no = value.startsWith("WHT#")
-                ? value
-                : `WHT#${value}`;
         }
     },
 });
@@ -738,9 +720,7 @@ const handleKeyDownREF = (e) => {
             ? "JV#"
             : form.payment_type === "5D - Check"
                 ? "CHK#"
-                : form.payment_type === "5E - Creditable(WHT)"
-                    ? "WHT#"
-                    : "";
+                : "";
     const prefixLength = currentPrefix.length;
     const isAllSelected =
         input.selectionStart === 0 && input.selectionEnd === input.value.length;
@@ -778,9 +758,7 @@ const handleKeyDownREF = (e) => {
                     ? form.reference_no.slice(3)
                     : form.payment_type === "5D - Check"
                         ? form.reference_no.slice(4)
-                        : form.payment_type === "5E - Creditable(WHT)"
-                            ? form.reference_no.slice(4)
-                            : "");
+                        : "");
         input.value = newValue;
         form.reference_no = newValue;
         input.setSelectionRange(prefixLength + 1, prefixLength + 1);
@@ -813,9 +791,7 @@ const handleClickREF = (e) => {
             ? "JV#"
             : form.payment_type === "5D - Check"
                 ? "CHK#"
-                : form.payment_type === "5E - Creditable(WHT)"
-                    ? "WHT#"
-                    : "";
+                : "";
     const prefixLength = prefix.length;
 
     if (input.selectionStart < prefixLength) {
@@ -831,8 +807,33 @@ const handleClickREF = (e) => {
 const ledgerType = ref(null);
 const floatingAmount = ref(0);
 const manualSelectIdentifier = ref(false);
+const overpaymentDetails = computed(() => {
+    const selectedDocs = Array.isArray(form.selectedDocuments)
+        ? form.selectedDocuments
+        : [];
+
+    return selectedDocs
+        .filter((doc) => (Number(doc?.overpayment_amount) || 0) > 0)
+        .map((doc) => ({
+            docunumber: doc.docunumber,
+            type: doc.type,
+            overpayment_amount: Number(doc.overpayment_amount) || 0,
+        }))
+        .filter((doc) => doc.overpayment_amount > 0);
+});
+
+const totalOverpaymentAmount = computed(() =>
+    overpaymentDetails.value.reduce(
+        (sum, doc) => sum + (Number(doc.overpayment_amount) || 0),
+        0
+    )
+);
+
+const hasOverpaymentDisplay = computed(
+    () => overpaymentDetails.value.length > 0
+);
+
 const handleSelectedInvoices = (selectedData) => {
-    console.log(selectedData);
     showDocumentNumberListModal.value = false;
     const toNumber = (val) => {
         if (val === null || val === undefined) return 0;
@@ -860,48 +861,49 @@ const handleSelectedInvoices = (selectedData) => {
         return sum + Math.max(0, base - toNumber(doc?.wht_amount));
     }, 0);
     if (!selectedData.totalAmountPaid) {
-        console.log('if');
         manualSelectIdentifier.value = false;
         form.document_no = selectedData.invoiceNumber;
+        form.apply_bir_2307 = selectedData.apply_bir_2307;
+        form.tax_rate = selectedData.tax_rate;
         form.total_amount = formatCurrency(selectedData.totalAmount);
-        form.wht_amount = formatCurrency(
-            selectedDocs.length ? summedWhtAmount : toNumber(selectedData.wht_amount)
-        );
-        form.total_amount_less_wht = formatCurrency(
-            selectedDocs.length
-                ? summedTotalLessWht
-                : toNumber(selectedData.total_amount_less_wht)
-        );
+        form.wht_amount = formatCurrency(0);
+        form.total_amount_less_wht = formatCurrency(selectedData.totalAmount);
         form.amount_paid = "";
         form.document_date = selectedData.date;
         floatingAmount.value = selectedData.floatingAmount;
         form.type = selectedData.type;
         form.selectedDocuments = [];
     } else {
-        console.log('else');
-        form.wht_amount = formatCurrency(
-            selectedDocs.length ? summedWhtAmount : 0
+        const selectedDocs = Array.isArray(selectedData.selectedDocuments)
+            ? selectedData.selectedDocuments
+            : [];
+
+        const totalWht = selectedDocs.reduce(
+            (sum, doc) => sum + (Number(doc.wht_amount) || 0),
+            0
         );
+        const totalNet = selectedDocs.reduce(
+            (sum, doc) =>
+                sum +
+                (Number(doc.total_amount_less_wht) ||
+                    Number(doc.amountToPay) ||
+                    0),
+            0
+        );
+
+        form.wht_amount = formatCurrency(isWhtSubjectPaymentType.value ? totalWht : 0);
         form.total_amount_less_wht = formatCurrency(
-            selectedDocs.length ? summedTotalLessWht : 0
+            isWhtSubjectPaymentType.value
+                ? totalNet
+                : Number(selectedData.totalAmountPaid) || 0
         );
         form.document_no = selectedData.invoiceNumber;
+        form.apply_bir_2307 = selectedData.apply_bir_2307;
+        form.tax_rate = selectedData.tax_rate;
         form.total_amount = formatCurrency(selectedData.totalAmount);
-        if (
-            form.payment_type === "5E - Creditable(WHT)" &&
-            !selectedData.editable_wht_mode
-        ) {
-            form.amount_paid = "";
-            form.witholdingtax = "";
-        } else if (
-            form.payment_type === "5E - Creditable(WHT)" &&
-            selectedData.editable_wht_mode
-        ) {
-            form.amount_paid = formatCurrency(selectedData.totalAmountPaid);
-            form.witholdingtax = "Custom Amount";
-        } else {
-            form.amount_paid = formatCurrency(selectedData.totalAmountPaid);
-        }
+        form.amount_paid = formatCurrency(
+            Number(selectedData.totalAmountPaid) || 0
+        );
         form.document_date = selectedData.date;
         floatingAmount.value = selectedData.floatingAmount;
         form.type = selectedData.type;
@@ -964,25 +966,7 @@ const handleConfirm = async (confirmed) => {
 const showInfoDialog = ref(false);
 const infoMessage = ref(null);
 
-////////SHOW DIALOG FOR WHT EDIT CONFIRMATION///////////////////////////
-const showDialogWHT = ref(false);
-const confirmationMessageWHT = ref(null);
 const editwhtconfirm = ref(false);
-const openWhtConfirmation = () => {
-    confirmationMessageWHT.value =
-        "This customer appears to have the ability to modify the withholding tax (WHT) amount. Proceed to editable mode?";
-    showDialogWHT.value = true;
-};
-const handleConfirmWHT = async (confirmed) => {
-    showDialogWHT.value = false;
-    if (confirmed) {
-        editwhtconfirm.value = true;
-        onDocuNumberClick();
-    } else {
-        editwhtconfirm.value = false;
-        onDocuNumberClick();
-    }
-};
 //#endregion
 
 ///////////////////////////////WATCH///////////////////////////////////////////////////////
@@ -1049,38 +1033,6 @@ const handleODConfirm = async (confirmed) => {
 };
 
 ///////////////////////////COMPUTE TAX PERCENTAGE//////////////////////////////////////////////////////////////////
-watch(
-    () => form.witholdingtax,
-    (newTax) => {
-        if (newTax !== "Custom Amount") {
-            if (
-                form.payment_type !== "5E - Creditable(WHT)" ||
-                !newTax ||
-                !form.total_amount
-            )
-                return;
-
-            // Extract the numeric value (e.g., "1%" → 1)
-            const taxPercentage = parseFloat(newTax.replace("%", ""));
-
-            const amountInCents = Math.round(
-                Number(
-                    String(form.total_amount)
-                        .replace(/[^\d.-]/g, "")
-                        .replace(/,/g, "")
-                ) * 100
-            );
-
-            // Calculate with proper decimal handling
-            form.amount_paid = (
-                (amountInCents * (taxPercentage / 100)) /
-                100
-            ).toFixed(2);
-        }
-    },
-    { immediate: true } // Run on initial selection
-);
-
 //////////////////////////COMPUTE DUE DATE BASE ON AGING BASIS AND AGING DAYS//////////////////////////////////////
 watch(
     () => form.aging_days,
@@ -1188,6 +1140,9 @@ watch(
             form.document_date = "";
             form.total_amount = "";
             form.amount_paid = "";
+            form.wht_amount = "";
+            form.total_amount_less_wht = "";
+            form.selectedDocuments = [];
             form.acc_code = "";
             form.cust_code = "";
             form.cash_in_bank = "";
@@ -1215,15 +1170,13 @@ watch(
             form.document_date = "";
             form.total_amount = "";
             form.amount_paid = "";
+            form.wht_amount = "";
+            form.total_amount_less_wht = "";
+            form.selectedDocuments = [];
             form.acc_code = "";
             form.cust_code = "";
             form.cash_in_bank = "";
-            if (form.payment_type === "5E - Creditable(WHT)") {
-                form.withBIR = false;
-            } else {
-                form.withBIR = "";
-            }
-
+            form.withBIR = "";
             form.witholdingtax = "";
             form.check_type = "";
             form.aging_basis = "";
@@ -1245,11 +1198,7 @@ watch(
             form.acc_code = "";
             form.cust_code = "";
             form.cash_in_bank = "";
-            if (form.payment_type === "5E - Creditable(WHT)") {
-                form.withBIR = false;
-            } else {
-                form.withBIR = "";
-            }
+            form.withBIR = "";
             // form.witholdingtax = "";
             form.check_type = "";
             form.aging_basis = "";
@@ -1287,25 +1236,6 @@ const submit = () => {
     if (form.payment_type === '5D - Check' && form.check_type === 'Dated Check') {
         delete submissionData.aging_basis;
         delete submissionData.aging_days;
-    }
-
-    if (!form.document_no === "Oldest to Newest Applied") {
-        if (floatingAmount.value) {
-            const cleanTotalAmount = parseFloat(
-                form.total_amount.replace(/[^\d.]/g, "")
-            );
-            const cleanFloatingAmount = parseFloat(floatingAmount.value);
-
-            const remainingFloatingBalance =
-                cleanTotalAmount - cleanFloatingAmount;
-
-            if (form.amount_paid > remainingFloatingBalance) {
-                infoMessage.value = `Amount should not exceed the available balance of ${formatCurrency(
-                    remainingFloatingBalance
-                )}`;
-                return (showInfoDialog.value = true);
-            }
-        }
     }
 
     Object.keys(form.errors).forEach((key) => {

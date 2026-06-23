@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\AppSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
 use App\Models\MasterfileModels\TenantUser;
 
@@ -46,6 +48,29 @@ class HandleInertiaRequests extends Middleware
                 ? $request->user()->only('id', 'name', 'role')
                 : null,
             'theme' => $request->user()?->theme ?? 'light',
+            'tenantSettings' => function () {
+                $appSettingId = config('tenant.current_app_setting_id');
+
+                if (!$appSettingId) {
+                    return [
+                        'allow_overpayment' => true,
+                    ];
+                }
+
+                if (!Schema::connection('mysql')->hasColumn('app_settings', 'allow_overpayment')) {
+                    return [
+                        'allow_overpayment' => true,
+                    ];
+                }
+
+                $setting = AppSetting::on('mysql')
+                    ->select('allow_overpayment')
+                    ->find($appSettingId);
+
+                return [
+                    'allow_overpayment' => $setting?->allow_overpayment ?? true,
+                ];
+            },
             'auth.permissions' => function () use ($request) {
                 $user = $request->user();
                 if (!$user) return [];

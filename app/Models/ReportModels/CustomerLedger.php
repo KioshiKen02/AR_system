@@ -26,10 +26,12 @@ class CustomerLedger extends Model
         'amount_paid',
         'running_balance',
         'wht_amount',
+        'overpayment_amount',
         'trade_type',
         'shrinkage',
         'overage',
         'return',
         'si_payment_type',
+        'transfer_from',
     ];
 }

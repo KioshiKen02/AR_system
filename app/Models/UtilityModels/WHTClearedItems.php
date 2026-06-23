@@ -13,6 +13,7 @@ class WHTClearedItems extends Model
         'wht_clearing_no',
         'payment_no',
         'wht_no',
+        'type',
         'document_no',
         'receipt_date',
         'amount',
@@ -22,6 +23,6 @@ class WHTClearedItems extends Model
 
     public function whtCleared()
     {
-        return $this->belongsTo(WHTCleared::class, 'clearing_no', 'clearing_no');
+        return $this->belongsTo(WHTCleared::class, 'wht_clearing_no', 'wht_clearing_no');
     }
 }

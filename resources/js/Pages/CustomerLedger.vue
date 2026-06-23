@@ -591,7 +591,8 @@ import { mdiClose, mdiEye, mdiMagnify, mdiMicrosoftExcel } from "@mdi/js";
 import { FunnelIcon } from "@heroicons/vue/24/solid";
 import DatePicker from "@/Pages/Components/DatePicker.vue";
 import ToastAlertWarning from "@/Pages/Components/ToastAlertWarning.vue";
-import { saveAs } from "file-saver"; // Import file-saver
+import * as fileSaver from "file-saver"; // Import file-saver
+const { saveAs } = fileSaver;
 import ExcelJS from "exceljs";
 
 const props = defineProps({

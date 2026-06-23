@@ -16,11 +16,141 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AdjustmentControllers extends Controller
 {
+    private function getEffectivePaidAmount(PaymentDetails $detail, bool $hasPaymentDetailsWhtColumns): float
+    {
+        if (!in_array($detail->status, ['Paid', 'Cleared'], true)) {
+            return 0.0;
+        }
+
+        $effectivePaid = (float) ($detail->amount_paid ?? 0);
+
+        if ((float) ($detail->wht_amount ?? 0) > 0) {
+            $effectivePaid = max(0, $effectivePaid - (float) ($detail->wht_amount ?? 0));
+        }
+
+        return $effectivePaid;
+    }
+
+    private function getEffectiveClearedWhtAmount(PaymentDetails $detail, bool $hasPaymentDetailsWhtColumns): float
+    {
+        $whtAmount = (float) ($detail->wht_amount ?? 0);
+        if ($whtAmount <= 0 || $detail->status === 'Cancelled') {
+            return 0.0;
+        }
+
+        if (!$hasPaymentDetailsWhtColumns) {
+            return $whtAmount;
+        }
+
+        return in_array($detail->wht_status, [null, 'Cleared'], true) ? $whtAmount : 0.0;
+    }
+
+    private function syncPaymentDetailOverpayment(string $documentNo, string $type, float $debit): void
+    {
+        if (!Schema::connection('tenant')->hasColumn('payment_details', 'overpayment_amount')) {
+            return;
+        }
+
+        $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
+
+        $rows = PaymentDetails::where('document_no', $documentNo)
+            ->where('type', $type)
+            ->orderBy('payment_date')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $runningCredited = 0.0;
+
+        foreach ($rows as $row) {
+            if ($row->status === 'Cancelled') {
+                $row->update(['overpayment_amount' => 0]);
+                continue;
+            }
+
+            $previousOverflow = max(0, $runningCredited - $debit);
+            $runningCredited += in_array($row->status, ['Floating', 'Paid', 'Cleared'], true)
+                ? (float) ($row->amount_paid ?? 0)
+                : 0.0;
+            $currentOverflow = max(0, $runningCredited - $debit);
+
+            $row->update([
+                'overpayment_amount' => max(0, $currentOverflow - $previousOverflow),
+            ]);
+        }
+    }
+
+    private function syncLedgerOverpayment(CustomerLedger $ledger): void
+    {
+        if (!Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount')) {
+            return;
+        }
+
+        $baseAmount = (float) ($ledger->adjusted_amount ?? $ledger->amount ?? 0);
+        $overage = (float) ($ledger->overage ?? 0);
+        $shrinkage = (float) ($ledger->shrinkage ?? 0);
+        $returnAmount = (float) ($ledger->return ?? 0);
+        $debit = $baseAmount + $overage - $shrinkage - $returnAmount;
+        $totalCollectiblePaid = (float) PaymentDetails::where('document_no', $ledger->invoice_number)
+            ->where('type', $ledger->type)
+            ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
+            ->sum('amount_paid');
+
+        $ledger->update([
+            'overpayment_amount' => max(0, $totalCollectiblePaid - $debit),
+        ]);
+        $this->syncPaymentDetailOverpayment($ledger->invoice_number, $ledger->type, $debit);
+    }
+
+    private function getActiveWhtTotal(string $documentNo, string $type): float
+    {
+        if (!Schema::hasColumn('payment_details', 'wht_amount')) {
+            return 0.0;
+        }
+
+        $query = PaymentDetails::where('document_no', $documentNo)
+            ->where('type', $type)
+            ->where('status', '!=', 'Cancelled')
+            ->where('wht_amount', '>', 0);
+
+        if (Schema::hasColumn('payment_details', 'wht_status')) {
+            $query->where(function ($q) {
+                $q->whereNull('wht_status')
+                    ->orWhere('wht_status', 'Floating')
+                    ->orWhere('wht_status', 'Cleared');
+            });
+        }
+
+        return (float) $query->sum('wht_amount');
+    }
+
+    private function getFloatingWhtTotal(string $documentNo, string $type): float
+    {
+        if (!Schema::hasColumn('payment_details', 'wht_amount')) {
+            return 0.0;
+        }
+
+        $query = PaymentDetails::where('document_no', $documentNo)
+            ->where('type', $type)
+            ->where('status', '!=', 'Cancelled')
+            ->where('wht_amount', '>', 0);
+
+        if (Schema::hasColumn('payment_details', 'wht_status')) {
+            $query->where(function ($q) {
+                $q->where('wht_status', 'Floating')
+                    ->orWhereNull('wht_status');
+            });
+        }
+
+        return (float) $query->sum('wht_amount');
+    }
 
     public function index(Request $request)
     {
@@ -126,10 +256,10 @@ class AdjustmentControllers extends Controller
                 'adjustment_no.required' => 'Adjustment Number Required',
                 'receipt_date.required' => 'Date Required',
                 'receipt_date.date' => 'Date Must Be Valid Date',
-                'receipt_date.before_or_equal' => 'Date Cannot Be Future',
+                'receipt_date.before_or_equal' => 'Date Cannot Be Advance',
                 'transaction_date.required' => 'Date Required',
                 'transaction_date.date' => 'Date Must Be Valid Date',
-                'transaction_date.before_or_equal' => 'Date Cannot Be Future',
+                'transaction_date.before_or_equal' => 'Date Cannot Be Advance',
                 'customer_code.required' => 'Customer Code Required',
                 'name.required' => 'Customer Name Required',
                 'type.required' => 'Type Required',
@@ -183,6 +313,7 @@ class AdjustmentControllers extends Controller
                     ->where('type', $ledger->type)
                     ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
                     ->sum('amount_paid');
+                $activeWhtApplied = $this->getActiveWhtTotal($ledger->invoice_number, $ledger->type);
 
                 $newPositive = $existingPositive;
                 $newNegative = $existingNegative;
@@ -193,9 +324,9 @@ class AdjustmentControllers extends Controller
                     $prospectiveNegative = $existingNegative + $validated['amount'];
                     $prospectiveAdjusted = $amount + $newPositive - $prospectiveNegative;
 
-                    if (round((float) $prospectiveAdjusted - (float) $floatingPaid, 2) < 0) {
+                    if (round((float) $prospectiveAdjusted - (float) ($floatingPaid + $activeWhtApplied), 2) < 0) {
                         throw ValidationException::withMessages([
-                            'amount' => 'Amount Exceeds Available Balance. Selected Document Has A Total Payment (Paid + Floating) of ' . number_format($floatingPaid, 2),
+                            'amount' => 'Amount Exceeds Available Balance. Selected Document Has A Total Payment/WHT Applied Or Floating of ' . number_format($floatingPaid + $activeWhtApplied, 2),
                         ]);
                     }
 
@@ -211,6 +342,8 @@ class AdjustmentControllers extends Controller
                     'negative_adjustment_amount' => $newNegative,
                     'running_balance' => $newRunningBalance,
                 ]);
+                $ledger->refresh();
+                $this->syncLedgerOverpayment($ledger);
 
                 $dbData = collect($validated)
                     ->except(['_cl_type'])
@@ -228,12 +361,13 @@ class AdjustmentControllers extends Controller
                 ->where('type', $ledger->type)
                 ->where('status', 'Floating')
                 ->sum('amount_paid');
+            $floatingWht = $this->getFloatingWhtTotal($ledger->invoice_number, $ledger->type);
 
-            $availableBalance = round((float) $ledger->running_balance - (float) $floatingPaid, 2);
+            $availableBalance = round((float) $ledger->running_balance - (float) $floatingPaid - (float) $floatingWht, 2);
             $adjustmentAmount = round((float) $validated['amount'], 2);
             if (strtolower($validated['type']) === 'negative' && round($availableBalance - $adjustmentAmount, 2) < 0) {
                 throw ValidationException::withMessages([
-                    'amount' => 'Amount Exceeds Available Balance. Selected Document Has A Total Floating Payment of ' . $floatingPaid,
+                    'amount' => 'Amount Exceeds Available Balance. Selected Document Has A Total Floating Payment/WHT of ' . number_format($floatingPaid + $floatingWht, 2),
                 ]);
             }
 
@@ -253,6 +387,8 @@ class AdjustmentControllers extends Controller
                 'running_balance' => $newAmount,
                 'adjusted_amount' => $newAdjustmentAmount
             ]);
+            $ledger->refresh();
+            $this->syncLedgerOverpayment($ledger);
 
             $dbData = collect($validated)
                 ->except(['_cl_type'])

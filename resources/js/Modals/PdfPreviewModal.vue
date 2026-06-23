@@ -31,7 +31,7 @@
                 <!-- Modal body -->
                 <div class="flex-1 overflow-auto p-4">
                     <!-- PDF preview -->
-                    <iframe v-if="pdfUrl && !loading" :src="pdfUrl"
+                    <iframe v-if="pdfUrl && !loading" :src="pdfViewerSrc"
                         class="w-full h-full min-h-[500px] border border-[var(--color-border)] rounded-md"
                         frameborder="0"></iframe>
 
@@ -81,7 +81,7 @@
 
 <script setup>
 import { mdiClose, mdiPrinterOutline } from "@mdi/js";
-import { ref, watch, onMounted, onUnmounted } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import { usePage } from "@inertiajs/vue3";
 import { saveAs } from "file-saver"; // Import file-saver
@@ -103,6 +103,11 @@ const props = defineProps({
 const emit = defineEmits(["close", "closeSuccess"]);
 
 const pdfUrl = ref(null);
+const pdfViewerSrc = computed(() => {
+    if (!pdfUrl.value) return null;
+    const hash = "toolbar=0&navpanes=0&scrollbar=0";
+    return pdfUrl.value.includes("#") ? pdfUrl.value : `${pdfUrl.value}#${hash}`;
+});
 const loading = ref(false);
 const error = ref(null);
 const channel = ref(null);

@@ -278,6 +278,9 @@
                         <th class="col-refno">REF. NO.</th>
                         <th class="col-remarks-h">REMARKS</th>
                         <th class="col-amount-h">CANCELLED AMOUNT</th>
+                        @if ($show_overpayment ?? true)
+                            <th class="col-amount-h">OVERPAYMENT</th>
+                        @endif
                         <th class="col-amount-h">AMOUNT</th>
                     </tr>
                 </thead>
@@ -307,6 +310,11 @@
                                         <td class="col-amount">
                                             {{ $detail['cancelled_amount'] ? number_format($detail['cancelled_amount'], 2) : '' }}
                                         </td>
+                                        @if ($show_overpayment ?? true)
+                                            <td class="col-amount">
+                                                {{ ($detail['overpayment_amount'] ?? 0) > 0 ? number_format($detail['overpayment_amount'], 2) : '' }}
+                                            </td>
+                                        @endif
                                         <td class="col-amount">
                                             {{ $detail['amount_paid'] ? number_format($detail['amount_paid'], 2) : '' }}
                                         </td>
@@ -323,7 +331,7 @@
                             @endforeach
 
                             <tr class="totals" style="border-bottom: 1px solid black;">
-                                <td colspan="8"><strong>Customer Total : </strong></td>
+                                <td colspan="{{ ($show_overpayment ?? true) ? 9 : 8 }}"><strong>Customer Total : </strong></td>
                                 <td class="col-amount">
                                     <strong>{{ number_format($customer['customer_total'], 2) }}</strong>
                                 </td>
@@ -338,7 +346,7 @@
                     <tbody>
                         <tr class="totals">
                             {{-- <td colspan="6"> Sub Total &gt;&gt;&gt;&gt;</td> --}}
-                            <td colspan="7"> <strong> Sub Total : </strong></td>
+                            <td colspan="8"> <strong> Sub Total : </strong></td>
                             <td class="col-amount">
                                 <strong>{{ number_format($paymentTypeGroup['type_total'], 2) }}</strong>
                             </td>

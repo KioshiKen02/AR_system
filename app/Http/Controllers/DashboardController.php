@@ -156,6 +156,25 @@ class DashboardController extends Controller
         $thirtyDayTotals = $getTotals($thirtyDaysAgo, $now);
         $overallTotals = $getTotals();
 
+        $getFloatingWhtTotals = function ($startDate = null, $endDate = null) {
+            $query = PaymentDetails::where('wht_amount', '>', 0)
+                ->where(function ($builder) {
+                    $builder->where('wht_status', 'Floating')
+                        ->orWhere(function ($fallback) {
+                            $fallback->whereNull('wht_status')
+                                ->where('status', 'Floating');
+                        });
+                });
+
+            if ($startDate && $endDate) {
+                $query->whereBetween('updated_at', [$startDate, $endDate]);
+            } elseif ($startDate) {
+                $query->where('updated_at', '>=', $startDate);
+            }
+
+            return (float) $query->sum('wht_amount');
+        };
+
         return [
             'check' => [
                 'post_dated' => [
@@ -175,9 +194,9 @@ class DashboardController extends Controller
                 ],
             ],
             'creditable' => [
-                'last_7_days' => $sevenDayTotals['Creditable(WHT)']['N/A'] ?? 0,
-                'last_30_days' => $thirtyDayTotals['Creditable(WHT)']['N/A'] ?? 0,
-                'overall' => $overallTotals['Creditable(WHT)']['N/A'] ?? 0,
+                'last_7_days' => $getFloatingWhtTotals($sevenDaysAgo, $now),
+                'last_30_days' => $getFloatingWhtTotals($thirtyDaysAgo, $now),
+                'overall' => $getFloatingWhtTotals(),
             ],
         ];
     }

@@ -357,7 +357,6 @@ class ReportPDFGeneratorController extends Controller
                 'reportOptions.check' => 'boolean',
                 'reportOptions.journalVoucher' => 'boolean',
                 'reportOptions.onlineDeposits' => 'boolean',
-                'reportOptions.creditableWHT' => 'boolean',
                 'sortOption' => 'required',
                 'paymentProoflistType' => 'nullable',
                 'file_type' => 'nullable',
@@ -427,9 +426,6 @@ class ReportPDFGeneratorController extends Controller
         }
         if ($reportOptions['onlineDeposits']) {
             $selectedTypes[] = '5C - Online Deposit';
-        }
-        if ($reportOptions['creditableWHT']) {
-            $selectedTypes[] = '5E - Creditable(WHT)';
         }
 
         // Apply payment type filter if any options selected
@@ -1272,10 +1268,6 @@ class ReportPDFGeneratorController extends Controller
         // if ($reportOptions['onlineDeposits']) {
         //     $selectedTypes[] = '5C - Online Deposit';
         // }
-        // if ($reportOptions['creditableWHT']) {
-        //     $selectedTypes[] = '5E - Creditable(WHT)';
-        // }
-
         // Apply payment type filter if any options selected
         // if (!empty($selectedTypes)) {
         //     $query->whereIn('payment_type', $selectedTypes);

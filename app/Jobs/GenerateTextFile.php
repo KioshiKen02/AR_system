@@ -716,10 +716,13 @@ class GenerateTextFile
                                     $docCode,
                                     $lineCustomerLocCode
                                 );
-                            } elseif ($payment->payment_type === '5E - Creditable(WHT)') {
-                                if ($detail->status === 'Floating') {
-                                    continue;
-                                }
+                            }
+
+                            $shouldGenerateWhtLine = (float) ($detail->wht_amount ?? 0) > 0
+                                && ($detail->wht_status ?? null) !== 'Floating'
+                                && (($detail->wht_status ?? null) !== null || ($detail->status ?? null) !== 'Floating');
+
+                            if ($shouldGenerateWhtLine) {
                                 $lines[] = $this->generateWHTLine(
                                     $auto_increment,
                                     $detail,

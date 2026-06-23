@@ -76,7 +76,7 @@ class TenantConfigService
     public function getCompanyCode()
     {
         return match ($this->appName) {
-            'Bilar Breeder', 'Bilar Breeder Local' => '3.00',
+            'Bilar Breeder', 'Bilar Breeder Local' => '03.00',
             'Gp Jagna' => '03.00',
             'Ice Plant' => '04.00',
             'Peanut Kisses' => '04.00',

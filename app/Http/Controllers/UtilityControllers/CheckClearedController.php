@@ -16,14 +16,87 @@ use App\Services\CheckClearedNumberService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 
 class CheckClearedController extends Controller
 {
+    private function getEffectivePaidAmount(PaymentDetails $detail, bool $hasPaymentDetailsWhtColumns): float
+    {
+        if (!in_array($detail->status, ['Paid', 'Cleared'], true)) {
+            return 0.0;
+        }
+
+        $effectivePaid = (float) ($detail->amount_paid ?? 0);
+
+        if ((float) ($detail->wht_amount ?? 0) > 0) {
+            $effectivePaid = max(0, $effectivePaid - (float) ($detail->wht_amount ?? 0));
+        }
+
+        return $effectivePaid;
+    }
+
+    private function getEffectiveClearedWhtAmount(PaymentDetails $detail, bool $hasPaymentDetailsWhtColumns): float
+    {
+        $whtAmount = (float) ($detail->wht_amount ?? 0);
+        if ($whtAmount <= 0 || $detail->status === 'Cancelled') {
+            return 0.0;
+        }
+
+        if (!$hasPaymentDetailsWhtColumns) {
+            return $whtAmount;
+        }
+
+        return in_array($detail->wht_status, [null, 'Cleared'], true) ? $whtAmount : 0.0;
+    }
+
+    private function syncPaymentDetailOverpayment(string $customerCode, string $documentNo, string $type, float $debit): void
+    {
+        if (!Schema::connection('tenant')->hasColumn('payment_details', 'overpayment_amount')) {
+            return;
+        }
+
+        $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
+
+        $rows = PaymentDetails::on('tenant')
+            ->where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $type)
+            ->orderBy('payment_date')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $runningCredited = 0.0;
+
+        foreach ($rows as $row) {
+            if ($row->status === 'Cancelled') {
+                $row->update(['overpayment_amount' => 0]);
+                continue;
+            }
+
+            $previousOverflow = max(0, $runningCredited - $debit);
+            $runningCredited += in_array($row->status, ['Floating', 'Paid', 'Cleared'], true)
+                ? (float) ($row->amount_paid ?? 0)
+                : 0.0;
+            $currentOverflow = max(0, $runningCredited - $debit);
+
+            $row->update([
+                'overpayment_amount' => max(0, $currentOverflow - $previousOverflow),
+            ]);
+        }
+    }
+
     private function syncLedgerForPayment(string $customerCode, string $documentNo, string $type): void
     {
+        $hasLedgerWhtAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount');
+        $hasLedgerOverpaymentAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount');
+        $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
+
         $ledgerQuery = CustomerLedger::on('tenant')
             ->where('customer_code', $customerCode)
             ->where('invoice_number', $documentNo)
@@ -45,28 +118,63 @@ class CheckClearedController extends Controller
         }
 
         $ledger = $ledgerQuery->firstOrFail();
+        $totalCollectiblePaid = (float) PaymentDetails::on('tenant')
+            ->where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $type)
+            ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
+            ->sum('amount_paid');
 
         $totalPaid = (float) PaymentDetails::on('tenant')
             ->where('customer_code', $customerCode)
             ->where('document_no', $documentNo)
             ->where('type', $type)
             ->whereIn('status', ['Paid', 'Cleared'])
-            ->sum('amount_paid');
+            ->get()
+            ->sum(fn ($detail) => $this->getEffectivePaidAmount($detail, $hasPaymentDetailsWhtColumns));
+
+        $totalWhtApplied = 0.0;
+        if ($hasLedgerWhtAmount && Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+            $whtQuery = PaymentDetails::on('tenant')
+                ->where('customer_code', $customerCode)
+                ->where('document_no', $documentNo)
+                ->where('type', $type)
+                ->whereIn('status', ['Paid', 'Cleared'])
+                ->where('wht_amount', '>', 0);
+
+            if ($hasPaymentDetailsWhtColumns) {
+                $whtQuery->where(function ($q) {
+                    $q->whereNull('wht_status')
+                        ->orWhere('wht_status', 'Cleared');
+                });
+            }
+
+            $totalWhtApplied = (float) $whtQuery->sum('wht_amount');
+        }
 
         $baseAmount = (float) ($ledger->adjusted_amount ?? $ledger->amount ?? 0);
         $overage = (float) ($ledger->overage ?? 0);
         $shrinkage = (float) ($ledger->shrinkage ?? 0);
         $returnAmount = (float) ($ledger->return ?? 0);
 
-        $runningBalance = max(
-            0,
-            $baseAmount - $totalPaid + $overage - $shrinkage - $returnAmount
-        );
+        $debit = $baseAmount + $overage - $shrinkage - $returnAmount;
+        $totalCredited = $totalPaid + $totalWhtApplied;
+        $runningBalance = max(0, $debit - $totalCredited);
+        $overpaymentAmount = max(0, $totalCollectiblePaid - $debit);
 
-        $ledger->update([
+        $ledgerUpdate = [
             'amount_paid' => $totalPaid,
             'running_balance' => $runningBalance,
-        ]);
+        ];
+        if ($hasLedgerWhtAmount) {
+            $ledgerUpdate['wht_amount'] = $totalWhtApplied;
+        }
+        if ($hasLedgerOverpaymentAmount) {
+            $ledgerUpdate['overpayment_amount'] = $overpaymentAmount;
+        }
+
+        $ledger->update($ledgerUpdate);
+        $this->syncPaymentDetailOverpayment($customerCode, $documentNo, $type, $debit);
     }
 
     public function index(Request $request)

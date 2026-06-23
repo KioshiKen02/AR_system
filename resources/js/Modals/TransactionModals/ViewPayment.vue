@@ -73,13 +73,7 @@
                                         <TextInput label="Customer Name" v-model="form.name" type="text"
                                             :message="form.errors.name" readonly class="col-span-2" />
                                         <TextInput label="Payment Type" v-model="form.payment_type" type="select"
-                                            :options="[
-                                                '5A - Cash',
-                                                '5B - Journal Voucher',
-                                                '5C - Online Deposit',
-                                                '5D - Check',
-                                                '5E - Creditable(WHT)',
-                                            ]" :message="form.errors.payment_type" readonly />
+                                            :options="paymentTypeOptions" :message="form.errors.payment_type" readonly />
                                     </div>
                                 </div>
                                 <transition @before-enter="beforeEnter" @enter="enter" @after-enter="afterEnter"
@@ -110,6 +104,11 @@
                                                         " type="text" readonly :message="form.errors
                                                             .amount_paid
                                                             " />
+                                                    <TextInput v-if="form.wht_amount" label="WHT Amount"
+                                                        v-model="form.wht_amount" type="text" readonly />
+                                                    <TextInput v-if="form.total_amount_less_wht"
+                                                        label="Total Amount Less WHT"
+                                                        v-model="form.total_amount_less_wht" type="text" readonly />
                                                 </div>
                                             </div>
                                         </div>
@@ -144,37 +143,6 @@
                                                     v-model="form.aging_days" type="number" :message="form.errors.aging_days
                                                         " readonly />
 
-                                                <div v-if="
-                                                    form.payment_type ===
-                                                    '5E - Creditable(WHT)'
-                                                " class="flex items-center gap-2 mt-8 mb-[26px]">
-                                                    <div class="relative inline-block w-6 h-6">
-                                                        <input type="checkbox" v-model="form.withBIR
-                                                            " readonly="true" disabled="true"
-                                                            class="peer w-6 h-6 appearance-none border-2 border-[var(--color-border)] rounded-md checked:bg-[var(--color-bg-avatar)] checked:border-transparent cursor-pointer" />
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                                            class="absolute p-0.5 top-0 left-0 w-6 h-6 text-white hidden peer-checked:block pointer-events-none"
-                                                            fill="white">
-                                                            <path
-                                                                d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
-                                                        </svg>
-                                                    </div>
-                                                    <label class="block font-semibold mb-1">
-                                                        With BIR 2307 Provided
-                                                    </label>
-                                                </div>
-
-                                                <TextInput v-if="
-                                                    form.payment_type ===
-                                                    '5E - Creditable(WHT)'
-                                                " label="With Holding Tax" v-model="form.witholdingtax" type="select"
-                                                    :options="[
-                                                        '1%',
-                                                        '2%',
-                                                        '5%',
-                                                    ]" :message="form.errors
-                                                        .witholdingtax
-                                                        " readonly />
                                             </div>
                                             <transition @before-enter="beforeEnter" @enter="enter"
                                                 @after-enter="afterEnter" @before-leave="beforeLeave" @leave="leave">
@@ -243,7 +211,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from "vue";
+import { computed, ref, watch, nextTick } from "vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import { useForm } from "@inertiajs/vue3";
 import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
@@ -289,6 +257,19 @@ const form = useForm({
     due_date: null,
 });
 
+const paymentTypeOptions = computed(() => {
+    const activeTypes = [
+        "5A - Cash",
+        "5B - Journal Voucher",
+        "5C - Online Deposit",
+        "5D - Check",
+    ];
+
+    return activeTypes.includes(form.payment_type)
+        ? activeTypes
+        : [...activeTypes, form.payment_type].filter(Boolean);
+});
+
 const pendingOldDate = ref(null);
 const modalLoading = ref(false);
 
@@ -297,6 +278,19 @@ const formatCurrency = (amount) => {
         style: "currency",
         currency: "PHP",
     }).format(amount);
+};
+
+const toNumber = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getDisplayAmountPaid = (selected) => {
+    const netAmount = toNumber(selected?.total_amount_less_wht);
+    const whtAmount = toNumber(selected?.wht_amount);
+
+    // Show the gross paid amount in View Payment so it matches payment_details.amount_paid.
+    return netAmount + whtAmount;
 };
 
 const emit = defineEmits(["close", "closeSuccess"]);
@@ -374,7 +368,7 @@ watch(
             form.document_no = props.selected.document_no;
             form.document_date = props.selected.document_date;
             form.total_amount = formatCurrency(props.selected.total_amount);
-            form.amount_paid = formatCurrency(props.selected.amount_paid);
+            form.amount_paid = formatCurrency(getDisplayAmountPaid(props.selected));
             form.wht_amount = formatCurrency(props.selected.wht_amount);
             form.total_amount_less_wht = formatCurrency(props.selected.total_amount_less_wht);
             form.acc_code = props.selected.acc_code;

@@ -18,10 +18,10 @@ use App\Services\InvoiceNumberService;
 use App\Services\InvoiceService;
 use App\Services\PaymentNumberService;
 use Exception;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +30,89 @@ use Illuminate\Support\Str;
 
 class PaymentController extends Controller
 {
+    private const WHT_SUBJECT_PAYMENT_TYPES = [
+        '5A - Cash',
+        '5B - Journal Voucher',
+        '5C - Online Deposit',
+        '5D - Check',
+    ];
+
+    private function isPaymentTypeSubjectToWht(string $paymentType): bool
+    {
+        return in_array($paymentType, self::WHT_SUBJECT_PAYMENT_TYPES, true);
+    }
+
+    private function isSingleUseWhtDocumentType(string $documentType): bool
+    {
+        return in_array($documentType, ['Sales Invoice', 'Charge Invoice'], true);
+    }
+
+    private function ensureDocumentAllowsAdditionalWht(string $customerCode, string $documentNo, string $documentType): void
+    {
+        if (!$this->isSingleUseWhtDocumentType($documentType)) {
+            return;
+        }
+
+        $existing = PaymentDetails::where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $documentType)
+            ->where('status', '!=', 'Cancelled');
+
+        if (Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+            $existing->where('wht_amount', '>', 0);
+        } else {
+            return;
+        }
+
+        if (Schema::connection('tenant')->hasColumn('payment_details', 'wht_status')) {
+            $existing->where(function ($query) {
+                $query->whereNull('wht_status')
+                    ->orWhere('wht_status', '!=', 'Cancelled');
+            });
+        }
+
+        if ($existing->exists()) {
+            throw ValidationException::withMessages([
+                'document_no' => 'WHT can only be applied once for Sales/Charge Invoice. Document: ' . $documentNo,
+            ]);
+        }
+    }
+
+    private function resolveWhtStatus(float $whtAmount, bool $applyBir2307): ?string
+    {
+        if ($whtAmount <= 0) {
+            return null;
+        }
+
+        return $applyBir2307 ? 'Cleared' : 'Floating';
+    }
+
+    private function normalizeSelectedDocumentsForWht(array $validated): array
+    {
+        if (empty($validated['selectedDocuments']) || !is_array($validated['selectedDocuments'])) {
+            return $validated;
+        }
+
+        if ($this->isPaymentTypeSubjectToWht($validated['payment_type'] ?? '')) {
+            return $validated;
+        }
+
+        foreach ($validated['selectedDocuments'] as &$doc) {
+            $oldWht = isset($doc['wht_amount']) ? floatval($doc['wht_amount']) : 0.0;
+            $amountToPay = isset($doc['amountToPay']) ? floatval($doc['amountToPay']) : 0.0;
+
+            if ($oldWht > 0) {
+                $amountToPay += $oldWht;
+            }
+
+            $doc['wht_amount'] = 0.0;
+            $doc['amountToPay'] = $amountToPay;
+            $doc['total_amount_less_wht'] = $amountToPay;
+        }
+        unset($doc);
+
+        return $validated;
+    }
     protected $cashPaymentFromInvoiceDirect = false;
 
     public function index(Request $request)
@@ -144,9 +227,9 @@ class PaymentController extends Controller
             // Base rules messages
             'payment_no.required' => 'Payment Number Required',
             'receipt_date.required' => 'Receipt Date Required',
-            'receipt_date.before_or_equal' => 'Receipt Date Cannot Be Future',
+            'receipt_date.before_or_equal' => 'Receipt Date Cannot Be Advance',
             'transaction_date.required' => 'Transaction Date Required',
-            'transaction_date.before_or_equal' => 'Transaction Date Cannot Be Future',
+            'transaction_date.before_or_equal' => 'Transaction Date Cannot Be Advance',
             'customer_code.required' => 'Customer Code Required',
             'name.required' => 'Customer Name Required',
             'payment_type.required' => 'Payment Type Required',
@@ -181,7 +264,7 @@ class PaymentController extends Controller
             'transaction_date' => ['required', 'date', 'before_or_equal:today'],
             'customer_code' => ['required', 'string'],
             'name' => ['required', 'string'],
-            'payment_type' => ['required', 'in:5A - Cash,5B - Journal Voucher,5C - Online Deposit,5D - Check,5E - Creditable(WHT)'],
+            'payment_type' => ['required', 'in:5A - Cash,5B - Journal Voucher,5C - Online Deposit,5D - Check'],
             'type' => ['required'],
             'document_no' => ['required', 'string'],
             'document_date' => ['required', 'date'],
@@ -192,15 +275,6 @@ class PaymentController extends Controller
                 'required',
                 'numeric',
                 'between:0,99999999.99',
-                function ($attribute, $value, $fail) use ($request) {
-                    if (!empty($request->selectedDocuments)) {
-                        $total = (float) preg_replace('/[^0-9.]/', '', $request->total_amount);
-
-                        if ($value > $total) {
-                            $fail('Amount paid cannot exceed total amount.');
-                        }
-                    }
-                },
             ],
             'selectedDocuments' => ['nullable', 'array'],
         ];
@@ -312,19 +386,6 @@ class PaymentController extends Controller
                 'acc_number' => 'required|string',
                 'due_date' => 'required|date',
             ],
-            '5E - Creditable(WHT)' => [
-                'reference_no' => [
-                    'required',
-                    'string',
-                    function ($attribute, $value, $fail) {
-                        if ($value === 'WHT#') {
-                            $fail('Reference Number is required');
-                        }
-                    },
-                ],
-                'withBIR' => 'required|boolean',
-                'witholdingtax' => 'required|string',
-            ],
         ];
 
         // Merge base rules with payment type specific rules
@@ -333,7 +394,12 @@ class PaymentController extends Controller
             $typeSpecificRules[$request->payment_type] ?? []
         );
 
+        $validationRules['apply_bir_2307'] = ['nullable', 'boolean'];
+        $validationRules['tax_rate'] = ['nullable', 'string'];
+
         $validated = $request->validate($validationRules, $customMessages);
+
+        $validated = $this->normalizeSelectedDocumentsForWht($validated);
 
         $validated['total_amount'] = (float) preg_replace('/[^0-9.]/', '', $validated['total_amount']);
         $validated['net_total'] = isset($validated['net_total'])
@@ -347,6 +413,11 @@ class PaymentController extends Controller
         $totalAmountLessWht = !empty($validated['total_amount_less_wht'])
             ? (float) preg_replace('/[^0-9.]/', '', $validated['total_amount_less_wht'])
             : 0;
+
+        if (!$this->isPaymentTypeSubjectToWht($validated['payment_type'])) {
+            $whtAmount = 0;
+            $totalAmountLessWht = 0;
+        }
 
         $amountApplied = $whtAmount > 0
             ? $totalAmountLessWht
@@ -386,7 +457,7 @@ class PaymentController extends Controller
             case '5B - Journal Voucher':
                 $pyNo = DB::transaction(function () use ($validated, $request, $cl_type, $invoiceNumberService, $paymentNumberService) {
                     $pynum = $this->processPayment($validated, $request, 'Paid', $cl_type, $paymentNumberService);
-                    if ($validated['cust_code']) {
+                    if (!empty($validated['cust_code'] ?? null)) {
                         $this->createArRecords($validated, $request, $invoiceNumberService);
                     }
                     return $pynum;
@@ -397,7 +468,7 @@ class PaymentController extends Controller
                 if ($odConfirmed) {
                     $pyNo = DB::transaction(function () use ($validated, $request, $cl_type, $invoiceNumberService, $paymentNumberService) {
                         $pynum = $this->processPayment($validated, $request, 'Paid', $cl_type, $paymentNumberService);
-                        if ($validated['cust_code']) {
+                        if (!empty($validated['cust_code'] ?? null)) {
                             $this->createArRecords($validated, $request, $invoiceNumberService);
                         }
                         return $pynum;
@@ -429,23 +500,6 @@ class PaymentController extends Controller
                 }
                 break;
 
-            case '5E - Creditable(WHT)':
-                if ($validated['withBIR'] === '1' || $validated['withBIR'] === true || $validated['withBIR'] === 1) {
-                    $pyNo = $this->processPayment($validated, $request, 'Paid', $cl_type, $paymentNumberService);
-                } else {
-                    $pyNo = $this->createDirectPaymentRecords($validated, $request, $paymentNumberService);
-                    $notificationsController->index($request);
-
-                    $userIds = User::whereIn('role', ['Admin', 'Accounting'])
-                        ->pluck('id')
-                        ->unique();
-
-                    foreach ($userIds as $userId) {
-                        $channel = 'notification-update.' . Str::random(20);
-                        broadcast(new NotificationEvent($userId, $channel));
-                    }
-                }
-                break;
         }
 
         event(new NewCreated('payment'));
@@ -484,9 +538,7 @@ class PaymentController extends Controller
                 }
 
                 if ($requestedAmount > ($availableBalance + 0.009)) {
-                    throw ValidationException::withMessages([
-                        'amount_paid' => "Document {$documentNo} no longer has enough available balance for this payment.",
-                    ]);
+                    continue;
                 }
             }
 
@@ -516,9 +568,41 @@ class PaymentController extends Controller
         }
     }
 
-    private function getAvailableDocumentBalance(string $customerCode, string $documentNo, string $documentType): float
+    private function getFloatingDocumentCredit(string $customerCode, string $documentNo, string $documentType): float
     {
-        $ledger = CustomerLedger::where('customer_code', $customerCode)
+        $floatingPaid = (float) PaymentDetails::where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $documentType)
+            ->where('status', 'Floating')
+            ->sum('amount_paid');
+
+        $floatingWht = 0.0;
+        if (
+            Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status')
+        ) {
+            $floatingWht = (float) PaymentDetails::where('customer_code', $customerCode)
+                ->where('document_no', $documentNo)
+                ->where('type', $documentType)
+                ->where('wht_status', 'Floating')
+                ->where(function ($query) {
+                    $query->whereNull('status')
+                        ->orWhere('status', '!=', 'Floating');
+                })
+                ->sum('wht_amount');
+        }
+
+        return $floatingPaid + $floatingWht;
+    }
+
+    private function getAvailableDocumentBalance(
+        string $customerCode,
+        string $documentNo,
+        string $documentType,
+        ?CustomerLedger $ledger = null
+    ): float
+    {
+        $ledger = $ledger ?: CustomerLedger::where('customer_code', $customerCode)
             ->where('invoice_number', $documentNo)
             ->where('type', $documentType)
             ->first();
@@ -527,13 +611,42 @@ class PaymentController extends Controller
             return 0;
         }
 
-        $floatingAmount = (float) PaymentDetails::where('customer_code', $customerCode)
-            ->where('document_no', $documentNo)
-            ->where('type', $documentType)
-            ->where('status', 'Floating')
-            ->sum('amount_paid');
+        $floatingCredit = $this->getFloatingDocumentCredit($customerCode, $documentNo, $documentType);
 
-        return max(0, round((float) $ledger->running_balance - $floatingAmount, 2));
+        return max(0, round((float) $ledger->running_balance - $floatingCredit, 2));
+    }
+
+    private function tenantAllowsOverpayment(): bool
+    {
+        $appSettingId = config('tenant.current_app_setting_id');
+
+        if (
+            !$appSettingId
+            || !Schema::connection('mysql')->hasColumn('app_settings', 'allow_overpayment')
+        ) {
+            return true;
+        }
+
+        $setting = AppSetting::on('mysql')
+            ->select('allow_overpayment')
+            ->find($appSettingId);
+
+        return (bool) ($setting?->allow_overpayment ?? true);
+    }
+
+    private function ensureOverpaymentAllowed(float $overpaymentAmount): void
+    {
+        if ($overpaymentAmount <= 0) {
+            return;
+        }
+
+        if ($this->tenantAllowsOverpayment()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'amount_paid' => 'Overpayment is not allowed for this tenant.',
+        ]);
     }
 
     //THERE IS UPDATE IN CUSTOMER LEDGER
@@ -543,233 +656,81 @@ class PaymentController extends Controller
             $processedDocuments = [];
 
             if (!empty($validated['selectedDocuments'])) { //MANUAL PAYMENT
-
-                if ($validated['payment_type'] === '5E - Creditable(WHT)' && $validated['witholdingtax'] !== 'Custom Amount') {
-                    foreach ($validated['selectedDocuments'] as $doc) {
-                        // Find the specific ledger row by document_no and type
-                        $ledger = CustomerLedger::where('customer_code', $validated['customer_code'])
-                            ->where('invoice_number', $doc['docunumber'])
-                            ->where('type', $doc['type'])
-                            ->lockForUpdate()
-                            ->first();
-
-                        // Preload all floating amounts grouped by document_no AND type
-                        $floatingAmounts = PaymentDetails::where('customer_code', $validated['customer_code'])
-                            ->where('status', 'Floating')
-                            ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-                            ->groupBy('document_no', 'type')
-                            ->get()
-                            ->groupBy(['document_no', 'type']);
-
-                        if (!$ledger) {
-                            throw ValidationException::withMessages([
-                                'general' => 'Error Please Try Again',
-                            ]);
-                        }
-
-                        // Get floating amount for this doc
-                        $floatingAmount = $floatingAmounts
-                            ->get($doc['docunumber'], collect())
-                            ->get($doc['type'], collect())
-                            ->first();
-
-                        if ($floatingAmount?->total_floating) {
-                            continue;
-                        }
-
-                        if ($validated['witholdingtax'] === '1%') {
-                            $wht = 0.01;
-                        } else if ($validated['witholdingtax'] === '2%') {
-                            $wht = 0.02;
-                        } else if ($validated['witholdingtax'] === '5%') {
-                            $wht = 0.05;
-                        }
-
-                        $floatingValue = $floatingAmount?->total_floating ?? 0;
-                        $amountToApply = $ledger->running_balance * $wht;
-
-                        // Calculate WHT if provided in the doc
-                        $whtApplied = isset($doc['wht_amount']) ? floatval($doc['wht_amount']) : 0;
-
-                        $overage_shortage = $ledger->running_balance - ($amountToApply + $whtApplied);
-
-                        // Total applied = cash + WHT
-                        $totalApplied = $amountToApply + $whtApplied;
-
-                        $docbalance = max(0, $ledger->running_balance - $totalApplied);
-
-                        $updateData = [
-                            'running_balance' => max(0, $ledger->running_balance - $totalApplied),
-                            'amount_paid' => $ledger->amount_paid + $totalApplied,
-                        ];
-                        if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
-                            $updateData['wht_amount'] = $whtApplied;
-                        }
-                        $ledger->update($updateData);
-
-                        // Updated document balance after total applied
-                        $processedDocuments[] = [
-                            'document_no' => $doc['docunumber'],
-                            'type' => $doc['type'],
-                            'amount' => $doc['amount'],
-                            'balance' => $docbalance,
-                            'amount_applied' => $amountToApply, // cash only
-                            'wht_amount' => $whtApplied,
-                            'total_amount_less_wht' => $totalApplied, // cash + WHT
-                            'document_date' => $ledger->date,
-                            'floating_deducted' => $floatingValue,
-                            'overage_shortage' => $overage_shortage
-                        ];
+                foreach ($validated['selectedDocuments'] as $doc) {
+                    $amountToApply = floatval($doc['amountToPay']); // Directly use amountToPay
+                    if ($amountToApply <= 0) {
+                        throw ValidationException::withMessages([
+                            'general' => 'Error Please Try Again',
+                        ]);
                     }
-                } else {
-                    foreach ($validated['selectedDocuments'] as $doc) {
-                        $amountToApply = floatval($doc['amountToPay']); // Directly use amountToPay
-                        if ($amountToApply <= 0) {
-                            throw ValidationException::withMessages([
-                                'general' => 'Error Please Try Again',
-                            ]);
-                        }
 
-                        // Find the specific ledger row by document_no and type
-                        $ledger = CustomerLedger::where('customer_code', $validated['customer_code'])
-                            ->where('invoice_number', $doc['docunumber'])
-                            ->where('type', $doc['type'])
-                            ->lockForUpdate()
-                            ->first();
+                    // Find the specific ledger row by document_no and type
+                    $ledger = CustomerLedger::where('customer_code', $validated['customer_code'])
+                        ->where('invoice_number', $doc['docunumber'])
+                        ->where('type', $doc['type'])
+                        ->lockForUpdate()
+                        ->first();
 
-                        // Preload all floating amounts grouped by document_no AND type
-                        $floatingAmounts = PaymentDetails::where('customer_code', $validated['customer_code'])
-                            ->where('status', 'Floating')
-                            ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-                            ->groupBy('document_no', 'type')
-                            ->get()
-                            ->groupBy(['document_no', 'type']);
-
-                        if (!$ledger) {
-                            throw ValidationException::withMessages([
-                                'general' => 'Error Please Try Again',
-                            ]);
-                        }
-
-                        // Get floating amount for this doc
-                        $floatingAmount = $floatingAmounts
-                            ->get($doc['docunumber'], collect())
-                            ->get($doc['type'], collect())
-                            ->first();
-
-                        $floatingValue = $floatingAmount?->total_floating ?? 0;
-                        $effectiveBalance = $ledger->running_balance - $floatingValue;
-
-                        // Calculate WHT if provided in the doc
-                        $whtApplied = isset($doc['wht_amount']) ? floatval($doc['wht_amount']) : 0;
-
-                        $overage_shortage = $ledger->running_balance - ($amountToApply + $whtApplied);
-
-                        // Total applied = cash + WHT
-                        $totalApplied = $amountToApply + $whtApplied;
-
-                        $docbalance = max(0, $ledger->running_balance - $totalApplied);
-
-                        $updateData = [
-                            'running_balance' => max(0, $ledger->running_balance - $totalApplied),
-                            'amount_paid' => $ledger->amount_paid + $totalApplied,
-                        ];
-                        if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
-                            $updateData['wht_amount'] = $whtApplied;
-                        }
-                        $ledger->update($updateData);
-
-                        // Updated document balance after total applied
-                        // This load is pass to creating new payment details
-                        $processedDocuments[] = [
-                            'document_no' => $doc['docunumber'],
-                            'type' => $doc['type'],
-                            'amount' => $doc['amount'],
-                            'balance' => $docbalance,
-                            'amount_applied' => $amountToApply, // cash only
-                            'wht_amount' => $whtApplied,
-                            'total_amount_less_wht' => $totalApplied, // cash + WHT
-                            'document_date' => $ledger->date,
-                            'floating_deducted' => $floatingValue,
-                            'overage_shortage' => $overage_shortage
-                        ];
+                    if (!$ledger) {
+                        throw ValidationException::withMessages([
+                            'general' => 'Error Please Try Again',
+                        ]);
                     }
+
+                    $availableBalance = $this->getAvailableDocumentBalance(
+                        $validated['customer_code'],
+                        $doc['docunumber'],
+                        $doc['type'],
+                        $ledger
+                    );
+                    $floatingValue = max(0, round((float) $ledger->running_balance - $availableBalance, 2));
+
+                    // Calculate WHT if provided in the doc
+                    $whtApplied = isset($doc['wht_amount']) ? floatval($doc['wht_amount']) : 0;
+                    if ($whtApplied > 0) {
+                        $this->ensureDocumentAllowsAdditionalWht(
+                            $validated['customer_code'],
+                            $doc['docunumber'],
+                            $doc['type']
+                        );
+                    }
+                    $applyBir2307 = $validated['apply_bir_2307'] ?? false;
+                    $grossApplied = $amountToApply + $whtApplied;
+                    $detailsBalance = max(0, $availableBalance - $grossApplied);
+                    $overpaymentAmount = isset($doc['overpayment_amount'])
+                        ? (float) $doc['overpayment_amount']
+                        : max(0, $grossApplied - $availableBalance);
+                    $this->ensureOverpaymentAllowed($overpaymentAmount);
+
+                    $updateData = [
+                        'running_balance' => max(0, $ledger->running_balance - $amountToApply),
+                        'amount_paid' => $ledger->amount_paid + $amountToApply,
+                    ];
+                    if (Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount')) {
+                        $updateData['overpayment_amount'] = $overpaymentAmount;
+                    }
+                    $ledger->update($updateData);
+
+                    // Updated document balance after total applied
+                    // This load is pass to creating new payment details
+                    $processedDocuments[] = [
+                        'document_no' => $doc['docunumber'],
+                        'type' => $doc['type'],
+                        'amount' => $doc['amount'],
+                        'balance' => $detailsBalance,
+                        'amount_applied' => $amountToApply, // cash only
+                        'wht_amount' => $whtApplied,
+                        'wht_status' => $this->resolveWhtStatus($whtApplied, $applyBir2307),
+                        'total_amount_less_wht' => $amountToApply, // cash only
+                        'document_date' => $ledger->date,
+                        'floating_deducted' => $floatingValue,
+                        'overage_shortage' => $detailsBalance,
+                        'overpayment_amount' => $overpaymentAmount,
+                    ];
                 }
             } else {
                 //OLDEST TO NEWEST PAYMENT
-                if ($validated['payment_type'] === '5E - Creditable(WHT)') {
-                    // dd('first else is trigger 2');
-
-                    // Get all customer ledgers ordered by date and ID (oldest first)
-                    $ledgers = CustomerLedger::where('customer_code', $validated['customer_code'])
-                        ->where('amount_paid', 0)
-                        ->orderBy('date')
-                        ->orderBy('created_at')
-                        ->lockForUpdate()
-                        ->get();
-
-                    // Preload all floating amounts grouped by document_no AND type
-                    $floatingAmounts = PaymentDetails::where('customer_code', $validated['customer_code'])
-                        ->where('status', 'Floating')
-                        ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-                        ->groupBy('document_no', 'type')
-                        ->get()
-                        ->groupBy(['document_no', 'type']);
-
-                    foreach ($ledgers as $ledger) {
-                        // Get floating amount for this specific document AND type
-                        $floatingAmount = $floatingAmounts
-                            ->get($ledger->invoice_number, collect())
-                            ->get($ledger->type, collect())
-                            ->first();
-
-                        if ($floatingAmount?->total_floating) {
-                            continue;
-                        }
-
-                        // Calculate effective balance after floating deduction
-                        if ($validated['witholdingtax'] === '1%') {
-                            $wht = 0.01;
-                        } else if ($validated['witholdingtax'] === '2%') {
-                            $wht = 0.02;
-                        } else if ($validated['witholdingtax'] === '5%') {
-                            $wht = 0.05;
-                        }
-                        $amountToApply = $ledger->running_balance * $wht;
-
-                        // Calculate WHT if provided in the doc
-                        $whtApplied = isset($ledger->wht_amount) ? floatval($ledger->wht_amount) : 0;
-
-                        // Total applied = cash + WHT
-                        $totalApplied = $amountToApply + $whtApplied;
-
-                        $docbalance = max(0, $ledger->running_balance - $totalApplied);
-                        $overage_shortage = $ledger->running_balance - ($amountToApply + $whtApplied);
-
-
-                        $updateData = [
-                            'running_balance' => $docbalance,
-                            'amount_paid' => $ledger->amount_paid + $totalApplied,
-                        ];
-                        if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
-                            $updateData['wht_amount'] = $whtApplied;
-                        }
-                        $ledger->update($updateData);
-
-                        $processedDocuments[] = [
-                            'document_no' => $ledger->invoice_number,
-                            'type' => $ledger->type,
-                            'amount' => $ledger->amount,
-                            'balance' => $docbalance,
-                            'amount_applied' => $amountToApply, // cash only (WHT excluded)
-                            'wht_amount' => $whtApplied,
-                            'total_amount_less_wht' => $totalApplied, // cash + WHT
-                            'document_date' => $ledger->date,
-                            'floating_deducted' => $floatingAmount?->total_floating ?? 0,
-                            'overage_shortage' => $overage_shortage
-                        ];
-                    }
-                } else {
+                {
 
                     // $remainingAmount = $validated['amount_paid'] + (float)preg_replace('/[^0-9.]/', '', $validated['advanced_payment_balance']);
                     $cust = Customer::where('cus_code', $validated['customer_code'])->lockForUpdate()->firstOrFail();
@@ -785,28 +746,18 @@ class PaymentController extends Controller
                         ->lockForUpdate()
                         ->get();
 
-                    // Preload all floating amounts grouped by document_no AND type
-                    $floatingAmounts = PaymentDetails::where('customer_code', $validated['customer_code'])
-                        ->where('status', 'Floating')
-                        ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-                        ->groupBy('document_no', 'type')
-                        ->get()
-                        ->groupBy(['document_no', 'type']);
-
                     foreach ($ledgers as $ledger) {
                         if ($remainingAdvPayment <= 0 && $remainingAmountPaid <= 0) {
                             break;
                         }
 
-                        // Get floating amount for this specific document AND type
-                        $floatingAmount = $floatingAmounts
-                            ->get($ledger->invoice_number, collect())
-                            ->get($ledger->type, collect())
-                            ->first();
-
-
-                        // Calculate effective balance after floating deduction
-                        $effectiveBalance = $ledger->running_balance - ($floatingAmount?->total_floating ?? 0);
+                        $effectiveBalance = $this->getAvailableDocumentBalance(
+                            $validated['customer_code'],
+                            $ledger->invoice_number,
+                            $ledger->type,
+                            $ledger
+                        );
+                        $floatingValue = max(0, round((float) $ledger->running_balance - $effectiveBalance, 2));
 
                         // Only proceed if there's positive balance after floating deduction
                         if ($effectiveBalance > 0) {
@@ -823,21 +774,17 @@ class PaymentController extends Controller
                             $amountToApply = $fromAdv + $fromPaid;
 
                             if ($amountToApply > 0) {
-                                // Calculate WHT if provided in the ledger (or doc)
-                                $whtApplied = isset($ledger->wht_amount) ? floatval($ledger->wht_amount) : 0;
+                                $whtApplied = 0.0;
+                                $applyBir2307 = $validated['apply_bir_2307'] ?? false;
 
-                                $totalApplied = $amountToApply + $whtApplied;
-
-                                $docbalance = max(0, $ledger->running_balance - $totalApplied);
-
-                                $overage_shortage = $ledger->running_balance - ($amountToApply + $whtApplied);
+                                $docbalance = max(0, $effectiveBalance - $amountToApply);
 
                                 $updateData = [
-                                    'running_balance' => $docbalance,
-                                    'amount_paid' => $ledger->amount_paid + $totalApplied,
+                                    'running_balance' => max(0, $ledger->running_balance - $amountToApply),
+                                    'amount_paid' => $ledger->amount_paid + $amountToApply,
                                 ];
-                                if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
-                                    $updateData['wht_amount'] = $whtApplied;
+                                if (Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount')) {
+                                    $updateData['overpayment_amount'] = 0;
                                 }
                                 $ledger->update($updateData);
 
@@ -849,10 +796,12 @@ class PaymentController extends Controller
                                     'amount_applied' => $amountToApply, // cash only
                                     'advpy_amount_applied' => $fromAdv,
                                     'wht_amount' => $whtApplied,
-                                    'total_amount_less_wht' => $totalApplied,
+                                    'wht_status' => $this->resolveWhtStatus($whtApplied, $applyBir2307),
+                                    'total_amount_less_wht' => $amountToApply,
                                     'document_date' => $ledger->date,
-                                    'floating_deducted' => $floatingAmount?->total_floating ?? 0,
-                                    'overage_shortage' => $overage_shortage
+                                    'floating_deducted' => $floatingValue,
+                                    'overage_shortage' => $docbalance,
+                                    'overpayment_amount' => 0,
                                 ];
                             }
                         }
@@ -875,183 +824,68 @@ class PaymentController extends Controller
             $processedDocuments = [];
 
             if (!empty($validated['selectedDocuments'])) { //MANUAL PAYMENT
-                if ($validated['payment_type'] === '5E - Creditable(WHT)' && $validated['witholdingtax'] !== 'Custom Amount') {
-                    foreach ($validated['selectedDocuments'] as $doc) {
-                        // Find the specific ledger row by document_no and type
-                        $ledger = CustomerLedger::where('customer_code', $validated['customer_code'])
-                            ->where('invoice_number', $doc['docunumber'])
-                            ->where('type', $doc['type'])
-                            ->lockForUpdate()
-                            ->first();
-
-                        // Preload all floating amounts grouped by document_no AND type
-                        $floatingAmounts = PaymentDetails::where('customer_code', $validated['customer_code'])
-                            ->where('status', 'Floating')
-                            ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-                            ->groupBy('document_no', 'type')
-                            ->get()
-                            ->groupBy(['document_no', 'type']);
-
-                        if (!$ledger) {
-                            throw ValidationException::withMessages([
-                                'general' => 'Error Please Try Again',
-                            ]);
-                        }
-
-                        // Get floating amount for this doc
-                        $floatingAmount = $floatingAmounts
-                            ->get($doc['docunumber'], collect())
-                            ->get($doc['type'], collect())
-                            ->first();
-
-                        if ($floatingAmount?->total_floating) {
-                            continue;
-                        }
-
-                        if ($validated['witholdingtax'] === '1%') {
-                            $wht = 0.01;
-                        } else if ($validated['witholdingtax'] === '2%') {
-                            $wht = 0.02;
-                        } else if ($validated['witholdingtax'] === '5%') {
-                            $wht = 0.05;
-                        }
-
-                        $floatingValue = $floatingAmount?->total_floating ?? 0;
-                        $amountToApply = $ledger->running_balance * $wht;
-                        $whtAmount = $ledger->running_balance - $amountToApply;
-
-                        $processedDocuments[] = [
-                            'document_no' => $doc['docunumber'],
-                            'type' => $doc['type'],
-                            'amount' => $doc['amount'],
-                            'balance' => $ledger->running_balance - $amountToApply,
-                            'amount_applied' => $amountToApply,
-                            'wht_amount' => $whtAmount,
-                            'total_amount_less_wht' => $amountToApply,
-                            'document_date' => $ledger->date,
-                            'floating_deducted' => $floatingValue,
-                            'overage_shortage' => $ledger->running_balance - $amountToApply,
-                        ];
+                foreach ($validated['selectedDocuments'] as $doc) {
+                    $amountToApply = floatval($doc['amountToPay']); // Directly use amountToPay
+                    if ($amountToApply <= 0) {
+                        throw ValidationException::withMessages([
+                            'general' => 'Error Please Try Again',
+                        ]);
                     }
-                } else {
 
-                    foreach ($validated['selectedDocuments'] as $doc) {
-                        $amountToApply = floatval($doc['amountToPay']); // Directly use amountToPay
-                        if ($amountToApply <= 0) {
-                            throw ValidationException::withMessages([
-                                'general' => 'Error Please Try Again',
-                            ]);
-                        }
+                    // Find the specific ledger row by document_no and type
+                    $ledger = CustomerLedger::where('customer_code', $validated['customer_code'])
+                        ->where('invoice_number', $doc['docunumber'])
+                        ->where('type', $doc['type'])
+                        ->lockForUpdate()
+                        ->first();
 
-                        // Find the specific ledger row by document_no and type
-                        $ledger = CustomerLedger::where('customer_code', $validated['customer_code'])
-                            ->where('invoice_number', $doc['docunumber'])
-                            ->where('type', $doc['type'])
-                            ->lockForUpdate()
-                            ->first();
-
-                        // Preload all floating amounts grouped by document_no AND type
-                        $floatingAmounts = PaymentDetails::where('customer_code', $validated['customer_code'])
-                            ->where('status', 'Floating')
-                            ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-                            ->groupBy('document_no', 'type')
-                            ->get()
-                            ->groupBy(['document_no', 'type']);
-
-                        if (!$ledger) {
-                            throw ValidationException::withMessages([
-                                'general' => 'Error Please Try Again',
-                            ]);
-                        }
-
-                        // Get floating amount for this doc
-                        $floatingAmount = $floatingAmounts
-                            ->get($doc['docunumber'], collect())
-                            ->get($doc['type'], collect())
-                            ->first();
-
-                        $floatingValue = $floatingAmount?->total_floating ?? 0;
-                        $effectiveBalance = $ledger->running_balance - $floatingValue;
-
-                        // Don't overpay beyond effective balance
-                        // if ($amountToApply > $effectiveBalance) {
-                        //     throw ValidationException::withMessages([
-                        //         'amount_paid' => "Amount to pay ({$amountToApply}) exceeds available balance ({$effectiveBalance}) for document {$doc['docunumber']}",
-                        //     ]);
-                        // }
-
-                        $whtPerDoc = (float) ($doc['wht_amount'] ?? 0);
-                        $totalApplied = $amountToApply + $whtPerDoc;
-
-                        $processedDocuments[] = [
-                            'document_no' => $doc['docunumber'],
-                            'type' => $doc['type'],
-                            'amount' => $doc['amount'],
-                            'balance' => max(0, $ledger->running_balance - $totalApplied),
-                            'amount_applied' => $amountToApply,
-                            'wht_amount' => $whtPerDoc,
-                            'total_amount_less_wht' => (float) ($doc['total_amount_less_wht'] ?? 0),
-                            'document_date' => $ledger->date,
-                            'floating_deducted' => $floatingValue,
-                            'overage_shortage' => $ledger->running_balance - $totalApplied,
-                        ];
+                    if (!$ledger) {
+                        throw ValidationException::withMessages([
+                            'general' => 'Error Please Try Again',
+                        ]);
                     }
+
+                    $availableBalance = $this->getAvailableDocumentBalance(
+                        $validated['customer_code'],
+                        $doc['docunumber'],
+                        $doc['type'],
+                        $ledger
+                    );
+                    $floatingValue = max(0, round((float) $ledger->running_balance - $availableBalance, 2));
+
+                    $whtApplied = isset($doc['wht_amount']) ? floatval($doc['wht_amount']) : 0;
+                    if ($whtApplied > 0) {
+                        $this->ensureDocumentAllowsAdditionalWht(
+                            $validated['customer_code'],
+                            $doc['docunumber'],
+                            $doc['type']
+                        );
+                    }
+                    $applyBir2307 = $validated['apply_bir_2307'] ?? false;
+                    $grossApplied = $amountToApply + $whtApplied;
+                    $detailsBalance = max(0, $availableBalance - $grossApplied);
+                    $overpaymentAmount = isset($doc['overpayment_amount'])
+                        ? (float) $doc['overpayment_amount']
+                        : max(0, $grossApplied - $availableBalance);
+                    $this->ensureOverpaymentAllowed($overpaymentAmount);
+
+                    $processedDocuments[] = [
+                        'document_no' => $doc['docunumber'],
+                        'type' => $doc['type'],
+                        'amount' => $doc['amount'],
+                        'balance' => $detailsBalance,
+                        'amount_applied' => $amountToApply,
+                        'wht_amount' => $whtApplied,
+                        'wht_status' => $this->resolveWhtStatus($whtApplied, $applyBir2307),
+                        'total_amount_less_wht' => $amountToApply,
+                        'document_date' => $ledger->date,
+                        'floating_deducted' => $floatingValue,
+                        'overage_shortage' => $detailsBalance,
+                        'overpayment_amount' => $overpaymentAmount,
+                    ];
                 }
             } else { //OLDEST TO NEWEST PAYMENT
-                if ($validated['payment_type'] === '5E - Creditable(WHT)') {
-                    // Get all customer ledgers ordered by date and ID (oldest first)
-                    $ledgers = CustomerLedger::where('customer_code', $validated['customer_code'])
-                        ->where('amount_paid', 0)
-                        ->orderBy('date')
-                        ->orderBy('created_at')
-                        ->lockForUpdate()
-                        ->get();
-
-                    // Preload all floating amounts grouped by document_no AND type
-                    $floatingAmounts = PaymentDetails::where('customer_code', $validated['customer_code'])
-                        ->where('status', 'Floating')
-                        ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-                        ->groupBy('document_no', 'type')
-                        ->get()
-                        ->groupBy(['document_no', 'type']);
-
-                    foreach ($ledgers as $ledger) {
-                        // Get floating amount for this specific document AND type
-                        $floatingAmount = $floatingAmounts
-                            ->get($ledger->invoice_number, collect())
-                            ->get($ledger->type, collect())
-                            ->first();
-
-                        if ($floatingAmount?->total_floating) {
-                            continue;
-                        }
-
-                        // Calculate effective balance after floating deduction
-                        if ($validated['witholdingtax'] === '1%') {
-                            $wht = 0.01;
-                        } else if ($validated['witholdingtax'] === '2%') {
-                            $wht = 0.02;
-                        } else if ($validated['witholdingtax'] === '5%') {
-                            $wht = 0.05;
-                        }
-                        $amountToApply = $ledger->running_balance * $wht;
-                        $whtAmount = $ledger->running_balance - $amountToApply;
-
-                        $processedDocuments[] = [
-                            'document_no' => $ledger->invoice_number,
-                            'type' => $ledger->type,
-                            'amount' => $ledger->amount,
-                            'balance' => $ledger->running_balance - $amountToApply,
-                            'amount_applied' => $amountToApply,
-                            'wht_amount' => $whtAmount,
-                            'total_amount_less_wht' => $amountToApply,
-                            'document_date' => $ledger->date,
-                            'floating_deducted' => $floatingAmount?->total_floating ?? 0,
-                            'overage_shortage' => $ledger->running_balance - $amountToApply,
-                        ];
-                    }
-                } else {
-
+                {
                     $cust = Customer::where('cus_code', $validated['customer_code'])->lockForUpdate()->firstOrFail();
 
                     $remainingAdvPayment = $cust->advanced_payment_balance;
@@ -1074,29 +908,18 @@ class PaymentController extends Controller
                         ->lockForUpdate()
                         ->get();
 
-                    // Preload all floating amounts grouped by document_no AND type
-                    $floatingAmounts = PaymentDetails::where('customer_code', $validated['customer_code'])
-                        ->where('status', 'Floating')
-                        ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-                        ->groupBy('document_no', 'type')
-                        ->get()
-                        ->groupBy(['document_no', 'type']);
-
                     foreach ($ledgers as $ledger) {
                         if ($remainingAdvPayment <= 0 && $remainingAmountPaid <= 0) {
                             break;
                         }
 
-                        // Get floating amount for this specific document AND type
-                        $floatingAmount = $floatingAmounts
-                            ->get($ledger->invoice_number, collect())
-                            ->get($ledger->type, collect())
-                            ->first();
-
-
-
-                        // Calculate effective balance after floating deduction
-                        $effectiveBalance = $ledger->running_balance - ($floatingAmount?->total_floating ?? 0);
+                        $effectiveBalance = $this->getAvailableDocumentBalance(
+                            $validated['customer_code'],
+                            $ledger->invoice_number,
+                            $ledger->type,
+                            $ledger
+                        );
+                        $floatingValue = max(0, round((float) $ledger->running_balance - $effectiveBalance, 2));
 
                         // Only proceed if there's positive balance after floating deduction
                         if ($effectiveBalance > 0) {
@@ -1113,26 +936,24 @@ class PaymentController extends Controller
                             $amountToApply = $fromAdv + $fromPaid;
 
                             if ($amountToApply > 0) {
-                                $whtPerDoc = $hasWht
-                                    ? ($totalAmountLessWht > 0
-                                        ? ($amountToApply / $totalAmountLessWht) * $whtAmount
-                                        : 0)
-                                    : 0;
-
-                                $totalApplied = $amountToApply + $whtPerDoc;
+                                $whtApplied = 0.0;
+                                $applyBir2307 = $validated['apply_bir_2307'] ?? false;
+                                $detailsBalance = max(0, $effectiveBalance - $amountToApply);
 
                                 $processedDocuments[] = [
                                     'document_no' => $ledger->invoice_number,
                                     'type' => $ledger->type,
                                     'amount' => $ledger->amount,
-                                    'balance' => max(0, $ledger->running_balance - $totalApplied),
+                                    'balance' => $detailsBalance,
                                     'amount_applied' => $amountToApply,
                                     'advpy_amount_applied' => $fromAdv,
-                                    'wht_amount' => $whtPerDoc,
-                                    'total_amount_less_wht' => $hasWht ? $amountToApply : 0,
+                                    'wht_amount' => $whtApplied,
+                                    'wht_status' => $this->resolveWhtStatus($whtApplied, $applyBir2307),
+                                    'total_amount_less_wht' => $amountToApply,
                                     'document_date' => $ledger->date,
-                                    'floating_deducted' => $floatingAmount?->total_floating ?? 0,
-                                    'overage_shortage' => $ledger->running_balance - $totalApplied,
+                                    'floating_deducted' => $floatingValue,
+                                    'overage_shortage' => $detailsBalance,
+                                    'overpayment_amount' => 0,
                                 ];
                             }
                         }
@@ -1174,49 +995,27 @@ class PaymentController extends Controller
                 ->all();
 
 
-            $totalAmount = (float) preg_replace('/[^0-9.]/', '', $dbData['net_total']);
+            $totalAmount = isset($dbData['total_amount'])
+                ? (float) preg_replace('/[^0-9.]/', '', $dbData['total_amount'])
+                : 0.0;
+            $headerDocumentTotal = collect($processedDocuments)->sum(
+                fn($doc) => (float) ($doc['amount'] ?? 0)
+            );
 
-            $netTotal = isset($dbData['net_total'])
-                ? (float) preg_replace('/[^0-9.]/', '', $dbData['net_total'])
-                : 0;
+            $totalWht = collect($processedDocuments)->sum(fn($doc) => (float) ($doc['wht_amount'] ?? 0));
+            $netPaid = collect($processedDocuments)->sum(fn($doc) => (float) ($doc['amount_applied'] ?? 0));
+            $grossPaid = $netPaid + $totalWht;
 
-            $totalWht = 0;
-            $totalAmountLessWht = 0;
-            $amountPaid = 0;
+            $applyBir2307 = $validated['apply_bir_2307'] ?? false;
 
-            if (!empty($validated['selectedDocuments'])) {
-                $totalWht = collect($validated['selectedDocuments'])
-                    ->sum(fn($doc) => (float) ($doc['wht_amount'] ?? 0));
-
-                $totalAmountLessWht = collect($validated['selectedDocuments'])
-                    ->sum(fn($doc) => (float) ($doc['total_amount_less_wht'] ?? 0));
-            }
-
-            $hasAmountToPay = collect($validated['selectedDocuments'])
-                ->contains(fn($doc) => array_key_exists('amountToPay', $doc));
-
-            // if the payment is from payment module 
-            if ($hasAmountToPay) {
-                if ($totalWht > 0) {
-                    $amountPaid = $totalAmountLessWht + $totalWht;
-                } else {
-                    $amountPaid = collect($validated['selectedDocuments'])
-                        ->sum(fn($doc) => (float) ($doc['amountToPay'] ?? 0));
-                }
-            }
-            // if the payment is from invoice module 
-            else {
-                if ($totalWht > 0) {
-                    $amountPaid = $totalAmountLessWht + $totalWht;
-                } else {
-                    $amountPaid = (float) preg_replace('/[^0-9.]/', '', $dbData['net_total']);
-                }
-            }
-
-            $dbData['total_amount'] = $totalAmount;
-            $dbData['amount_paid'] = $amountPaid;
-            $dbData['wht_amount'] = $totalWht;
-            $dbData['total_amount_less_wht'] = $totalAmountLessWht;
+            $dbData['total_amount'] = !empty($validated['selectedDocuments']) && $headerDocumentTotal > 0
+                ? $headerDocumentTotal
+                : ($totalAmount > 0 ? $totalAmount : $grossPaid);
+            $dbData['amount_paid'] = $grossPaid;
+            $dbData['wht_amount'] = $this->isPaymentTypeSubjectToWht($validated['payment_type']) ? $totalWht : 0.0;
+            $dbData['total_amount_less_wht'] = $this->isPaymentTypeSubjectToWht($validated['payment_type'])
+                ? $netPaid
+                : $grossPaid;
 
             $dbData['created_by'] = $request->user()->name;
             $dbData['payment_no'] = $nextNumber;
@@ -1228,14 +1027,13 @@ class PaymentController extends Controller
                 $dbData['advpy_amount_paid'] = 0;
             }
 
-            if (
-                $netTotal <= 0 && $totalWht > 0 &&
-                bccomp((string)$amountPaid, (string)$totalAmount, 2) !== 0
-            ) {
-
-                throw ValidationException::withMessages([
-                    'amount_paid' => 'Amount paid must equal total amount when WHT is applied.',
-                ]);
+            if ($this->isPaymentTypeSubjectToWht($validated['payment_type']) && $totalWht > 0) {
+                $expectedGross = $grossPaid;
+                if ($totalAmount > 0 && bccomp((string) $expectedGross, (string) $totalAmount, 2) > 0) {
+                    throw ValidationException::withMessages([
+                        'amount_paid' => 'Total applied (net + WHT) cannot exceed total amount.',
+                    ]);
+                }
             }
 
             if (!Schema::connection('tenant')->hasColumn('payment', 'wht_amount')) {
@@ -1255,10 +1053,6 @@ class PaymentController extends Controller
                 if ($validated['check_type']) {
                     $checkno = $validated['reference_no'];
                 }
-            } else if ($cashConfirm != 'Cash Confirmed' && $validated['payment_type'] === '5E - Creditable(WHT)') {
-                if ($validated['witholdingtax']) {
-                    $checkno = $validated['reference_no'];
-                }
             }
 
             if (empty($validated['selectedDocuments'])) { //OLDEST TO NEWEST
@@ -1270,9 +1064,7 @@ class PaymentController extends Controller
 
                     $amountApplied = (float) preg_replace('/[^0-9.]/', '', $doc['amount_applied']);
 
-                    $finalAmountPaid = $whtPerDoc > 0
-                        ? $amountApplied + $whtPerDoc
-                        : $amountApplied;
+                    $finalAmountPaid = $whtPerDoc > 0 ? $amountApplied + $whtPerDoc : $amountApplied;
 
                     $detailsData = [
                         'payment_no' => $nextNumber,
@@ -1297,6 +1089,19 @@ class PaymentController extends Controller
                     ];
                     if (Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
                         $detailsData['wht_amount'] = $whtPerDoc;
+                        if ($whtPerDoc > 0 && isset($doc['wht_status'])) {
+                            $detailsData['wht_status'] = $doc['wht_status'];
+                        }
+                    }
+                    if (Schema::connection('tenant')->hasColumn('payment_details', 'floating_deducted_amount')) {
+                        $detailsData['floating_deducted_amount'] = isset($doc['floating_deducted'])
+                            ? (float) $doc['floating_deducted']
+                            : 0;
+                    }
+                    if (Schema::connection('tenant')->hasColumn('payment_details', 'overpayment_amount')) {
+                        $detailsData['overpayment_amount'] = isset($doc['overpayment_amount'])
+                            ? (float) $doc['overpayment_amount']
+                            : 0;
                     }
                     PaymentDetails::create($detailsData);
                 }
@@ -1310,9 +1115,7 @@ class PaymentController extends Controller
 
                     $amountApplied = (float) preg_replace('/[^0-9.]/', '', $doc['amount_applied']);
 
-                    $finalAmountPaid = $whtPerDoc > 0
-                        ? $amountApplied + $whtPerDoc
-                        : $amountApplied;
+                    $finalAmountPaid = $whtPerDoc > 0 ? $amountApplied + $whtPerDoc : $amountApplied;
 
                     $detailsData = [
                         'payment_no' => $nextNumber,
@@ -1337,6 +1140,19 @@ class PaymentController extends Controller
                     ];
                     if (Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
                         $detailsData['wht_amount'] = $whtPerDoc;
+                        if ($whtPerDoc > 0 && isset($doc['wht_status'])) {
+                            $detailsData['wht_status'] = $doc['wht_status'];
+                        }
+                    }
+                    if (Schema::connection('tenant')->hasColumn('payment_details', 'floating_deducted_amount')) {
+                        $detailsData['floating_deducted_amount'] = isset($doc['floating_deducted'])
+                            ? (float) $doc['floating_deducted']
+                            : 0;
+                    }
+                    if (Schema::connection('tenant')->hasColumn('payment_details', 'overpayment_amount')) {
+                        $detailsData['overpayment_amount'] = isset($doc['overpayment_amount'])
+                            ? (float) $doc['overpayment_amount']
+                            : 0;
                     }
                     PaymentDetails::create($detailsData);
                 }
@@ -1352,9 +1168,9 @@ class PaymentController extends Controller
             $customer = CustomerService::getCustomerByCode($validated['cust_code']);
             $invoiceNumber = $invoiceNumberService->generate(true);
 
-            CustomerLedger::create([
+            $ledgerData = [
                 'invoice_number' => $invoiceNumber,
-                'date' => $validated['transaction_date'],
+                'date' => $validated['receipt_date'],
                 'type' => "Payment",
                 'customer_code' => $validated['cust_code'],
                 'customer_name' => $customer->cus_name,
@@ -1363,7 +1179,14 @@ class PaymentController extends Controller
                 'adjusted_amount' => 0.00,
                 'amount_paid' => 0.00,
                 'running_balance' => $validated['amount_paid'],
-            ]);
+            ];
+
+            if (Schema::connection('tenant')->hasColumn('customer_ledger', 'transfer_from')) {
+                $sourceCustomer = trim(($validated['customer_code'] ?? '') . ' - ' . ($validated['name'] ?? ''), ' -');
+                $ledgerData['transfer_from'] = $sourceCustomer !== '' ? $sourceCustomer : null;
+            }
+
+            CustomerLedger::create($ledgerData);
         });
     }
 
@@ -1624,7 +1447,7 @@ class PaymentController extends Controller
                 'transaction_date' => ['required', 'date', 'before_or_equal:today'],
                 'customer_code' => ['required', 'string'],
                 'name' => ['required', 'string'],
-                'payment_type' => ['required', 'in:5A - Cash,5B - Journal Voucher,5C - Online Deposit,5D - Check,5E - Creditable(WHT)'],
+                'payment_type' => ['required', 'in:5A - Cash,5B - Journal Voucher,5C - Online Deposit,5D - Check'],
                 'type' => ['required', 'in:Sales Invoice,Charge Invoice,Payment,BG'],
                 'document_no' => ['required', 'string'],
                 'document_date' => ['required', 'date'],

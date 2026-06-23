@@ -349,22 +349,6 @@
                                         <span class="ml-2 text-sm font-medium">Check</span>
                                     </label>
 
-                                    <!-- Creditable WHT -->
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" v-model="form.reportOptions.creditableWHT
-                                            " :class="('',
-                                                    form.errors.reportOptions
-                                                        ? 'peer appearance-none w-5 h-5 border-2 border-red-400 rounded-md checked:bg-[var(--color-bg-avatar)] checked:border-transparent focus:outline-none transition-colors duration-200'
-                                                        : 'peer appearance-none w-5 h-5 border-2 border-[var(--color-border)] rounded-md checked:bg-[var(--color-bg-avatar)] checked:border-transparent focus:outline-none transition-colors duration-200')
-                                                " />
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                            class="absolute p-0.5 top-0 left-0 w-5 h-5 hidden peer-checked:block pointer-events-none"
-                                            fill="white">
-                                            <path
-                                                d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
-                                        </svg>
-                                        <span class="ml-2 text-sm font-medium">Creditable(WHT)</span>
-                                    </label>
                                 </div>
                             </div>
 
@@ -508,7 +492,6 @@ const form = useForm({
         check: false,
         journalVoucher: false,
         onlineDeposits: false,
-        creditableWHT: false,
     },
     sortOption: "Date",
     paymentProoflistType: null,

@@ -3,7 +3,7 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60">
             <!-- Modal Container -->
             <div
-                class="w-full max-w-7xl overflow-hidden rounded-2xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
+                class="w-full max-w-[90vw] overflow-hidden rounded-2xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
                 <!-- Content -->
                 <div class="p-6">
                     <!-- Header -->
@@ -37,50 +37,52 @@
 
                     <!-- TABLE -->
                     <div
-                        class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
-                        <div class="sticky top-0 z-10 pr-2">
-                            <table class="w-full text-[var(--color-text-primary)] text-sm">
-                                <thead class="border-b border-[var(--color-border)]/50">
-                                    <tr>
-                                        <th class="px-5 py-2 text-left w-[12%]">
-                                            PAYMENT NO
-                                        </th>
-                                        <th class="px-5 py-2 text-left w-[12%]">
-                                            DOCUMENT NO
-                                        </th>
-                                        <th class="px-5 py-2 text-left w-[12%]">
-                                            DOCUMENT DATE
-                                        </th>
-                                        <th class="px-5 py-2 text-left w-[12%]">
-                                            PAYMENT DATE
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[13%]">
-                                            PAYMENT TYPE
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[13%]">
-                                            CHECK TYPE
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[14%]">
-                                            AMOUNT
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[14%]">
-                                            WHT AMOUNT
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[12%]">
-                                            STATUS
-                                        </th>
-                                    </tr>
-                                </thead>
-                            </table>
-                        </div>
-                        <div class="relative overflow-hidden">
+                        class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm">
+                        <div class="relative overflow-x-auto">
                             <div
                                 class="max-h-72 overflow-y-auto relative scrollbar-thin scrollbar-thumb-[var(--color-scrollbar-track)] scrollbar-track-[var(--color-primary)]/20 scrollbar-stable [scrollbar-gutter:stable] scrollbar-thumb-rounded-full">
-                                <table class="w-full text-[var(--color-text-primary)] text-sm">
+                                <table class="w-full table-fixed text-[var(--color-text-primary)] text-[11px]">
+                                    <thead class="sticky top-0 z-10 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)]/50">
+                                        <tr>
+                                            <th class="px-1.5 py-1 text-left w-[82px]">
+                                            PAYMENT NO
+                                            </th>
+                                            <th class="px-1.5 py-1 text-left w-[82px]">
+                                            DOCUMENT NO
+                                            </th>
+                                            <th class="px-1.5 py-1 text-left w-[92px]">
+                                            DOCUMENT DATE
+                                            </th>
+                                            <th class="px-1.5 py-1 text-left w-[92px]">
+                                            PAYMENT DATE
+                                            </th>
+                                            <th class="px-1.5 py-1 text-center w-[100px]">
+                                            PAYMENT TYPE
+                                            </th>
+                                            <th class="px-1.5 py-1 text-center w-[100px]">
+                                            CHECK TYPE
+                                            </th>
+                                            <th class="px-1.5 py-1 text-right w-[96px]">
+                                            TOTAL AMOUNT
+                                            </th>
+                                            <th class="px-1.5 py-1 text-right w-[96px]">
+                                            AMOUNT (w/o WHT)
+                                            </th>
+                                            <th class="px-1.5 py-1 text-right w-[90px]">
+                                            OVERPAYMENT
+                                            </th>
+                                            <th class="px-1.5 py-1 text-right w-[90px]">
+                                            WHT AMOUNT
+                                            </th>
+                                            <th class="px-1.5 py-1 text-left w-[82px]">
+                                            STATUS
+                                            </th>
+                                        </tr>
+                                    </thead>
                                     <!-- Loading State -->
                                     <tbody v-if="isLoading">
                                         <tr>
-                                            <td colspan="8" class="text-center py-8">
+                                            <td colspan="11" class="text-center py-8">
                                                 <div class="flex justify-center items-center">
                                                     <svg width="30" height="30" viewBox="0 0 24 24"
                                                         xmlns="http://www.w3.org/2000/svg" fill="var(--color-icon)">
@@ -106,29 +108,29 @@
 paymentdetail, index
                                             ) in filteredData" :key="index"
                                             class="rounded-xl hover:bg-[var(--color-primary)]/20 transition-colors duration-150 group">
-                                            <td class="px-5 py-2 font-medium w-[12%]">
+                                            <td class="px-1.5 py-1 font-medium w-[82px]">
                                                 {{ paymentdetail.payment_no }}
                                             </td>
-                                            <td class="px-5 py-2 font-medium w-[12%]">
+                                            <td class="px-1.5 py-1 font-medium w-[82px]">
                                                 {{ paymentdetail.document_no }}
                                             </td>
-                                            <td class="px-5 py-2 w-[12%]">
+                                            <td class="px-1.5 py-1 w-[92px]">
                                                 {{
                                                     formatDate(
                                                         paymentdetail.document_date
                                                     )
                                                 }}
                                             </td>
-                                            <td class="px-5 py-2 w-[12%]">
+                                            <td class="px-1.5 py-1 w-[92px]">
                                                 {{
                                                     formatDate(
                                                         paymentdetail.payment_date
                                                     )
                                                 }}
                                             </td>
-                                            <td class="px-5 py-2 text-center w-[13%]">
+                                            <td class="px-1.5 py-1 text-center w-[100px]">
                                                 <span
-                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium"
                                                     :class="{
                                                         'bg-amber-700 text-amber-300':
                                                             paymentdetail.payment_type ===
@@ -142,18 +144,15 @@ paymentdetail, index
                                                         'bg-sky-700 text-sky-300':
                                                             paymentdetail.payment_type ===
                                                             'Check',
-                                                        'bg-rose-700 text-rose-300':
-                                                            paymentdetail.payment_type ===
-                                                            'Creditable(WHT)',
                                                     }">
                                                     {{
                                                         paymentdetail.payment_type
                                                     }}
                                                 </span>
                                             </td>
-                                            <td class="px-5 py-2 text-center w-[13%]">
+                                            <td class="px-1.5 py-1 text-center w-[100px]">
                                                 <span
-                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium"
                                                     :class="{
                                                         'bg-cyan-700 text-cyan-300':
                                                             paymentdetail.check_type ===
@@ -170,21 +169,38 @@ paymentdetail, index
                                                     }}
                                                 </span>
                                             </td>
-                                            <td class="px-5 py-2 text-right font-medium w-[14%]">
+                                            <td class="px-1.5 py-1 text-right font-medium w-[96px]">
                                                 {{
                                                     formatCurrency(
                                                         paymentdetail.amount_paid
                                                     )
                                                 }}
                                             </td>
-                                            <td class="px-5 py-2 text-right font-medium w-[14%]">
+                                            <td class="px-1.5 py-1 text-right font-medium w-[96px]">
+                                                {{
+                                                    formatCurrency(
+                                                        (Number(paymentdetail.amount_paid) || 0) -
+                                                        (Number(paymentdetail.wht_amount) || 0)
+                                                    )
+                                                }}
+                                            </td>
+                                            <td class="px-1.5 py-1 text-right font-medium w-[90px]">
+                                                {{
+                                                    Number(paymentdetail.overpayment_amount) > 0
+                                                        ? formatCurrency(
+                                                            paymentdetail.overpayment_amount
+                                                        )
+                                                        : "-"
+                                                }}
+                                            </td>
+                                            <td class="px-1.5 py-1 text-right font-medium w-[90px]">
                                                 {{
                                                     formatCurrency(
                                                         paymentdetail.wht_amount
                                                     )
                                                 }}
                                             </td>
-                                            <td class="px-5 py-2 text-left w-[12%]">
+                                            <td class="px-1.5 py-1 text-left w-[82px]">
                                                 <span class="inline-flex items-center">
                                                     <span class="relative flex h-2.5 w-2.5">
                                                         <span
@@ -214,7 +230,7 @@ paymentdetail, index
                                                                 "></span>
                                                     </span>
                                                     <span
-                                                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium"
+                                                        class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium"
                                                         :class="{
                                                             ' text-emerald-500':
                                                                 paymentdetail.status ===
@@ -242,7 +258,7 @@ paymentdetail, index
                                             filteredData.length === 0 &&
                                             !isLoading
                                         ">
-                                            <td colspan="8" class="px-5 py-6 text-center">
+                                            <td colspan="11" class="px-5 py-6 text-center">
                                                 <div
                                                     class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2"
@@ -327,6 +343,8 @@ watch(
                         check_type: paymentdetail.check_type,
                         amount_paid: paymentdetail.amount_paid,
                         wht_amount: paymentdetail.wht_amount,
+                        overpayment_amount:
+                            paymentdetail.overpayment_amount ?? 0,
                         status: paymentdetail.status,
                     }));
                 filteredData.value = allResults.value;

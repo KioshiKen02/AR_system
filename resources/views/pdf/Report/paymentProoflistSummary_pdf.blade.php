@@ -278,6 +278,9 @@
                     <th class="col-customer">CUSTOMER NAME</th>
                     <th class="col-amount-h">AMOUNT</th>
                     <th class="col-amountpaid-h">AMOUNT PAID</th>
+                    @if ($show_overpayment ?? true)
+                        <th class="col-amountpaid-h">OVERPAYMENT</th>
+                    @endif
                     <th class="col-pop">PROOF OF PAYMENT</th>
                     <th class="col-pop">REMARKS</th>
                 </tr>
@@ -298,6 +301,11 @@
                             <td class="col-customer">{{ $payment['customer'] }}</td>
                             <td class="col-amount">{{ number_format($detail['amount'], 2) }}</td>
                             <td class="col-amountpaid">{{ number_format($detail['amount_paid'], 2) }}</td>
+                            @if ($show_overpayment ?? true)
+                                <td class="col-amountpaid">
+                                    {{ ($detail['overpayment_amount'] ?? 0) > 0 ? number_format($detail['overpayment_amount'], 2) : '' }}
+                                </td>
+                            @endif
                             <td class="col-pop">
                                 @switch($payment['payment_type'])
                                     @case('5A - Cash')
@@ -316,12 +324,8 @@
                                         ONLINE DEPOSIT
                                     @break
 
-                                    @case('5E - Creditable(WHT)')
-                                        CREDITABLE WHT
-                                    @break
-
                                     @default
-                                        N/A
+                                        {{ strtoupper(preg_replace('/^[0-9][A-Z]\s-\s/', '', $payment['payment_type'] ?? 'N/A')) }}
                                 @endswitch
                             </td>
                             <td class="col-pop">{{ $detail['remarks'] }}</td>
@@ -341,6 +345,7 @@
                     <td class="col-docno"></td>
                     <td class="col-customer"></td>
                     <td class="col-amount"></td>
+                    <td class="col-amountpaid"></td>
                     <td class="col-amountpaid"></td>
                     <td class="col-cash"> {{ number_format($grandTotalAmountPaid, 2) }}
                     </td>

@@ -57,6 +57,7 @@
                         <th class="px-3 py-2 text-left font-semibold tracking-wider">APP NAME</th>
                         <th class="px-3 py-2 text-left font-semibold tracking-wider">BASE URL</th>
                         <th class="px-3 py-2 text-left font-semibold tracking-wider">DB DATABASE</th>
+                        <th class="px-3 py-2 text-center font-semibold tracking-wider">OVERPAYMENT</th>
                         <th class="px-3 py-2 text-center font-semibold tracking-wider">STATUS</th>
                         <th class="px-3 py-2 text-center font-semibold tracking-wider">ACTION</th>
                     </tr>
@@ -65,7 +66,7 @@
                 <!-- Loading State -->
                 <tbody v-if="isLoading">
                     <tr>
-                        <td colspan="5" class="text-center py-8">
+                        <td colspan="6" class="text-center py-8">
                              <div class="flex justify-center items-center">
                                 <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
                                     fill="var(--color-icon)">
@@ -87,6 +88,11 @@
                         <td class="px-3 py-2 font-medium">{{ setting.app_name }}</td>
                         <td class="px-3 py-2">{{ setting.base_url }}</td>
                         <td class="px-3 py-2">{{ setting.db_database }}</td>
+                        <td class="px-3 py-2 text-center">
+                            <span class="capitalize">
+                                {{ setting.allow_overpayment ? 'Allowed' : 'Blocked' }}
+                            </span>
+                        </td>
                         <td class="px-3 py-2 text-center">
                             <span class="inline-flex items-center">
                                 <span class="relative flex h-2.5 w-2.5 mr-2">
@@ -131,7 +137,7 @@
 
                     <!-- Empty State -->
                     <tr v-if="!isLoading && appSettings.data.length === 0">
-                        <td colspan="5" class="px-5 py-6 text-center">
+                        <td colspan="6" class="px-5 py-6 text-center">
                             <div class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2" fill="none"
                                     viewBox="0 0 24 24" stroke="var(--color-icon)">

@@ -25,6 +25,73 @@ use Inertia\Inertia;
 
 class InvoiceController extends Controller
 {
+    private function getEffectivePaidAmount(PaymentDetails $detail, bool $hasPaymentDetailsWhtColumns): float
+    {
+        if (!in_array($detail->status, ['Paid', 'Cleared'], true)) {
+            return 0.0;
+        }
+
+        $effectivePaid = (float) ($detail->amount_paid ?? 0);
+
+        if ((float) ($detail->wht_amount ?? 0) > 0) {
+            $effectivePaid = max(0, $effectivePaid - (float) ($detail->wht_amount ?? 0));
+        }
+
+        return $effectivePaid;
+    }
+
+    private function getEffectiveClearedWhtAmount(PaymentDetails $detail, bool $hasPaymentDetailsWhtColumns): float
+    {
+        $whtAmount = (float) ($detail->wht_amount ?? 0);
+        if ($whtAmount <= 0 || $detail->status === 'Cancelled') {
+            return 0.0;
+        }
+
+        if (!$hasPaymentDetailsWhtColumns) {
+            return $whtAmount;
+        }
+
+        return in_array($detail->wht_status, [null, 'Cleared'], true) ? $whtAmount : 0.0;
+    }
+
+    private function syncPaymentDetailOverpayment(string $customerCode, string $documentNo, string $type, float $debit): void
+    {
+        if (!Schema::connection('tenant')->hasColumn('payment_details', 'overpayment_amount')) {
+            return;
+        }
+
+        $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
+
+        $rows = PaymentDetails::on('tenant')
+            ->where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $type)
+            ->orderBy('payment_date')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $runningCredited = 0.0;
+
+        foreach ($rows as $row) {
+            if ($row->status === 'Cancelled') {
+                $row->update(['overpayment_amount' => 0]);
+                continue;
+            }
+
+            $previousOverflow = max(0, $runningCredited - $debit);
+            $runningCredited += in_array($row->status, ['Floating', 'Paid', 'Cleared'], true)
+                ? (float) ($row->amount_paid ?? 0)
+                : 0.0;
+            $currentOverflow = max(0, $runningCredited - $debit);
+
+            $row->update([
+                'overpayment_amount' => max(0, $currentOverflow - $previousOverflow),
+            ]);
+        }
+    }
+
 
     public function index(Request $request)
     {
@@ -128,10 +195,10 @@ class InvoiceController extends Controller
                 'invoice_no.required' => 'Invoice Number Required',
                 'receipt_date.required' => 'Date Required',
                 'receipt_date.date' => 'Date Must Be Valid Date',
-                'receipt_date.before_or_equal' => 'Date Cannot Be Future',
+                'receipt_date.before_or_equal' => 'Date Cannot Be Advance',
                 'transaction_date.required' => 'Date Required',
                 'transaction_date.date' => 'Date Must Be Valid Date',
-                'transaction_date.before_or_equal' => 'Date Cannot Be Future',
+                'transaction_date.before_or_equal' => 'Date Cannot Be Advance',
                 'customer_code.required' => 'Customer Code Required',
                 'name.required' => 'Customer Name Required',
                 'price_group.required' => 'Price Group Required',
@@ -192,10 +259,10 @@ class InvoiceController extends Controller
                 'invoice_no.required' => 'Invoice Number Required',
                 'receipt_date.required' => 'Date Required',
                 'receipt_date.date' => 'Date Must Be Valid Date',
-                'receipt_date.before_or_equal' => 'Date Cannot Be Future',
+                'receipt_date.before_or_equal' => 'Date Cannot Be Advance',
                 'transaction_date.required' => 'Date Required',
                 'transaction_date.date' => 'Date Must Be Valid Date',
-                'transaction_date.before_or_equal' => 'Date Cannot Be Future',
+                'transaction_date.before_or_equal' => 'Date Cannot Be Advance',
                 'customer_code.required' => 'Customer Code Required',
                 'name.required' => 'Customer Name Required',
                 'price_group.required' => 'Price Group Required',
@@ -344,6 +411,10 @@ class InvoiceController extends Controller
     public function getInvoiceList(Request $request)
     {
         $customerCode = $request->input('type');
+        $hasLedgerWhtAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount');
+        $hasLedgerOverpaymentAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount');
+        $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
 
         if (in_array($request->input('apply_to'), ['Sales Invoice', 'Other Income'])) {
             $applyTo = $request->input('apply_to');
@@ -358,12 +429,40 @@ class InvoiceController extends Controller
             $paidAmounts = PaymentDetails::where('customer_code', $customerCode)
                 ->whereIn('status', ['Paid', 'Cleared'])
                 ->whereIn('document_no', $invoiceNumbers)
-                ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
+                ->selectRaw($this->paymentDetailsEffectivePaidSelect($hasPaymentDetailsWhtColumns))
+                ->groupBy('document_no', 'type')
+                ->get()
+                ->groupBy(['document_no', 'type']);
+            $grossAmounts = PaymentDetails::where('customer_code', $customerCode)
+                ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
+                ->whereIn('document_no', $invoiceNumbers)
+                ->selectRaw('document_no, type, SUM(COALESCE(amount_paid, 0)) as total_gross_paid')
                 ->groupBy('document_no', 'type')
                 ->get()
                 ->groupBy(['document_no', 'type']);
 
-            $result = $ledgers->map(function ($ledger) use ($applyTo, $paidAmounts) {
+            $whtAmounts = collect();
+            if ($hasLedgerWhtAmount && Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+                $whtQuery = PaymentDetails::where('customer_code', $customerCode)
+                    ->whereIn('status', ['Paid', 'Cleared'])
+                    ->whereIn('document_no', $invoiceNumbers)
+                    ->where('wht_amount', '>', 0);
+
+                if ($hasPaymentDetailsWhtColumns) {
+                    $whtQuery->where(function ($q) {
+                        $q->whereNull('wht_status')
+                            ->orWhere('wht_status', 'Cleared');
+                    });
+                }
+
+                $whtAmounts = $whtQuery
+                    ->selectRaw('document_no, type, SUM(wht_amount) as total_wht')
+                    ->groupBy('document_no', 'type')
+                    ->get()
+                    ->groupBy(['document_no', 'type']);
+            }
+
+            $result = $ledgers->map(function ($ledger) use ($customerCode, $applyTo, $paidAmounts, $grossAmounts, $whtAmounts, $hasLedgerWhtAmount, $hasLedgerOverpaymentAmount) {
                 $existingPositive = Adjustment::where('invoice_no', $ledger->invoice_number)
                     ->where('apply_to', $applyTo)
                     ->where('type', 'Positive')
@@ -385,23 +484,54 @@ class InvoiceController extends Controller
                     ->get($ledger->type, collect())
                     ->first();
                 $paid = (float) ($paidRow->total_paid ?? $ledger->amount_paid ?? 0);
-                $syncedRunningBalance = max(0, $debit - $paid);
+                $grossRow = $grossAmounts
+                    ->get($ledger->invoice_number, collect())
+                    ->get($ledger->type, collect())
+                    ->first();
+                $grossPaid = (float) ($grossRow->total_gross_paid ?? 0);
+                $wht = 0.0;
+                if ($hasLedgerWhtAmount) {
+                    $whtRow = $whtAmounts
+                        ->get($ledger->invoice_number, collect())
+                        ->get($ledger->type, collect())
+                        ->first();
+                    $wht = (float) ($whtRow->total_wht ?? 0);
+                }
+                $totalCredited = $paid + $wht;
+                $syncedRunningBalance = max(0, $debit - $totalCredited);
+                $overpaymentAmount = max(0, $grossPaid - $debit);
 
                 if (
                     $ledger->adjusted_amount != (($ledger->amount ?? 0) + $netAdjustment) ||
                     $ledger->positive_adjustment_amount != $existingPositive ||
                     $ledger->negative_adjustment_amount != $existingNegative ||
                     $ledger->amount_paid != $paid ||
-                    $ledger->running_balance != $syncedRunningBalance
+                    $ledger->running_balance != $syncedRunningBalance ||
+                    ($hasLedgerWhtAmount && (float) ($ledger->wht_amount ?? 0) !== $wht) ||
+                    ($hasLedgerOverpaymentAmount && (float) ($ledger->overpayment_amount ?? 0) !== $overpaymentAmount)
                 ) {
-                    $ledger->update([
+                    $ledgerUpdate = [
                         'adjusted_amount' => ($ledger->amount ?? 0) + $netAdjustment,
                         'positive_adjustment_amount' => $existingPositive,
                         'negative_adjustment_amount' => $existingNegative,
                         'amount_paid' => $paid,
                         'running_balance' => $syncedRunningBalance,
-                    ]);
+                    ];
+                    if ($hasLedgerWhtAmount) {
+                        $ledgerUpdate['wht_amount'] = $wht;
+                    }
+                    if ($hasLedgerOverpaymentAmount) {
+                        $ledgerUpdate['overpayment_amount'] = $overpaymentAmount;
+                    }
+                    $ledger->update($ledgerUpdate);
                 }
+
+                $this->syncPaymentDetailOverpayment(
+                    $customerCode,
+                    $ledger->invoice_number,
+                    $ledger->type,
+                    $debit
+                );
 
                 return [
                     'invoice_no' => $ledger->invoice_number,
@@ -422,12 +552,40 @@ class InvoiceController extends Controller
             $paidAmounts = PaymentDetails::where('customer_code', $customerCode)
                 ->whereIn('status', ['Paid', 'Cleared'])
                 ->whereIn('document_no', $invoiceNumbers)
-                ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
+                ->selectRaw($this->paymentDetailsEffectivePaidSelect($hasPaymentDetailsWhtColumns))
+                ->groupBy('document_no', 'type')
+                ->get()
+                ->groupBy(['document_no', 'type']);
+            $grossAmounts = PaymentDetails::where('customer_code', $customerCode)
+                ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
+                ->whereIn('document_no', $invoiceNumbers)
+                ->selectRaw('document_no, type, SUM(COALESCE(amount_paid, 0)) as total_gross_paid')
                 ->groupBy('document_no', 'type')
                 ->get()
                 ->groupBy(['document_no', 'type']);
 
-            $result = $ledgers->map(function ($ledger) use ($paidAmounts) {
+            $whtAmounts = collect();
+            if ($hasLedgerWhtAmount && Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+                $whtQuery = PaymentDetails::where('customer_code', $customerCode)
+                    ->whereIn('status', ['Paid', 'Cleared'])
+                    ->whereIn('document_no', $invoiceNumbers)
+                    ->where('wht_amount', '>', 0);
+
+                if ($hasPaymentDetailsWhtColumns) {
+                    $whtQuery->where(function ($q) {
+                        $q->whereNull('wht_status')
+                            ->orWhere('wht_status', 'Cleared');
+                    });
+                }
+
+                $whtAmounts = $whtQuery
+                    ->selectRaw('document_no, type, SUM(wht_amount) as total_wht')
+                    ->groupBy('document_no', 'type')
+                    ->get()
+                    ->groupBy(['document_no', 'type']);
+            }
+
+            $result = $ledgers->map(function ($ledger) use ($customerCode, $paidAmounts, $grossAmounts, $whtAmounts, $hasLedgerWhtAmount, $hasLedgerOverpaymentAmount) {
                 $beginningBalance = BeginningBalance::where('beginningbalance_no', $ledger->invoice_number)->first();
 
                 if ($beginningBalance && $ledger->amount != $beginningBalance->balance_amount) {
@@ -452,21 +610,52 @@ class InvoiceController extends Controller
                     ->get($ledger->type, collect())
                     ->first();
                 $paid = (float) ($paidRow->total_paid ?? $ledger->amount_paid ?? 0);
-                $syncedRunningBalance = max(0, $currentAdjusted - $paid);
+                $grossRow = $grossAmounts
+                    ->get($ledger->invoice_number, collect())
+                    ->get($ledger->type, collect())
+                    ->first();
+                $grossPaid = (float) ($grossRow->total_gross_paid ?? 0);
+                $wht = 0.0;
+                if ($hasLedgerWhtAmount) {
+                    $whtRow = $whtAmounts
+                        ->get($ledger->invoice_number, collect())
+                        ->get($ledger->type, collect())
+                        ->first();
+                    $wht = (float) ($whtRow->total_wht ?? 0);
+                }
+                $totalCredited = $paid + $wht;
+                $syncedRunningBalance = max(0, $currentAdjusted - $totalCredited);
+                $overpaymentAmount = max(0, $grossPaid - $currentAdjusted);
 
                 if (
                     $ledger->adjusted_amount != $currentAdjusted ||
                     $ledger->amount_paid != $paid ||
-                    $ledger->running_balance != $syncedRunningBalance
+                    $ledger->running_balance != $syncedRunningBalance ||
+                    ($hasLedgerWhtAmount && (float) ($ledger->wht_amount ?? 0) !== $wht) ||
+                    ($hasLedgerOverpaymentAmount && (float) ($ledger->overpayment_amount ?? 0) !== $overpaymentAmount)
                 ) {
-                    $ledger->update([
+                    $ledgerUpdate = [
                         'adjusted_amount' => $currentAdjusted,
                         'positive_adjustment_amount' => $existingPositive,
                         'negative_adjustment_amount' => $existingNegative,
                         'amount_paid' => $paid,
                         'running_balance' => $syncedRunningBalance
-                    ]);
+                    ];
+                    if ($hasLedgerWhtAmount) {
+                        $ledgerUpdate['wht_amount'] = $wht;
+                    }
+                    if ($hasLedgerOverpaymentAmount) {
+                        $ledgerUpdate['overpayment_amount'] = $overpaymentAmount;
+                    }
+                    $ledger->update($ledgerUpdate);
                 }
+
+                $this->syncPaymentDetailOverpayment(
+                    $customerCode,
+                    $ledger->invoice_number,
+                    $ledger->type,
+                    $currentAdjusted
+                );
 
                 return [
                     'invoice_no' => $ledger->invoice_number,
@@ -544,6 +733,10 @@ class InvoiceController extends Controller
     {
         $customerCode = $request->input('customer_code');
         $date = $request->input('date');
+        $hasLedgerWhtAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount');
+        $hasLedgerOverpaymentAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount');
+        $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
 
         Log::info('getInvoiceListForPayment diagnostics', [
             'tenant_slug' => $request->route('tenant'),
@@ -558,7 +751,7 @@ class InvoiceController extends Controller
             $ledgersToRecompute = CustomerLedger::on('tenant')
                 ->where('customer_code', $customerCode)
                 ->where('date', '<=', $date)
-                ->whereIn('type', ['Sales Invoice', 'Charge Invoice', 'BG', 'Beginning Balance'])
+                ->whereIn('type', ['Sales Invoice', 'Charge Invoice', 'BG', 'Beginning Balance', 'Payment'])
                 ->get([
                     'id',
                     'invoice_number',
@@ -572,6 +765,8 @@ class InvoiceController extends Controller
                     'shrinkage',
                     'overage',
                     'return',
+                    ...($hasLedgerWhtAmount ? ['wht_amount'] : []),
+                    ...($hasLedgerOverpaymentAmount ? ['overpayment_amount'] : []),
                 ]);
 
             if ($ledgersToRecompute->isNotEmpty()) {
@@ -598,10 +793,40 @@ class InvoiceController extends Controller
                     ->where('customer_code', $customerCode)
                     ->whereIn('status', ['Paid', 'Cleared'])
                     ->whereIn('document_no', $invoiceNumbers)
-                    ->selectRaw('document_no, type, SUM(amount_paid) as total_paid')
+                    ->selectRaw($this->paymentDetailsEffectivePaidSelect($hasPaymentDetailsWhtColumns))
                     ->groupBy('document_no', 'type')
                     ->get()
                     ->groupBy(['document_no', 'type']);
+                $grossAmounts = PaymentDetails::on('tenant')
+                    ->where('customer_code', $customerCode)
+                    ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
+                    ->whereIn('document_no', $invoiceNumbers)
+                    ->selectRaw('document_no, type, SUM(COALESCE(amount_paid, 0)) as total_gross_paid')
+                    ->groupBy('document_no', 'type')
+                    ->get()
+                    ->groupBy(['document_no', 'type']);
+
+                $whtAmounts = collect();
+                if ($hasLedgerWhtAmount && Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+                    $whtAmountsQuery = PaymentDetails::on('tenant')
+                        ->where('customer_code', $customerCode)
+                        ->whereIn('status', ['Paid', 'Cleared'])
+                        ->whereIn('document_no', $invoiceNumbers)
+                        ->where('wht_amount', '>', 0);
+
+                    if ($hasPaymentDetailsWhtColumns) {
+                        $whtAmountsQuery->where(function ($q) {
+                            $q->whereNull('wht_status')
+                                ->orWhere('wht_status', 'Cleared');
+                        });
+                    }
+
+                    $whtAmounts = $whtAmountsQuery
+                        ->selectRaw('document_no, type, SUM(wht_amount) as total_wht')
+                        ->groupBy('document_no', 'type')
+                        ->get()
+                        ->groupBy(['document_no', 'type']);
+                }
 
                 foreach ($ledgersToRecompute as $ledger) {
                     $applyTo = $ledger->type;
@@ -640,8 +865,23 @@ class InvoiceController extends Controller
                         ->get($ledger->type, collect())
                         ->first();
                     $paid = (float) ($paidRow->total_paid ?? $ledger->amount_paid ?? 0);
+                    $grossRow = $grossAmounts
+                        ->get($ledger->invoice_number, collect())
+                        ->get($ledger->type, collect())
+                        ->first();
+                    $grossPaid = (float) ($grossRow->total_gross_paid ?? 0);
+                    $wht = 0.0;
+                    if ($hasLedgerWhtAmount) {
+                        $whtRow = $whtAmounts
+                            ->get($ledger->invoice_number, collect())
+                            ->get($ledger->type, collect())
+                            ->first();
+                        $wht = (float) ($whtRow->total_wht ?? 0);
+                    }
 
-                    $runningBalance = max(0, $debit - $paid);
+                    $totalCredited = $paid + $wht;
+                    $runningBalance = max(0, $debit - $totalCredited);
+                    $overpaymentAmount = max(0, $grossPaid - $debit);
 
                     if (
                         $ledger->amount != $amount ||
@@ -649,24 +889,42 @@ class InvoiceController extends Controller
                         $ledger->adjusted_amount != $adjustedAmount ||
                         $ledger->positive_adjustment_amount != $posSum ||
                         $ledger->negative_adjustment_amount != $negSum ||
-                        $ledger->running_balance != $runningBalance
+                        $ledger->running_balance != $runningBalance ||
+                        ($hasLedgerWhtAmount && (float) ($ledger->wht_amount ?? 0) !== $wht) ||
+                        ($hasLedgerOverpaymentAmount && (float) ($ledger->overpayment_amount ?? 0) !== $overpaymentAmount)
                     ) {
-                        CustomerLedger::on('tenant')->where('id', $ledger->id)->update([
+                        $ledgerUpdate = [
                             'amount' => $amount,
                             'amount_paid' => $paid,
                             'adjusted_amount' => $adjustedAmount,
                             'positive_adjustment_amount' => $posSum,
                             'negative_adjustment_amount' => $negSum,
                             'running_balance' => $runningBalance,
-                        ]);
+                        ];
+
+                        if ($hasLedgerWhtAmount) {
+                            $ledgerUpdate['wht_amount'] = $wht;
+                        }
+                        if ($hasLedgerOverpaymentAmount) {
+                            $ledgerUpdate['overpayment_amount'] = $overpaymentAmount;
+                        }
+
+                        CustomerLedger::on('tenant')->where('id', $ledger->id)->update($ledgerUpdate);
                     }
+
+                    $this->syncPaymentDetailOverpayment(
+                        $customerCode,
+                        $ledger->invoice_number,
+                        $ledger->type,
+                        $debit
+                    );
                 }
             }
         }
 
         // Get all ledger entries for the customer
         $columns = ['invoice_number', 'date', 'type', 'amount', 'amount_paid', 'running_balance', 'trade_type'];
-        if (Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')) {
+        if ($hasLedgerWhtAmount) {
             $columns[] = 'wht_amount';
         }
         $ledgers = CustomerLedger::on('tenant')->where('customer_code', $customerCode)
@@ -676,24 +934,30 @@ class InvoiceController extends Controller
             ->orderBy('created_at')
             ->get();
 
-        $floatingAmounts = PaymentDetails::on('tenant')->where('customer_code', $customerCode)
-            ->where('status', 'Floating')
-            ->selectRaw('document_no, type, SUM(amount_paid) as total_floating')
-            ->groupBy('document_no', 'type')
-            ->get()
+        $paymentDetailColumns = ['document_no', 'type', 'status', 'payment_type', 'check_type', 'amount_paid'];
+        if ($hasPaymentDetailsWhtColumns) {
+            $paymentDetailColumns[] = 'wht_amount';
+            $paymentDetailColumns[] = 'wht_status';
+        }
+
+        $paymentDetailsByDocument = PaymentDetails::on('tenant')
+            ->where('customer_code', $customerCode)
+            ->whereIn('document_no', $ledgers->pluck('invoice_number')->filter()->unique()->values())
+            ->get($paymentDetailColumns)
             ->groupBy(['document_no', 'type']);
 
         // Format the results and check payment details
-        $result = $ledgers->map(function ($ledger) {
+        $result = $ledgers->map(function ($ledger) use ($paymentDetailsByDocument, $hasPaymentDetailsWhtColumns, $hasLedgerWhtAmount) {
             // Initialize floating amount
             $pdcFloatingAmount = 0;
             $dcFloatingAmount = 0;
             $whtFloatingAmount = 0;
+            $hasWhtTransaction = false;
+            $whtTransactionCount = 0;
 
-            // Check if invoice exists in payment_details
-            $paymentDetails = PaymentDetails::on('tenant')->where('document_no', $ledger->invoice_number)
-                ->where('type', $ledger->type)
-                ->get();
+            $paymentDetails = $paymentDetailsByDocument
+                ->get($ledger->invoice_number, collect())
+                ->get($ledger->type, collect());
 
             // If payment details exist, check status and calculate floating amount
             if ($paymentDetails->isNotEmpty()) {
@@ -705,9 +969,33 @@ class InvoiceController extends Controller
                     $dcFloatingAmount = $floatingPayments->where('payment_type', 'Check')
                         ->where('check_type', 'Dated Check')
                         ->sum('amount_paid');
-                    $whtFloatingAmount = $floatingPayments->where('payment_type', 'Creditable(WHT)')
-                        ->sum('amount_paid');
                 }
+
+                if ($hasPaymentDetailsWhtColumns) {
+                    $whtFloatingAmount = $paymentDetails
+                        ->filter(function ($pd) {
+                            return ($pd->wht_status ?? null) === 'Floating'
+                                && ($pd->status ?? null) !== 'Floating';
+                        })
+                        ->sum('wht_amount');
+                }
+
+                $whtTransactions = $paymentDetails
+                    ->filter(function ($pd) use ($hasPaymentDetailsWhtColumns) {
+                        if (($pd->status ?? null) === 'Cancelled') {
+                            return false;
+                        }
+                        if ((float) ($pd->wht_amount ?? 0) <= 0) {
+                            return false;
+                        }
+                        if ($hasPaymentDetailsWhtColumns && ($pd->wht_status ?? null) === 'Cancelled') {
+                            return false;
+                        }
+                        return true;
+                    });
+
+                $whtTransactionCount = $whtTransactions->count();
+                $hasWhtTransaction = $whtTransactionCount > 0;
             }
 
             return [
@@ -716,6 +1004,7 @@ class InvoiceController extends Controller
                 'type' => $ledger->type,
                 'amount' => $ledger->amount,
                 'amount_paid' => $ledger->amount_paid,
+                'applied_wht_amount' => $hasLedgerWhtAmount ? (float) ($ledger->wht_amount ?? 0) : 0.0,
                 'running_balance' => $ledger->running_balance,
                 'trade_type' => $ledger->trade_type ?? null,
                 'pdc_floating_amount' => $pdcFloatingAmount,
@@ -723,10 +1012,28 @@ class InvoiceController extends Controller
                 'dc_floating_amount' => $dcFloatingAmount,
                 'has_dc_floating_payments' => $dcFloatingAmount > 0,
                 'wht_floating_amount' => $whtFloatingAmount,
-                'has_wht_floating_payments' => $whtFloatingAmount > 0
+                'has_wht_floating_payments' => $whtFloatingAmount > 0,
+                'has_wht_transaction' => $hasWhtTransaction,
+                'wht_transaction_count' => $whtTransactionCount,
             ];
         });
 
         return response()->json($result);
+    }
+
+    private function paymentDetailsEffectivePaidSelect(bool $hasPaymentDetailsWhtColumns): string
+    {
+        if (!$hasPaymentDetailsWhtColumns) {
+            return 'document_no, type, SUM(amount_paid) as total_paid';
+        }
+
+        return "document_no, type,
+            SUM(
+                CASE
+                    WHEN COALESCE(wht_amount, 0) > 0
+                    THEN GREATEST(COALESCE(amount_paid, 0) - COALESCE(wht_amount, 0), 0)
+                    ELSE COALESCE(amount_paid, 0)
+                END
+            ) as total_paid";
     }
 }

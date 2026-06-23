@@ -15,16 +15,14 @@
             <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
                 enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
                 leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
-                <InformationDialog :show="showInfoDialog" :message="`This Document No Already Has a Total Floating Payment of ${formatCurrency(
-                    totalFloatingAmount
-                )} Which is Equal To Its Current Balance. Further Payment is Not Allowed For This Document`"
+                <InformationDialog :show="showInfoDialog" :message="infoDialogMessage"
                     @close="showInfoDialog = false" />
             </Transition>
 
             <ToastAlertWarning :show="showToast" :message="toastMessage" />
             <!-- Modal Container -->
             <div
-                class="w-full max-w-7xl overflow-hidden rounded-2xl text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
+                class="w-full max-w-[95vw] overflow-hidden rounded-2xl text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
                 <!-- Content -->
                 <div class="p-6">
                     <!-- Header -->
@@ -37,8 +35,8 @@
                         </div>
                     </div>
 
-                    <div class="flex justify-between items-start mb-4">
-                        <div class="w-1/2 flex flex-col gap-2">
+                    <div class="mb-4 grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
+                        <div class="flex flex-col gap-2 rounded-xl border border-[var(--color-border)]/60 p-4">
                             <label class="block text-md font-bold">PAYMENT MODE</label>
                             <div class="flex gap-4">
                                 <label class="w-full inline-flex items-center cursor-pointer group">
@@ -102,16 +100,39 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="w-1/3 flex flex-col gap-2">
+
+                        <div class="flex flex-col gap-2 rounded-xl border border-[var(--color-border)]/60 p-4">
                             <label class="block text-md font-bold">FILTER BY TYPE</label>
-                            <div class="relative">
-                                <DropdownInput v-model="selectedTypeFilter" :options="[
+                            <div class="relative flex-1 flex items-center">
+                                <DropdownInput data-testid="type-filter" v-model="selectedTypeFilter" :options="[
                                     'All Types',
                                     'Sales Invoice',
                                     'Charge Invoice',
                                     'Payment',
                                     'BG',
                                 ]" placeholder="Click to Select" />
+                            </div>
+                        </div>
+
+                        <div v-if="props.whtEnabled" class="flex flex-col gap-2 rounded-xl border border-[var(--color-border)]/60 p-4">
+                            <label class="block text-md font-bold">TAX</label>
+                            <div class="flex flex-1 flex-wrap items-center gap-4">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="text-sm font-bold">Tax rate (optional):</span>
+                                    <DropdownInput data-testid="tax-rate-select" v-model="taxRate" :options="['None', '1%', '2%', '5%']" class="w-28" />
+                                </div>
+                                <label class="flex items-center gap-2 cursor-pointer text-sm font-bold min-h-[42px]">
+                                    <span class="relative w-5 h-5">
+                                        <input data-testid="apply-bir-2307" type="checkbox" v-model="applyBir2307" class="peer appearance-none w-5 h-5 border-2 rounded-sm border-[var(--color-border)] bg-[var(--color-bg-secondary)] checked:bg-[var(--color-primary)] checked:!border-[var(--color-primary)] focus:outline-none transition-colors duration-200 cursor-pointer" />
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                            class="absolute inset-0 p-0.5 text-white hidden peer-checked:block pointer-events-none"
+                                            fill="currentColor">
+                                            <path
+                                                d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
+                                        </svg>
+                                    </span>
+                                    <span>Apply BIR 2307</span>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -139,14 +160,7 @@
                     <!-- TABLE -->
                     <div v-if="payment_mode === 'Oldest to Newest'"
                         class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
-                        <div v-if="props.paymentType === '5E - Creditable(WHT)'"
-                            class="h-82 w-full flex flex-col justify-center items-center gap-2 p-6">
-                            <span><svg-icon type="mdi" :path="mdiAlert" class="w-20 h-20" /></span>
-                            <span class="font-extrabold text-2xl uppercase text-center">Unsupported payment type. Please
-                                try
-                                another.</span>
-                        </div>
-                        <div v-else class="h-82 w-full flex flex-col justify-center items-center gap-2">
+                        <div class="h-82 w-full flex flex-col justify-center items-center gap-2">
                             <span><svg-icon type="mdi" :path="mdiCalendarClock" class="w-20 h-20" /></span>
                             <span v-if="filteredData.length !== 0" class="font-extrabold text-2xl">OLDEST TO NEWEST
                                 SELECTED</span>
@@ -154,49 +168,71 @@
                         </div>
                     </div>
                     <div v-if="payment_mode === 'Manual Select'"
-                        class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
-                        <div class="sticky top-0 z-10 pr-2">
-                            <table class="w-full text-[var(--color-text-primary)]">
-                                <thead class="border-b border-[var(--color-border)]/50">
-                                    <tr>
-                                        <th class="px-5 py-2 text-center w-[10%]">
-                                            SELECT
-                                        </th>
-                                        <th class="px-5 py-2 text-left w-[13%]">
-                                            DOCUMENT NO
-                                        </th>
-                                        <th class="px-5 py-2 text-left w-[13%]">
-                                            DATE
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[12%]">
-                                            TYPE
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[12%]">
-                                            TRADE TYPE
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[20%]">
-                                            SI/CI AMOUNT
-                                        </th>
-                                        <th class="px-5 py-2 text-center w-[20%]">
-                                            AMOUNT TO PAY
-                                        </th>
-
-                                        <th class="px-5 py-2 text-center w-[10%]">
-                                            WHT
-                                        </th>
-                                    </tr>
-
-                                </thead>
-                            </table>
-                        </div>
-                        <div class="relative overflow-hidden">
+                        class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm">
+                        <!-- <div
+                            class="grid grid-cols-2 gap-3 border-b border-[var(--color-border)]/60 bg-[var(--color-bg-secondary)]/50 p-3 text-xs text-[var(--color-text-secondary)]">
+                            <div>
+                                <span class="font-semibold text-[var(--color-text-primary)]">SI/CI Amount:</span>
+                                Original document amount.
+                            </div>
+                            <div>
+                                <span class="font-semibold text-[var(--color-text-primary)]">Cash/Cleared Paid:</span>
+                                Posted cash paid only, excluding floating WHT.
+                            </div>
+                            <div>
+                                <span class="font-semibold text-[var(--color-text-primary)]">Floating Credit:</span>
+                                Reserved WHT, PDC, or DC not yet cleared.
+                            </div>
+                            <div>
+                                <span class="font-semibold text-[var(--color-text-primary)]">Collectible Balance:</span>
+                                Current balance after floating credit deduction.
+                            </div>
+                        </div> -->
+                        <div class="relative overflow-x-auto">
                             <div
-                                class="max-h-72 overflow-y-auto relative scrollbar-thin scrollbar-thumb-[var(--color-scrollbar-track)] scrollbar-track-[var(--color-primary)]/20 scrollbar-stable [scrollbar-gutter:stable] scrollbar-thumb-rounded-full">
-                                <table class="w-full text-[var(--color-text-primary)] text-sm">
-                                    <!-- Loading State -->
+                                class="h-[min(65vh,720px)] min-h-[420px] overflow-y-auto relative scrollbar-thin scrollbar-thumb-[var(--color-scrollbar-track)] scrollbar-track-[var(--color-primary)]/20 scrollbar-stable [scrollbar-gutter:stable] scrollbar-thumb-rounded-full">
+                                <table class="w-full min-w-[1340px] table-fixed text-[var(--color-text-primary)] text-sm">
+                                    <thead class="sticky top-0 z-10 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)]/50">
+                                        <tr>
+                                            <th class="px-2 py-1.5 text-center w-[70px]">
+                                                SELECT
+                                            </th>
+                                            <th class="px-2 py-1.5 text-left w-[130px]"> 
+                                                DOCUMENT NO
+                                            </th>
+                                            <th class="px-2 py-1.5 text-left w-[100px]">
+                                                DATE
+                                            </th>
+                                            <th class="px-2 py-1.5 text-center w-[120px]">
+                                                TYPE
+                                            </th>
+                                            <th class="px-2 py-1.5 text-center w-[95px]">
+                                                TRADE TYPE
+                                            </th>
+                                            <th class="px-2 py-1.5 text-right w-[110px]">
+                                                SI/CI AMOUNT
+                                            </th>
+                                            <th class="px-2 py-1.5 text-right w-[110px]">
+                                                CASH/CLEARED PAID
+                                            </th>
+                                            <th class="px-2 py-1.5 text-right w-[110px]">
+                                                COLLECTIBLE BALANCE
+                                            </th>
+                                            <th class="px-2 py-1.5 text-center w-[150px]">
+                                                AMOUNT TO PAY
+                                            </th>
+                                            <th v-if="props.whtEnabled" class="px-2 py-1.5 text-center w-[110px]">
+                                                <div class="flex flex-col items-center">
+                                                    <span>WHT</span>
+                                                    <span class="text-xs font-medium text-[var(--color-text-secondary)]">Optional</span>
+                                                </div>
+                                            </th>
+                                        </tr>
+                                    </thead>
+
                                     <tbody v-if="isLoading">
                                         <tr>
-                                            <td colspan="6" class="text-center py-8">
+                                            <td :colspan="props.whtEnabled ? 12 : 11" class="text-center py-10">
                                                 <div class="flex justify-center items-center">
                                                     <svg width="30" height="30" viewBox="0 0 24 24"
                                                         xmlns="http://www.w3.org/2000/svg" fill="var(--color-icon)">
@@ -216,16 +252,11 @@
                                         </tr>
                                     </tbody>
 
-
-                                    <!-- Data Rows -->
                                     <tbody v-else class="divide-y divide-[var(--color-border)]/50 rounded-xl">
-                                        <!-- {{ filteredData }} -->
-
                                         <tr v-for="(invoice, index
                                         ) in filteredData" :key="index"
                                             class="rounded-xl hover:bg-[var(--color-primary)]/20 transition-colors duration-150 group cursor-pointer">
-                                            <!-- SELECT  -->
-                                            <td class="px-2 py-2 text-center w-[10%]">
+                                            <td class="px-2 py-1.5 text-center w-[70px]">
                                                 <label class="relative inline-block w-5 h-5">
                                                     <input type="checkbox" :checked="isInvoiceSelected(
                                                         invoice
@@ -247,7 +278,7 @@
                                                     </svg>
                                                 </label>
                                             </td>
-                                            <td class="px-8 py-2 font-medium w-[13%]" @click="
+                                            <td class="px-2 py-1.5 font-medium w-[130px]" @click="
                                                 (e) =>
                                                     handleCheckboxClick(
                                                         invoice,
@@ -256,7 +287,7 @@
                                             ">
                                                 {{ invoice.docunumber }}
                                             </td>
-                                            <td class="px-5 py-2 w-[13%]" @click="
+                                            <td class="px-2 py-1.5 w-[100px]" @click="
                                                 (e) =>
                                                     handleCheckboxClick(
                                                         invoice,
@@ -265,7 +296,7 @@
                                             ">
                                                 {{ formatDate(invoice.date) }}
                                             </td>
-                                            <td class="px-5 py-2 text-center w-[12%]" @click="
+                                            <td class="px-2 py-1.5 text-center w-[120px]" @click="
                                                 (e) =>
                                                     handleCheckboxClick(
                                                         invoice,
@@ -273,7 +304,7 @@
                                                     )
                                             ">
                                                 <span
-                                                    class="inline-flex items-center px-5 py-0.5 rounded-full text-xs font-medium"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                                                     :class="{
                                                         'bg-emerald-700 text-emerald-300':
                                                             invoice.type ===
@@ -291,7 +322,7 @@
                                                     {{ invoice.type }}
                                                 </span>
                                             </td>
-                                            <td class="px-5 py-2 text-center w-[12%]" @click="
+                                            <td class="px-2 py-1.5 text-center w-[95px]" @click="
                                                 (e) =>
                                                     handleCheckboxClick(
                                                         invoice,
@@ -299,7 +330,7 @@
                                                     )
                                             ">
                                                 <span
-                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                                                     :class="[
                                                         invoice.trade_type ===
                                                             'Trade'
@@ -315,7 +346,7 @@
                                                     }}
                                                 </span>
                                             </td>
-                                            <td class="px-20 py-2 text-left font-medium w-[20%]" @click="
+                                            <td class="px-2 py-1.5 text-right font-medium w-[110px]" @click="
                                                 (e) =>
                                                     handleCheckboxClick(
                                                         invoice,
@@ -324,70 +355,88 @@
                                             ">
                                                 {{
                                                     formatCurrency(
-                                                        invoice.balance
+                                                        invoice.amount
                                                     )
                                                 }}
                                             </td>
-                                            <td class="px-5 py-2 text-right font-medium w-[20%]">
+                                            <td class="px-2 py-1.5 text-right font-medium w-[110px]" @click="
+                                                (e) =>
+                                                    handleCheckboxClick(
+                                                        invoice,
+                                                        e
+                                                    )
+                                            ">
+                                                <div class="flex flex-col items-end leading-tight">
+                                                    <div class="font-medium">
+                                                        {{
+                                                            formatCurrency(
+                                                                parseFloat(
+                                                                    invoice.amount_paid
+                                                                ) || 0
+                                                            )
+                                                        }}
+                                                    </div>
+                                                    <div v-if="invoice.wht_floating_amount > 0" class="text-xs text-[var(--color-text-secondary)]">
+                                                        Floating Credit - WHT {{ formatCurrency(invoice.wht_floating_amount) }}
+                                                    </div>
+                                                    <div v-if="invoice.pdc_floating_amount > 0" class="text-xs text-[var(--color-text-secondary)]">
+                                                        Floating Credit - PDC {{ formatCurrency(invoice.pdc_floating_amount) }}
+                                                    </div>
+                                                    <div v-if="invoice.dc_floating_amount > 0" class="text-xs text-[var(--color-text-secondary)]">
+                                                        Floating Credit - DC {{ formatCurrency(invoice.dc_floating_amount) }}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-2 py-1.5 text-right font-medium w-[110px]" @click="
+                                                (e) =>
+                                                    handleCheckboxClick(
+                                                        invoice,
+                                                        e
+                                                    )
+                                            ">
+                                                {{
+                                                    formatCurrency(
+                                                        getRealBalance(
+                                                            invoice
+                                                        )
+                                                    )
+                                                }}
+                                            </td>
+                                            <td class="px-2 py-1.5 text-right font-medium w-[150px]">
                                                 <TextInput type="decimal" v-model="invoice.amountToPay
-                                                    " :readonly="!isInvoiceSelected(invoice) ||
-                                                        (props.paymentType ===
-                                                            '5E - Creditable(WHT)' &&
-                                                            !props.editable_wht)
-                                                        || whtIsActive
+                                                    " :readonly="!isInvoiceSelected(invoice)
                                                         " :validation="isInvoiceSelected(
                                                             invoice
                                                         )
                                                             ? 'yes'
                                                             : 'no'
-                                                            " />
-                                                <!-- @blur="
-                                                        validateAmount(invoice)
-                                                    "
-                                                    @keyup.enter="
-                                                        validateAmount(invoice)
-                                                    " -->
+                                                            " @input="syncManualAmountToPay(invoice)" />
                                             </td>
 
-                                            <!-- APPLY WHT  -->
-                                            <td class="px-3 py-2 align-top">
-                                                <div :disabled="invoice.wht_amount !== 0" class="flex flex-col items-center gap-1 text-xs">
-                                                    <!-- Apply 1% -->
-                                                    <label class="flex items-center gap-2 cursor-pointer">
-                                                        <span class="relative w-4 h-4">
-                                                            <input type="checkbox" class="disabled:cursor-not-allowed"
-                                                                :checked="invoice.apply_wht === 'auto'"
-                                                                @change="setWhtType(invoice, invoice.apply_wht === 'auto' ? 'manual' : 'auto')"
-                                                                :disabled="!isInvoiceSelected(invoice)" />
-
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                                                class="absolute inset-0 p-0.5 hidden peer-checked:block"
-                                                                fill="white">
-                                                                <path
-                                                                    d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
-                                                            </svg>
-                                                        </span>
-                                                        <span>Apply 1%</span>
-                                                    </label>
-
-                                                    <span class="text-gra-500">OR</span>
-
-                                                    <!-- Manual WHT -->
-                                                    <TextInput type="decimal" placeholder="Input WHT"
-                                                        class="w-20 text-center" v-model.number="invoice.wht_amount"
-                                                        :readonly="invoice.apply_wht === 'auto' || !isInvoiceSelected(invoice)"
-                                                        @update:modelValue="onManualWhtInput(invoice)" />
-
+                                            <td v-if="props.whtEnabled" class="px-2 py-1.5 text-right font-medium w-[110px]">
+                                                <div v-if="isInvoiceSelected(invoice)">
+                                                    <div v-if="taxRate === 'None'" class="flex flex-col items-end gap-1">
+                                                        <input data-testid="wht-manual-input" type="text" inputmode="decimal" v-model="invoice.wht_amount"
+                                                            placeholder="Optional" @input="(e) => onManualWhtInput(invoice, e.target.value)" class="form-input hide-arrows text-right w-full"
+                                                            :class="invoice.wht_error
+                                                                ? '!border-red-400 !ring-2 !ring-red-500/50 bg-red-900/10'
+                                                                : 'border-[var(--color-border)]'" />
+                                                        <div v-if="invoice.wht_error" class="text-xs text-red-500 text-right">
+                                                            {{ invoice.wht_error }}
+                                                        </div>
+                                                    </div>
+                                                    <div v-else>
+                                                        {{ formatCurrency(invoice.wht_amount) }}
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
 
-                                        <!-- Empty State -->
                                         <tr v-if="
                                             filteredData.length === 0 &&
                                             !isLoading
                                         ">
-                                            <td colspan="6" class="px-5 py-6 text-center">
+                                            <td :colspan="props.whtEnabled ? 12 : 11" class="px-5 py-10 text-center">
                                                 <div
                                                     class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2"
@@ -419,9 +468,7 @@
                                 Close
                             </div>
                         </button>
-                        <button :disabled="payment_mode === 'Oldest to Newest' &&
-                            props.paymentType === '5E - Creditable(WHT)'
-                            " @click="submitSelected" class="submitButton group">
+                        <button @click="submitSelected" class="submitButton group">
                             <div class="flex justify-center items-center gap-2">
                                 <span class="transition-transform duration-300 group-hover:rotate-405">
                                     <svg-icon type="mdi" :path="mdiNavigationVariantOutline" class="w-5 h-5" />
@@ -461,6 +508,14 @@ const props = defineProps({
     date: String,
     paymentType: String,
     editable_wht: Boolean,
+    whtEnabled: {
+        type: Boolean,
+        default: false,
+    },
+    autoApplyWht: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(["close", "submit"]);
@@ -491,6 +546,41 @@ let toastTimeout = null; // to keep track of the timeout
 const selectedInvoices = ref([]);
 const selectedTypeFilter = ref("All Types");
 const whtIsActive = ref(false);
+const pendingSubmitPayload = ref(null);
+
+const taxRate = ref("None");
+const applyBir2307 = ref(false);
+const allowOverpayment = computed(
+    () => page.props.tenantSettings?.allow_overpayment ?? true
+);
+
+watch([taxRate, applyBir2307], () => {
+    if (props.whtEnabled) {
+        selectedInvoices.value.forEach((inv) => {
+            const matched = documents.value.find(
+                (doc) => doc.docunumber === inv.docunumber && doc.type === inv.type
+            );
+            if (matched) {
+                setWhtType(matched, "auto", false);
+            }
+        });
+    }
+});
+
+const getRealBalance = (invoice) => {
+    const rawBalance = parseFloat(invoice.balance) || 0;
+    return Math.max(0, rawBalance - getFloatingPaidAmount(invoice));
+};
+
+const infoDialogMessage = computed(() => {
+    if (totalFloatingAmount.value > 0) {
+        return `This document already has a total floating credit of ${formatCurrency(
+            totalFloatingAmount.value
+        )}. Further payment is not allowed because the current collectible balance is already zero.`;
+    }
+
+    return "This document is already fully paid. Further payment is not allowed.";
+});
 
 // Watch for changes in customer_code
 watch(
@@ -523,9 +613,11 @@ watch(
                     type: invoice.type,
                     amount: invoice.amount,
                     amount_paid: invoice.amount_paid,
+                    applied_wht_amount: invoice.applied_wht_amount || 0,
                     balance: invoice.running_balance,
                     amountToPay: 0.0,
                     wht_amount: 0.00,
+                    wht_error: "",
                     total_amount_less_wht: 0.00,
                     trade_type: invoice.trade_type,
                     pdc_floating_amount: invoice.pdc_floating_amount,
@@ -536,6 +628,8 @@ watch(
                     wht_floating_amount: invoice.wht_floating_amount,
                     has_wht_floating_payments:
                         invoice.has_wht_floating_payments,
+                    has_wht_transaction: invoice.has_wht_transaction,
+                    wht_transaction_count: invoice.wht_transaction_count,
                 }));
             filteredData.value = documents.value;
         } catch (error) {
@@ -561,33 +655,191 @@ const formatCurrency = (amount) => {
     }).format(amount);
 };
 
+const documentKey = (doc) => `${doc.docunumber}::${doc.type}`;
+
+const findMatchedDocument = (doc) => {
+    return documents.value.find(
+        (item) => item.docunumber === doc.docunumber && item.type === doc.type
+    );
+};
+
+const getRequestedDocumentAmount = (doc) => {
+    return (parseFloat(doc?.amountToPay) || 0) + (parseFloat(doc?.wht_amount) || 0);
+};
+
+const isSingleUseWhtDocument = (invoice) =>
+    invoice.type === "Sales Invoice" || invoice.type === "Charge Invoice";
+
+const canApplyWhtToInvoice = (invoice, showMessage = true) => {
+    if (!props.whtEnabled) {
+        return true;
+    }
+
+    if (!isSingleUseWhtDocument(invoice) || !invoice.has_wht_transaction) {
+        return true;
+    }
+
+    if (showMessage) {
+        showWarningToast(
+            "WHT can only be applied once for Sales/Charge Invoice"
+        );
+    }
+
+    return false;
+};
+
+const resetInvoiceWht = (invoice) => {
+    const balance = getRealBalance(invoice);
+    invoice.wht_error = "";
+    invoice.apply_wht = "manual";
+    invoice.wht_amount = 0;
+    invoice.total_amount_less_wht = balance.toFixed(2);
+    invoice.amountToPay = balance.toFixed(2);
+};
+
+const buildSelectedDocumentsPayload = () => {
+    return selectedInvoices.value.map((inv) => {
+        const matched = findMatchedDocument(inv);
+
+        return {
+            docunumber: inv.docunumber,
+            type: inv.type,
+            date: inv.date,
+            amount: inv.amount,
+            balance:
+                matched && typeof matched.balance !== "undefined"
+                    ? getRealBalance(matched)
+                    : getRealBalance(inv),
+            amountToPay: parseFloat(matched?.amountToPay) || 0,
+            wht_amount: parseFloat(matched?.wht_amount) || 0,
+            total_amount_less_wht:
+                parseFloat(matched?.total_amount_less_wht) || 0,
+        };
+    });
+};
+
+const buildManualSubmitPayload = () => ({
+    invoiceNumber: selectedInvoiceNumbers.value.join(", "),
+    totalAmount: selectedTotalAmount.value,
+    date: selectedDate.value,
+    type: selectedInvoiceType.value.join(", "),
+    totalAmountPaid: selectedTotalAmountPaid.value,
+    editable_wht_mode: props.editable_wht,
+    apply_bir_2307: applyBir2307.value,
+    tax_rate: taxRate.value,
+    selectedDocuments: buildSelectedDocumentsPayload(),
+});
+
+const getOverpaidDocuments = (payload) => {
+    if (!Array.isArray(payload?.selectedDocuments)) {
+        return [];
+    }
+
+    return payload.selectedDocuments
+        .map((doc) => {
+            const matched = findMatchedDocument(doc) || doc;
+            const availableBalance =
+                typeof matched.balance !== "undefined"
+                    ? getRealBalance(matched)
+                    : parseFloat(doc.balance) || 0;
+            const requestedAmount = getRequestedDocumentAmount(doc);
+
+            return {
+                ...doc,
+                availableBalance,
+                requestedAmount,
+            };
+        })
+        .filter(
+            (doc) => doc.requestedAmount > (parseFloat(doc.availableBalance) || 0) + 0.009
+        );
+};
+
+const clearPendingSubmission = () => {
+    pendingSubmitPayload.value = null;
+};
+
+const submitNormalizedPayload = (payload) => {
+    const overpaidDocuments = getOverpaidDocuments(payload);
+
+    if (overpaidDocuments.length > 0 && !allowOverpayment.value) {
+        return showWarningToast(
+            "Overpayment is not allowed for this tenant."
+        );
+    }
+
+    const overpaidDocumentMap = new Map(
+        overpaidDocuments.map((doc) => [documentKey(doc), doc])
+    );
+
+    const normalizedPayload = {
+        ...payload,
+        selectedDocuments: (payload.selectedDocuments || []).map((doc) => {
+            const overpaidDoc = overpaidDocumentMap.get(documentKey(doc));
+
+            if (!overpaidDoc) {
+                return {
+                    ...doc,
+                    overpayment_amount: Number(doc.overpayment_amount) || 0,
+                };
+            }
+
+            return {
+                ...doc,
+                overpayment_amount: parseFloat(
+                    Math.max(
+                        0,
+                        (overpaidDoc?.requestedAmount || 0) -
+                            (overpaidDoc?.availableBalance || 0)
+                    ).toFixed(2)
+                ),
+            };
+        }),
+    };
+
+    clearPendingSubmission();
+    emit("submit", normalizedPayload);
+    closeModal();
+};
+
+const getFloatingPaidAmount = (invoice) => {
+    const pdc = parseFloat(invoice.pdc_floating_amount) || 0;
+    const dc = parseFloat(invoice.dc_floating_amount) || 0;
+    const wht = parseFloat(invoice.wht_floating_amount) || 0;
+    return pdc + dc + wht;
+};
+
+const getPaymentStatus = (invoice) => {
+    const tags = [];
+    if (invoice.has_pdc_floating_payments) tags.push("PDC");
+    if (invoice.has_dc_floating_payments) tags.push("DC");
+    if (invoice.has_wht_floating_payments) tags.push("WHT");
+
+    if (tags.length === 0) return "Cleared";
+    return `Floating (${tags.join("/")})`;
+};
+
+const getStatusBadgeClass = (invoice) => {
+    const hasFloating =
+        invoice.has_pdc_floating_payments ||
+        invoice.has_dc_floating_payments ||
+        invoice.has_wht_floating_payments;
+    return hasFloating
+        ? "bg-amber-700 text-amber-200"
+        : "bg-emerald-700 text-emerald-200";
+};
+
 const handleCheckboxClick = (invoice, event) => {
-    if (props.paymentType === "5E - Creditable(WHT)") {
-        if (
-            invoice.amount_paid !== "0.00" ||
-            invoice.has_dc_floating_payments ||
-            invoice.has_pdc_floating_payments ||
-            invoice.has_wht_floating_payments
-        ) {
-            // Prevent the checkbox from visually changing
-            event.preventDefault();
-            showWarningToast(
-                "A Partial Payment Has Already Been Made For This Document Number"
-            );
-            return;
-        }
-    } else {
-        const balance = parseFloat(invoice.balance) || 0;
-        const pdcfloating = parseFloat(invoice.pdc_floating_amount) || 0;
-        const dcfloating = parseFloat(invoice.dc_floating_amount) || 0;
-        const whtfloating = parseFloat(invoice.wht_floating_amount) || 0;
+    const balance = getRealBalance(invoice);
+    const pdcfloating = parseFloat(invoice.pdc_floating_amount) || 0;
+    const dcfloating = parseFloat(invoice.dc_floating_amount) || 0;
+    const whtfloating = parseFloat(invoice.wht_floating_amount) || 0;
 
-        totalFloatingAmount.value = pdcfloating + dcfloating + whtfloating;
+    totalFloatingAmount.value = pdcfloating + dcfloating + whtfloating;
 
-        if (balance <= totalFloatingAmount.value) {
-            event.preventDefault();
-            return (showInfoDialog.value = true);
-        }
+    if (balance <= 0) {
+        event.preventDefault();
+        return (showInfoDialog.value = true);
     }
 
     // Only proceed with normal handling if validation passes
@@ -602,19 +854,13 @@ const isInvoiceSelected = (invoice) => {
 };
 
 const handleCheckboxChange = (invoice) => {
-    // if (props.paymentType === "5E - Creditable(WHT)" && !props.editable_wht) {
-    //     invoice.amountToPay = invoice.balance;
-    // }
-    const balance = parseFloat(invoice.balance) || 0;
-    const pdcfloating = parseFloat(invoice.pdc_floating_amount) || 0;
-    const dcfloating = parseFloat(invoice.dc_floating_amount) || 0;
-    const whtfloating = parseFloat(invoice.wht_floating_amount) || 0;
-
-    const realBalance = balance - (pdcfloating + dcfloating + whtfloating);
+    const realBalance = getRealBalance(invoice);
 
     invoice.amountToPay = realBalance.toFixed(2);
+    invoice.total_amount_less_wht = realBalance.toFixed(2);
     if (/^\d+\.\d{3}$/.test(invoice.amountToPay)) {
         invoice.amountToPay = parseFloat((+invoice.amountToPay).toFixed(2));
+        invoice.total_amount_less_wht = invoice.amountToPay;
     }
 
     const existingIndex = selectedInvoices.value.findIndex(
@@ -626,6 +872,7 @@ const handleCheckboxChange = (invoice) => {
         // Remove from selection
         selectedInvoices.value.splice(existingIndex, 1);
         invoice.amountToPay = 0.0;
+        invoice.total_amount_less_wht = 0.0;
     } else {
         // Add to selection
         selectedInvoices.value.push({
@@ -645,22 +892,49 @@ const handleCheckboxChange = (invoice) => {
             has_dc_floating_payments: invoice.has_dc_floating_payments,
             has_wht_floating_payments: invoice.has_wht_floating_payments,
         });
+
+        if (props.whtEnabled && props.autoApplyWht) {
+            setWhtType(invoice, "auto");
+            return;
+        }
     }
 
     updateSelectedValues();
 };
 
-const setWhtType = (invoice, type) => {
+const setWhtType = (invoice, type, showMessage = true) => {
     if (!isInvoiceSelected(invoice)) return;
+    if (!props.whtEnabled) return;
     whtIsActive.value = true;
 
-    const balance = parseFloat(invoice.balance) || 0;
+    invoice.wht_error = "";
+
+    const balance = getRealBalance(invoice);
 
     if (type === "auto") {
+        if (taxRate.value === "None") {
+            invoice.apply_wht = "manual";
+            onManualWhtInput(invoice);
+            return;
+        }
+
+        if (!canApplyWhtToInvoice(invoice, showMessage)) {
+            resetInvoiceWht(invoice);
+            updateSelectedValues();
+            return;
+        }
+
         invoice.apply_wht = "auto";
-        invoice.wht_amount = (balance * 0.01).toFixed(2);
-        invoice.total_amount_less_wht = (balance - invoice.wht_amount).toFixed(2);
-        invoice.amountToPay = (balance - invoice.wht_amount).toFixed(2);
+        let rate = 0.01;
+        if (taxRate.value === "2%") rate = 0.02;
+        if (taxRate.value === "5%") rate = 0.05;
+
+        const computedWht = balance * rate;
+        const whtRounded = Math.round(computedWht * 100) / 100;
+        const net = Math.max(0, balance - whtRounded);
+        invoice.wht_amount = whtRounded.toFixed(2);
+        invoice.total_amount_less_wht = net.toFixed(2);
+        invoice.amountToPay = net.toFixed(2);
     }
     else {
         whtIsActive.value = false;
@@ -676,22 +950,56 @@ const setWhtType = (invoice, type) => {
 };
 
 
-const onManualWhtInput = (invoice) => {
+const onManualWhtInput = (invoice, rawValue = invoice.wht_amount) => {
     if (!isInvoiceSelected(invoice)) return;
+    if (!props.whtEnabled) return;
+    if (taxRate.value !== "None") return;
+
+    invoice.wht_error = "";
     whtIsActive.value = true;
 
     // force manual mode
     invoice.apply_wht = "manual";
 
-    const balance = parseFloat(invoice.balance) || 0;
-    let manualWht = parseFloat(invoice.wht_amount) || 0;
+    const balance = getRealBalance(invoice);
+
+    if (rawValue === "" || rawValue === null || typeof rawValue === "undefined") {
+        rawValue = 0;
+    }
+
+    let manualWht = Number(rawValue);
+    if (!Number.isFinite(manualWht) || Number.isNaN(manualWht)) {
+        invoice.wht_error = "Invalid tax amount";
+        showWarningToast("Invalid tax amount");
+        manualWht = 0;
+        invoice.wht_amount = 0;
+    }
+
+    if (manualWht < 0) {
+        invoice.wht_error = "Tax must be 0 or greater";
+        showWarningToast("Tax must be 0 or greater");
+        manualWht = 0;
+        invoice.wht_amount = 0;
+    }
+
+    if (invoice.wht_error === "") {
+        invoice.wht_amount = manualWht;
+    }
+
+    if (manualWht > 0 && !canApplyWhtToInvoice(invoice)) {
+        resetInvoiceWht(invoice);
+        updateSelectedValues();
+        return;
+    }
 
     // Safety: WHT must not exceed balance
     if (manualWht > balance) {
         manualWht = balance;
         invoice.wht_amount = balance.toFixed(2);
+        showWarningToast("Tax exceeds balance. Automatically adjusted.");
     } else if (manualWht === 0) {
         whtIsActive.value = false;
+        invoice.wht_amount = 0;
     }
     invoice.total_amount_less_wht = Math.max(0, balance - manualWht).toFixed(2);
     invoice.amountToPay = Math.max(0, balance - manualWht).toFixed(2);
@@ -707,7 +1015,7 @@ const updateSelectedValues = () => {
     }
     // Calculate total amount
     selectedTotalAmount.value = selectedInvoices.value.reduce(
-        (sum, invoice) => sum + invoice.balance,
+        (sum, invoice) => sum + getRealBalance(invoice),
         0
     );
 
@@ -776,23 +1084,45 @@ const resetValues = () => {
 const validateAmount = (invoice) => {
     if (!isInvoiceSelected(invoice)) return;
 
-    const amount = parseFloat(invoice.amountToPay) || 0;
-    const balance = parseFloat(invoice.balance) || 0;
-    const pdcfloating = parseFloat(invoice.pdc_floating_amount) || 0;
-    const dcfloating = parseFloat(invoice.dc_floating_amount) || 0;
-    const whtfloating = parseFloat(invoice.wht_floating_amount) || 0;
+    const amount = parseFloat(invoice.amountToPay);
+    const realBalance = getRealBalance(invoice);
 
-    const realBalance = balance - (pdcfloating + dcfloating + whtfloating);
-    if (amount > realBalance) {
-        showWarningToast(
-            "Amount Exceeds Available Balance Automatically Adjusted"
-        );
-        // Reset to balance if exceeds
-        invoice.amountToPay = realBalance.toFixed(2);
+    if (!Number.isFinite(amount) || Number.isNaN(amount) || amount < 0) {
+        invoice.amountToPay = 0;
     }
+
     if (/^\d+\.\d{3}$/.test(invoice.amountToPay)) {
         invoice.amountToPay = parseFloat((+invoice.amountToPay).toFixed(2));
     }
+
+    if ((parseFloat(invoice.amountToPay) || 0) > realBalance) {
+        if (!allowOverpayment.value) {
+            invoice.amountToPay = realBalance.toFixed(2);
+            invoice.total_amount_less_wht = realBalance.toFixed(2);
+
+            return showWarningToast(
+                "Overpayment is not allowed. Amount adjusted to collectible balance."
+            );
+        }
+
+        showWarningToast(
+            "This amount exceeds the collectible balance and will be treated as overpayment."
+        );
+    }
+
+    invoice.total_amount_less_wht = (
+        parseFloat(invoice.amountToPay) || 0
+    ).toFixed(2);
+};
+
+const syncManualAmountToPay = (invoice) => {
+    if (!isInvoiceSelected(invoice)) return;
+
+    validateAmount(invoice);
+    invoice.total_amount_less_wht = (
+        parseFloat(invoice.amountToPay) || 0
+    ).toFixed(2);
+    updateSelectedValues();
 };
 
 // watch(
@@ -883,33 +1213,11 @@ const handleConfirm = async (confirmed) => {
     showDialog.value = false;
     if (confirmed) {
         if (payment_mode.value === "Manual Select") {
-            emit("submit", {
-                invoiceNumber: selectedInvoiceNumbers.value.join(", "),
-                totalAmount: selectedTotalAmount.value,
-                date: selectedDate.value,
+            const payload = {
+                ...buildManualSubmitPayload(),
                 floatingAmount: totalFloatingAmount.value,
-                type: selectedInvoiceType.value.join(", "),
-                totalAmountPaid: selectedTotalAmountPaid.value,
-                selectedDocuments: selectedInvoices.value.map((inv) => {
-                    const matched = documents.value.find(
-                        (doc) =>
-                            doc.docunumber === inv.docunumber &&
-                            doc.type === inv.type
-                    );
-
-                    return {
-                        docunumber: inv.docunumber,
-                        type: inv.type,
-                        date: inv.date,
-                        amount: inv.amount,
-                        balance: inv.balance,
-                        amountToPay: parseFloat(matched?.amountToPay) || 0,
-                        wht_amount: parseFloat(matched?.wht_amount) || 0,
-                        total_amount_less_wht: parseFloat(matched?.total_amount_less_wht) || 0,
-
-                    };
-                }),
-            });
+            };
+            submitNormalizedPayload(payload);
         } else {
             emit("submit", {
                 invoiceNumber: selectedInvoiceNumbers.value.join(", "),
@@ -920,7 +1228,9 @@ const handleConfirm = async (confirmed) => {
             });
         }
 
-        closeModal();
+        if (payment_mode.value !== "Manual Select") {
+            closeModal();
+        }
     }
 };
 ////////SHOW INFO DIALOG///////////////////////////
@@ -948,10 +1258,14 @@ const submitSelected = () => {
             );
         }
 
-        selectedTotalAmountPaid.value = documents.value.reduce(
-            (sum, invoice) => sum + parseFloat(invoice.amountToPay),
-            0
-        );
+        selectedTotalAmountPaid.value = selectedInvoices.value.reduce((sum, invoice) => {
+            const matched = findMatchedDocument(invoice) || invoice;
+            return (
+                sum +
+                (parseFloat(matched.amountToPay) || 0) +
+                (parseFloat(matched.wht_amount) || 0)
+            );
+        }, 0);
 
         totalFloatingAmount.value = parseFloat(
             pdcfloatingAmount.value +
@@ -972,32 +1286,7 @@ const submitSelected = () => {
             showDialog.value = true;
             // }
         } else {
-            emit("submit", {
-                invoiceNumber: selectedInvoiceNumbers.value.join(", "),
-                totalAmount: selectedTotalAmount.value,
-                date: selectedDate.value,
-                type: selectedInvoiceType.value.join(", "),
-                totalAmountPaid: selectedTotalAmountPaid.value,
-                editable_wht_mode: props.editable_wht,
-                selectedDocuments: selectedInvoices.value.map((inv) => {
-                    const matched = documents.value.find(
-                        (doc) =>
-                            doc.docunumber === inv.docunumber &&
-                            doc.type === inv.type
-                    );
-
-                    return {
-                        docunumber: inv.docunumber,
-                        type: inv.type,
-                        date: inv.date,
-                        amount: inv.amount,
-                        balance: inv.balance,
-                        amountToPay: parseFloat(matched?.amountToPay) || 0,
-                        wht_amount: parseFloat(matched?.wht_amount) || 0,
-                        total_amount_less_wht: parseFloat(matched?.total_amount_less_wht) || 0,
-                    };
-                }),
-            });
+            submitNormalizedPayload(buildManualSubmitPayload());
             // closeModal();
         }
     } else {
@@ -1011,115 +1300,73 @@ const submitSelected = () => {
 
         const seenTypes = new Set();
 
-        if (props.paymentType === "5E - Creditable(WHT)") {
-            selectedInvoiceType.value = invoicesToSelect
-                .filter((invoice) => invoice.has_dc_floating_payments === false)
-                .filter(
-                    (invoice) => invoice.has_pdc_floating_payments === false
-                )
-                .filter(
-                    (invoice) => invoice.has_wht_floating_payments === false
-                )
-                .filter((invoice) => invoice.amount_paid === "0.00")
-                .filter((inv) => {
-                    if (seenTypes.has(inv.type)) return false;
-                    seenTypes.add(inv.type);
-                    return true;
-                })
-                .map((inv) => inv.type);
+        selectedInvoiceType.value = invoicesToSelect
+            .filter((inv) => {
+                if (seenTypes.has(inv.type)) return false;
+                seenTypes.add(inv.type);
+                return true;
+            })
+            .map((inv) => inv.type);
 
-            if (isEmpty(selectedInvoiceType.value)) {
-                return showWarningToast(
-                    "No Documents Available For WHT Payment type"
-                );
-            }
+        selectedTotalAmount.value = invoicesToSelect.reduce(
+            (sum, invoice) => sum + getRealBalance(invoice),
+            0
+        );
 
-            selectedTotalAmount.value = invoicesToSelect
-                .filter((invoice) => invoice.has_dc_floating_payments === false)
-                .filter(
-                    (invoice) => invoice.has_pdc_floating_payments === false
-                )
-                .filter(
-                    (invoice) => invoice.has_wht_floating_payments === false
-                )
-                .filter((invoice) => invoice.amount_paid === "0.00")
-                .reduce((sum, invoice) => sum + parseFloat(invoice.balance), 0);
+        selectedDate.value = invoicesToSelect.reduce(
+            (earliest, invoice) =>
+                new Date(invoice.date) < new Date(earliest)
+                    ? invoice.date
+                    : earliest,
+            invoicesToSelect[0].date
+        );
 
-            selectedDate.value = invoicesToSelect
-                .filter((invoice) => invoice.has_dc_floating_payments === false)
-                .filter(
-                    (invoice) => invoice.has_pdc_floating_payments === false
-                )
-                .filter(
-                    (invoice) => invoice.has_wht_floating_payments === false
-                )
-                .filter((invoice) => invoice.amount_paid === "0.00")
-                .reduce(
-                    (earliest, invoice) =>
-                        new Date(invoice.date) < new Date(earliest)
-                            ? invoice.date
-                            : earliest,
-                    invoicesToSelect[0].date
-                );
-        } else {
-            selectedInvoiceType.value = invoicesToSelect
-                .filter((inv) => {
-                    if (seenTypes.has(inv.type)) return false;
-                    seenTypes.add(inv.type);
-                    return true;
-                })
-                .map((inv) => inv.type);
+        // Calculate floating amounts
+        pdcfloatingAmount.value = invoicesToSelect.reduce(
+            (sum, invoice) =>
+                sum + parseFloat(invoice.pdc_floating_amount || 0),
+            0
+        );
+        dcfloatingAmount.value = invoicesToSelect.reduce(
+            (sum, invoice) =>
+                sum + parseFloat(invoice.dc_floating_amount || 0),
+            0
+        );
+        whtfloatingAmount.value = invoicesToSelect.reduce(
+            (sum, invoice) =>
+                sum + parseFloat(invoice.wht_floating_amount || 0),
+            0
+        );
 
-            selectedTotalAmount.value = invoicesToSelect.reduce(
-                (sum, invoice) => sum + parseFloat(invoice.balance),
-                0
-            );
+        // Check floating payments
+        haspdcFloating.value = invoicesToSelect.some(
+            (invoice) => invoice.has_pdc_floating_payments
+        );
+        hasdcFloating.value = invoicesToSelect.some(
+            (invoice) => invoice.has_dc_floating_payments
+        );
+        haswhtFloating.value = invoicesToSelect.some(
+            (invoice) => invoice.has_wht_floating_payments
+        );
 
-            selectedDate.value = invoicesToSelect.reduce(
-                (earliest, invoice) =>
-                    new Date(invoice.date) < new Date(earliest)
-                        ? invoice.date
-                        : earliest,
-                invoicesToSelect[0].date
-            );
-
-            // Calculate floating amounts
-            pdcfloatingAmount.value = invoicesToSelect.reduce(
-                (sum, invoice) =>
-                    sum + parseFloat(invoice.pdc_floating_amount || 0),
-                0
-            );
-            dcfloatingAmount.value = invoicesToSelect.reduce(
-                (sum, invoice) =>
-                    sum + parseFloat(invoice.dc_floating_amount || 0),
-                0
-            );
-            whtfloatingAmount.value = invoicesToSelect.reduce(
-                (sum, invoice) =>
-                    sum + parseFloat(invoice.wht_floating_amount || 0),
-                0
-            );
-
-            // Check floating payments
-            haspdcFloating.value = invoicesToSelect.some(
-                (invoice) => invoice.has_pdc_floating_payments
-            );
-            hasdcFloating.value = invoicesToSelect.some(
-                (invoice) => invoice.has_dc_floating_payments
-            );
-            haswhtFloating.value = invoicesToSelect.some(
-                (invoice) => invoice.has_wht_floating_payments
-            );
-
-            totalFloatingAmount.value = parseFloat(
-                pdcfloatingAmount.value +
-                dcfloatingAmount.value +
-                whtfloatingAmount.value
-            );
-        }
+        totalFloatingAmount.value = parseFloat(
+            pdcfloatingAmount.value +
+            dcfloatingAmount.value +
+            whtfloatingAmount.value
+        );
 
         // Handle floating payments confirmation
-        if (props.paymentType === "5E - Creditable(WHT)") {
+        if (
+            haspdcFloating.value ||
+            hasdcFloating.value ||
+            haswhtFloating.value
+        ) {
+            if (selectedTotalAmount.value <= 0) {
+                showInfoDialog.value = true;
+            } else {
+                showDialog.value = true;
+            }
+        } else {
             emit("submit", {
                 invoiceNumber: selectedInvoiceNumbers.value.join(", "),
                 totalAmount: selectedTotalAmount.value,
@@ -1127,28 +1374,6 @@ const submitSelected = () => {
                 type: selectedInvoiceType.value.join(", "),
             });
             closeModal();
-        } else {
-            if (
-                haspdcFloating.value ||
-                hasdcFloating.value ||
-                haswhtFloating.value
-            ) {
-                const remainingBalance =
-                    selectedTotalAmount.value - totalFloatingAmount.value;
-                if (remainingBalance === 0) {
-                    showInfoDialog.value = true;
-                } else {
-                    showDialog.value = true;
-                }
-            } else {
-                emit("submit", {
-                    invoiceNumber: selectedInvoiceNumbers.value.join(", "),
-                    totalAmount: selectedTotalAmount.value,
-                    date: selectedDate.value,
-                    type: selectedInvoiceType.value.join(", "),
-                });
-                closeModal();
-            }
         }
     }
 };

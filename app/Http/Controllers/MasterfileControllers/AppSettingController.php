@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Log;
+
 
 class AppSettingController extends Controller
 {
@@ -47,6 +49,7 @@ class AppSettingController extends Controller
             'db_password' => 'nullable|string',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
+            'allow_overpayment' => 'boolean',
         ]);
 
         // Explicitly set connection to mysql for creation
@@ -76,13 +79,13 @@ class AppSettingController extends Controller
         // We should explicitly grab the route parameter we want.
         $targetId = $request->route('appSetting');
         
-        \Log::info("AppSetting Update Corrected: Target ID = " . json_encode($targetId));
+        Log::info("AppSetting Update Corrected: Target ID = " . json_encode($targetId));
         
         // Ensure we are looking at the mysql connection
         $appSetting = AppSetting::on('mysql')->find($targetId);
 
         if (!$appSetting) {
-             \Log::error("AppSetting Update: ID {$targetId} not found in mysql database.");
+             Log::error("AppSetting Update: ID {$targetId} not found in mysql database.");
              return redirect()->back()->withErrors(['error' => 'App Setting not found.']);
         }
 
@@ -97,6 +100,7 @@ class AppSettingController extends Controller
             'db_password' => 'nullable|string',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
+            'allow_overpayment' => 'boolean',
         ]);
 
         $appSetting->update($validated);

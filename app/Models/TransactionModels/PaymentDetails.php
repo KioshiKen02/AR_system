@@ -25,11 +25,14 @@ class PaymentDetails extends Model
         'balance',
         'amount_paid',
         'wht_amount',
+        'wht_status',
         'due_date',
         'clearing_date',
         'status',
         'remarks',
         'overage_shortage',
+        'floating_deducted_amount',
+        'overpayment_amount',
         'created_by',
     ];
 }

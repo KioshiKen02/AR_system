@@ -337,7 +337,7 @@
                                                     >
                                                         {{
                                                             formatCurrency(
-                                                                payment.amount_paid
+                                                                payment.amount
                                                             )
                                                         }}
                                                     </td>
@@ -637,22 +637,28 @@ const fetchPaymentDetails = async (customerCode) => {
         const response = await axios.get(route("getFloatingWht", { tenant: page.props.tenant }), {
             params: {
                 customer_code: customerCode,
-                payment_type: "Creditable(WHT)",
                 clearingdate: form.clearing_date,
             },
         });
 
         // Map the response data to our table structure
-        paymentDetails.value = response.data.map((payment) => ({
+        paymentDetails.value = response.data.map((payment) => {
+            const rawStatus = payment.wht_status ?? payment.status;
+            const status = ["Floating", "Cleared", "Cancelled"].includes(rawStatus)
+                ? rawStatus
+                : "Floating";
+
+            return {
             payment_no: payment.payment_no,
             wht_no: payment.check_no,
             document_no: payment.document_no,
             receipt_date: payment.payment_receipt_date,
             type: payment.type,
-            amount_paid: payment.amount_paid,
-            status: payment.status,
+            amount: payment.wht_amount,
+            status,
             remarks: payment.remarks || "",
-        }));
+            };
+        });
     } catch (error) {
         console.error("Error fetching payment details:", error);
         paymentDetails.value = [];
@@ -745,7 +751,7 @@ const submit = () => {
         document_no: payment.document_no,
         type: payment.type,
         receipt_date: payment.receipt_date,
-        amount: payment.amount_paid,
+        amount: payment.amount,
         status: payment.status,
         remarks: payment.remarks,
     }));
@@ -753,10 +759,14 @@ const submit = () => {
     Object.keys(form.errors).forEach((key) => {
         form.errors[key] = "";
     });
-    form.post(route("whtclearing"), {
+    form.post(route("whtclearing", { tenant: page.props.tenant }), {
         onSuccess: () => {
             axios
-                .get(route("whtclearing.latest.whtclearingNumber"))
+                .get(
+                    route("whtclearing.latest.whtclearingNumber", {
+                        tenant: page.props.tenant,
+                    })
+                )
                 .then((res) => {
                     form.wht_clearing_no = res.data.whtclearing_number;
                     if (canPrint("0402-WHTCLR")) {

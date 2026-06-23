@@ -183,20 +183,6 @@
                                             </label>
                                             <span class="text-sm">5D - Check</span>
                                         </label>
-                                        <label class="flex items-center space-x-2">
-                                            <label class="relative inline-block w-4 h-4">
-                                                <input type="checkbox" v-model="typeFiltersPaymentType
-                                                    " value="5E - Creditable(WHT)"
-                                                    class="peer appearance-none w-4 h-4 border-2 rounded-sm border-[var(--color-border)] bg-transparent checked:bg-[var(--color-primary)] checked:!border-[var(--color-primary)] focus:outline-none transition-colors duration-200" />
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                                    class="absolute p-0.5 top-0.5 left-0 right-0 bottom-0 w-4 h-4 text-[var(--color-bg-primary)] hidden peer-checked:block pointer-events-none"
-                                                    fill="currentColor">
-                                                    <path
-                                                        d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
-                                                </svg>
-                                            </label>
-                                            <span class="text-sm">5E - Creditable(WHT)</span>
-                                        </label>
                                     </div>
                                 </div>
 
@@ -387,9 +373,6 @@
                                         '5C - Online Deposit',
                                     'bg-sky-700 text-sky-300':
                                         payment.payment_type === '5D - Check',
-                                    'bg-rose-700 text-rose-300':
-                                        payment.payment_type ===
-                                        '5E - Creditable(WHT)',
                                 }">
                                 {{ payment.payment_type.slice(5) }}
                             </span>
@@ -411,7 +394,7 @@
                             </span>
                         </td>
                         <td class="px-3 py-2 text-right">
-                            {{ formatCurrency(payment.amount_paid) }}
+                            {{ formatCurrency(getDisplayAmountPaid(payment)) }}
                         </td>
                         <td class="px-3 py-2 text-center uppercase">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
@@ -534,6 +517,18 @@ const closeSuccessViewModal = () => {
 const closeEditSuccessModal = () => {
     showViewModal.value = false;
     showSuccessToast("Payment has Been Updated Successfully");
+};
+
+const toNumber = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getDisplayAmountPaid = (payment) => {
+    const netAmount = toNumber(payment?.total_amount_less_wht);
+    const whtAmount = toNumber(payment?.wht_amount);
+
+    return netAmount + whtAmount;
 };
 
 const deleteItem = async (adjust) => {

@@ -87,6 +87,7 @@ const mountLedger = (overrides = {}) => {
                     customer_name: "Alice",
                     customer_code: "C-001",
                     type: "Payment",
+                    transfer_from: "SRC-001 - Source Customer",
                     debit_amount: 0,
                     amount_paid: 100,
                     running_balance: 900,
@@ -100,6 +101,7 @@ const mountLedger = (overrides = {}) => {
                     customer_name: "Alice",
                     customer_code: "C-001",
                     type: "Payment",
+                    transfer_from: null,
                     debit_amount: 0,
                     amount_paid: 150,
                     running_balance: 750,
@@ -113,6 +115,7 @@ const mountLedger = (overrides = {}) => {
                     customer_name: "Alice",
                     customer_code: "C-001",
                     type: "Sales Invoice",
+                    transfer_from: null,
                     debit_amount: 200,
                     amount_paid: 0,
                     running_balance: 950,
@@ -167,6 +170,7 @@ describe("CustomerLedger client-side filtering", () => {
         expect(wrapper.text()).toContain("INV-001");
         expect(wrapper.text()).toContain("INV-002");
         expect(wrapper.text()).toContain("INV-003");
+        expect(wrapper.text()).toContain("SRC-001 - Source Customer");
     });
 
     it("hides floating-deducted rows when the hide checkbox is toggled", async () => {
@@ -200,5 +204,7 @@ describe("CustomerLedger client-side filtering", () => {
         expect(dataRowCount).toBe(2);
         expect(lastWorksheet._rows[1][0]).toBe("INV-001");
         expect(lastWorksheet._rows[2][0]).toBe("INV-003");
+        expect(lastWorksheet._rows[1][5]).toBe("SRC-001 - Source Customer");
+        expect(lastWorksheet._rows[2][5]).toBe("");
     });
 });

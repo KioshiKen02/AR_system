@@ -20,11 +20,13 @@ class AppSetting extends Model
         'db_password',
         'description',
         'is_active',
+        'allow_overpayment',
     ];
 
     protected $casts = [
         'db_password' => 'encrypted',
         'is_active' => 'boolean',
+        'allow_overpayment' => 'boolean',
     ];
 
     public function users()

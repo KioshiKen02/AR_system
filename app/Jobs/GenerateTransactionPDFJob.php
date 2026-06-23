@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Events\TransactionPdfGenerated;
 use App\Events\TransactionPdfGenerationProgress;
+use App\Models\AppSetting;
 use App\Models\ReportModels\ReprintLog;
 use App\Models\TransactionModels\Payment;
 use App\Models\TransactionModels\PaymentDetails;
@@ -17,6 +18,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use NumberFormatter;
@@ -67,6 +69,65 @@ class GenerateTransactionPDFJob
 
     protected function updateProgress(int $progress, string $message)
     {
+    }
+
+    private function getStoredFloatingDeduction(PaymentDetails $detail): float
+    {
+        if (
+            Schema::connection('tenant')->hasColumn('payment_details', 'floating_deducted_amount')
+            && $detail->floating_deducted_amount !== null
+        ) {
+            return max(0, (float) $detail->floating_deducted_amount);
+        }
+
+        // Best-effort fallback for older rows created before the dedicated column existed.
+        return (float) PaymentDetails::where('customer_code', $detail->customer_code)
+            ->where('document_no', $detail->document_no)
+            ->where('type', $detail->type)
+            ->where('id', '<', $detail->id)
+            ->where(function ($query) {
+                $query->whereIn('status', ['Floating', 'Cleared'])
+                    ->orWhereIn('wht_status', ['Floating', 'Cleared']);
+            })
+            ->sum('amount_paid');
+    }
+
+    private function getSlipDisplayBalance(PaymentDetails $detail): float
+    {
+        $rawBalance = (float) ($detail->balance ?? 0);
+        $floatingDeduction = $this->getStoredFloatingDeduction($detail);
+
+        return max(0, $rawBalance - $floatingDeduction);
+    }
+
+    private function getSlipDisplayAmount(PaymentDetails $detail): float
+    {
+        $displayBalance = $this->getSlipDisplayBalance($detail);
+        $grossPaid = (float) ($detail->amount_paid ?? 0);
+        $overpayment = (float) ($detail->overpayment_amount ?? 0);
+        $effectiveAppliedToDocument = max(0, $grossPaid - $overpayment);
+
+        return $displayBalance + $effectiveAppliedToDocument;
+    }
+
+    private function shouldShowOverpayment(): bool
+    {
+        if (!Schema::connection('mysql')->hasColumn('app_settings', 'allow_overpayment')) {
+            return true;
+        }
+
+        $tenantSlug = strtolower(trim((string) ($this->passedData['tenant'] ?? '')));
+
+        if ($tenantSlug === '') {
+            return true;
+        }
+
+        $setting = AppSetting::on('mysql')
+            ->select('allow_overpayment')
+            ->whereRaw('LOWER(TRIM(base_url)) = ?', [$tenantSlug])
+            ->first();
+
+        return (bool) ($setting?->allow_overpayment ?? true);
     }
 
     protected function invoiceTransaction()
@@ -324,15 +385,30 @@ class GenerateTransactionPDFJob
         $this->passedData['reportName'] = ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId));
 
 
-        $this->passedData['paidDocuments'] = PaymentDetails::where('payment_no', $this->passedData['payment_no'])->orderBy('id')->get();
+        $this->passedData['paidDocuments'] = PaymentDetails::where('payment_no', $this->passedData['payment_no'])
+            ->orderBy('id')
+            ->get()
+            ->map(function ($detail) {
+                $detail->slip_balance = $this->getSlipDisplayBalance($detail);
+                $detail->slip_amount = $this->getSlipDisplayAmount($detail);
+
+                return $detail;
+            });
 
         $totalGross = $this->passedData['paidDocuments']->sum('amount_paid');
         $totalWht = $this->passedData['paidDocuments']->sum('wht_amount');
         $totalNet = $totalGross - $totalWht;
+        $totalOverpayment = Schema::connection('tenant')->hasColumn('payment_details', 'overpayment_amount')
+            ? $this->passedData['paidDocuments']->sum(function ($detail) {
+                return (float) ($detail->overpayment_amount ?? 0);
+            })
+            : 0;
 
         $this->passedData['amount_paid'] = $totalGross;
         $this->passedData['wht_amount'] = $totalWht;
         $this->passedData['total_amount_less_wht'] = $totalNet;
+        $this->passedData['overpayment_amount'] = $totalOverpayment;
+        $this->passedData['show_overpayment'] = $this->shouldShowOverpayment();
         $this->passedData['amount_in_words'] = $this->amountToWords($totalGross);
 
         if ($this->reprintconfirmation) {
@@ -366,7 +442,10 @@ class GenerateTransactionPDFJob
                     'margin_bottom' => 10,
                     'margin_left' => 10,
                 ]);
-        } else if ($this->passedData['payment_type'] === 'Journal Voucher' || $this->passedData['payment_type'] === 'Creditable(WHT)') {
+        } else if (
+            $this->passedData['payment_type'] === 'Journal Voucher'
+            || Str::contains((string) ($this->passedData['payment_type'] ?? ''), 'WHT')
+        ) {
             $pdf = Pdf::loadView('pdf.paymentJV_pdf', compact('data'))
                 ->setPaper('A4', 'portrait')
                 ->setOptions([

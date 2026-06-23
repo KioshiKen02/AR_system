@@ -44,6 +44,7 @@
                             <TextInput label="Overage" v-model="form.overage" type="text" readonly />
                             <TextInput label="Shrinkage" v-model="form.shrinkage" type="text" readonly />
                             <TextInput label="Return" v-model="form.return" type="text" readonly />
+                            <TextInput label="Overpayment" v-model="form.overpayment_amount" type="text" readonly />
                             <TextInput label="WHT Amount" v-model="form.wht_amount" type="text" readonly />
                         </div>
 
@@ -60,6 +61,8 @@
                                                 <th scope="col" class="px-4 py-3">Description</th>
                                                 <th scope="col" class="px-4 py-3 text-right">Debit</th>
                                                 <th scope="col" class="px-4 py-3 text-right">Credit</th>
+                                                <th scope="col" class="px-4 py-3 text-right">Cheque Floating</th>
+                                                <th scope="col" class="px-4 py-3 text-right">WHT Floating</th>
                                                 <th scope="col" class="px-4 py-3 text-right">Balance</th>
                                             </tr>
                                         </thead>
@@ -71,10 +74,12 @@
                                                 <td class="px-4 py-3">{{ item.description }}</td>
                                                 <td class="px-4 py-3 text-right">{{ item.debit > 0 ? formatCurrency(item.debit) : '-' }}</td>
                                                 <td class="px-4 py-3 text-right">{{ item.credit > 0 ? formatCurrency(item.credit) : '-' }}</td>
+                                                <td class="px-4 py-3 text-right">{{ item.credit_floating > 0 ? formatCurrency(item.credit_floating) : '-' }}</td>
+                                                <td class="px-4 py-3 text-right">{{ item.wht_floating > 0 ? formatCurrency(item.wht_floating) : '-' }}</td>
                                                 <td class="px-4 py-3 text-right font-semibold">{{ formatCurrency(item.balance) }}</td>
                                             </tr>
                                             <tr v-if="detailedTransactions.length === 0">
-                                                <td colspan="6" class="px-4 py-8 text-center text-[var(--color-text-muted)]">
+                                                <td colspan="8" class="px-4 py-8 text-center text-[var(--color-text-muted)]">
                                                     No transactions found.
                                                 </td>
                                             </tr>
@@ -146,6 +151,7 @@ const form = useForm({
     shrinkage: null,
     return: null,
     amount_paid: null,
+    overpayment_amount: null,
     wht_amount: null,
     running_balance: null,
     pos_adjustment: null,
@@ -193,6 +199,9 @@ watch(
                 ? formatCurrency(props.selected.return)
                 : formatCurrency("0.00");
             form.amount_paid = formatCurrency(props.selected.amount_paid);
+            form.overpayment_amount = formatCurrency(
+                props.selected.overpayment_amount ?? 0
+            );
             form.wht_amount = formatCurrency(props.selected.wht_amount);
             form.running_balance = formatCurrency(props.selected.running_balance ?? 0);
 
@@ -216,6 +225,9 @@ watch(
                 );
                 form.amount_paid = formatCurrency(ledger.amount_paid ?? 0);
                 form.running_balance = formatCurrency(ledger.running_balance ?? 0);
+                form.overpayment_amount = formatCurrency(
+                    ledger.overpayment_amount ?? 0
+                );
                 form.overage = formatCurrency(ledger.overage ?? 0);
                 form.shrinkage = formatCurrency(ledger.shrinkage ?? 0);
                 form.return = formatCurrency(ledger.return ?? 0);

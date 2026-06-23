@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\AppSetting;
 use App\Models\MasterfileModels\Customer;
 use App\Models\ReportModels\CustomerLedger;
 use App\Models\TransactionModels\Adjustment;
@@ -18,6 +19,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use NumberFormatter;
@@ -64,6 +66,57 @@ class GeneratePdfJob
             'cash_net_amount' => $cashNetAmount,
             'ar_net_amount' => $arNetAmount,
         ];
+    }
+
+    private function shouldShowOverpayment(): bool
+    {
+        if (!$this->appSettingId) {
+            return true;
+        }
+
+        if (!Schema::connection('mysql')->hasColumn('app_settings', 'allow_overpayment')) {
+            return true;
+        }
+
+        $setting = AppSetting::on('mysql')
+            ->select('allow_overpayment')
+            ->find($this->appSettingId);
+
+        return (bool) ($setting?->allow_overpayment ?? true);
+    }
+
+    private function getStoredFloatingDeductionForProoflist(PaymentDetails $detail): float
+    {
+        if (
+            Schema::connection('tenant')->hasColumn('payment_details', 'floating_deducted_amount')
+            && $detail->floating_deducted_amount !== null
+        ) {
+            return max(0, (float) $detail->floating_deducted_amount);
+        }
+
+        return (float) PaymentDetails::where('customer_code', $detail->customer_code)
+            ->where('document_no', $detail->document_no)
+            ->where('type', $detail->type)
+            ->where('id', '<', $detail->id)
+            ->where(function ($query) {
+                $query->whereIn('status', ['Floating', 'Cleared'])
+                    ->orWhereIn('wht_status', ['Floating', 'Cleared']);
+            })
+            ->sum('amount_paid');
+    }
+
+    private function getProoflistDisplayBalance(PaymentDetails $detail): float
+    {
+        return max(0, (float) ($detail->balance ?? 0) - $this->getStoredFloatingDeductionForProoflist($detail));
+    }
+
+    private function getProoflistDisplayAmount(PaymentDetails $detail): float
+    {
+        $displayBalance = $this->getProoflistDisplayBalance($detail);
+        $grossPaid = (float) ($detail->amount_paid ?? 0);
+        $overpayment = (float) ($detail->overpayment_amount ?? 0);
+
+        return $displayBalance + max(0, $grossPaid - $overpayment);
     }
 
     public function handle()
@@ -1008,9 +1061,6 @@ class GeneratePdfJob
         if ($reportOptions['onlineDeposits']) {
             $selectedTypes[] = '5C - Online Deposit';
         }
-        if ($reportOptions['creditableWHT']) {
-            $selectedTypes[] = '5E - Creditable(WHT)';
-        }
 
         if (! empty($selectedTypes)) {
             $query->whereIn('payment_type', $selectedTypes);
@@ -1062,12 +1112,15 @@ class GeneratePdfJob
                             $paymentTotal = 0;
 
                             foreach ($payment->paymentDetails as $detail) {
+                                $displayAmount = $this->getProoflistDisplayAmount($detail);
                                 $paymentDetails[] = [
                                     'document_no' => $detail->document_no,
                                     'type' => $detail->type,
                                     'ds_no' => $payment->ds_no,
                                     'reference_no' => $payment->reference_no,
+                                    'amount' => $displayAmount,
                                     'amount_paid' => $detail->status === 'Cancelled' ? null : $detail->amount_paid,
+                                    'overpayment_amount' => $detail->status === 'Cancelled' ? null : ($detail->overpayment_amount ?? 0),
                                     'document_date' => $detail->document_date,
                                     'remarks' => $detail->remarks,
                                     'cancelled_amount' => $detail->status === 'Cancelled' ? $detail->amount_paid : null,
@@ -1126,6 +1179,7 @@ class GeneratePdfJob
                 'currency' => 'PHP',
                 'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
                 'groupedData' => $groupedData,
+                'show_overpayment' => $this->shouldShowOverpayment(),
                 'preparedBy' => $this->preparedBy,
                 'notedBy' => $notedBy,
                 'hidePreparedChecked' => $hidePreparedChecked,
@@ -1163,13 +1217,15 @@ class GeneratePdfJob
                     $paymentDetails = [];
 
                     foreach ($payment->paymentDetails as $detail) {
+                        $displayAmount = $this->getProoflistDisplayAmount($detail);
                         $paymentDetails[] = [
                             'document_no' => $detail->document_no,
                             'type' => $detail->type,
                             'ds_no' => $payment->ds_no,
                             'reference_no' => $payment->reference_no,
-                            'amount' => $detail->amount,
+                            'amount' => $displayAmount,
                             'amount_paid' => $detail->amount_paid,
+                            'overpayment_amount' => $detail->overpayment_amount ?? 0,
                             'document_date' => $detail->document_date,
                             'remarks' => $detail->remarks,
                         ];
@@ -1212,6 +1268,7 @@ class GeneratePdfJob
                 'currency' => 'PHP',
                 'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
                 'payments' => $formattedPayments,
+                'show_overpayment' => $this->shouldShowOverpayment(),
                 'preparedBy' => $this->preparedBy,
                 'notedBy' => $notedBy,
                 'hidePreparedChecked' => $hidePreparedChecked,
@@ -1285,9 +1342,6 @@ class GeneratePdfJob
         if ($reportOptions['onlineDeposits']) {
             $selectedTypes[] = '5C - Online Deposit';
         }
-        if ($reportOptions['creditableWHT']) {
-            $selectedTypes[] = '5E - Creditable(WHT)';
-        }
 
         if (! empty($selectedTypes)) {
             $query->whereIn('payment_type', $selectedTypes);
@@ -1339,11 +1393,13 @@ class GeneratePdfJob
                             $paymentTotal = 0;
 
                             foreach ($payment->paymentDetails as $detail) {
+                                $displayAmount = $this->getProoflistDisplayAmount($detail);
                                 $paymentDetails[] = [
                                     'document_no' => $detail->document_no,
                                     'type' => $detail->type,
                                     'ds_no' => $payment->ds_no,
                                     'reference_no' => $payment->reference_no,
+                                    'amount' => $displayAmount,
                                     'amount_paid' => $detail->status === 'Cancelled' ? null : $detail->amount_paid,
                                     'document_date' => $detail->document_date,
                                     'remarks' => $detail->remarks,
@@ -1417,12 +1473,13 @@ class GeneratePdfJob
                     $paymentDetails = [];
 
                     foreach ($payment->paymentDetails as $detail) {
+                        $displayAmount = $this->getProoflistDisplayAmount($detail);
                         $paymentDetails[] = [
                             'document_no' => $detail->document_no,
                             'type' => $detail->type,
                             'ds_no' => $payment->ds_no,
                             'reference_no' => $payment->reference_no,
-                            'amount' => $detail->amount,
+                            'amount' => $displayAmount,
                             'amount_paid' => $detail->amount_paid,
                             'document_date' => $detail->document_date,
                             'remarks' => $detail->remarks,
@@ -2677,8 +2734,21 @@ class GeneratePdfJob
         $floatingAmounts = [];
         if (! empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
-                ->whereIn('payment_type', ['Check', 'Creditable(WHT)'])
-                ->where('status', 'Floating')
+                ->where(function ($query) {
+                    $query->where(function ($checkQuery) {
+                        $checkQuery->where('payment_type', 'Check')
+                            ->where('status', 'Floating');
+                    })->orWhere(function ($whtQuery) {
+                        $whtQuery->where('wht_amount', '>', 0)
+                            ->where(function ($statusQuery) {
+                                $statusQuery->where('wht_status', 'Floating')
+                                    ->orWhere(function ($fallbackQuery) {
+                                        $fallbackQuery->whereNull('wht_status')
+                                            ->where('status', 'Floating');
+                                    });
+                            });
+                    });
+                })
                 ->get();
 
             foreach ($paymentDetails as $detail) {
@@ -2690,10 +2760,11 @@ class GeneratePdfJob
                     ];
                 }
 
-                if ($detail->payment_type === 'Check') {
+                if ($detail->payment_type === 'Check' && $detail->status === 'Floating') {
                     $floatingAmounts[$key]['pdc_dc'] += $detail->amount_paid;
-                } else {
-                    $floatingAmounts[$key]['wht'] += $detail->amount_paid;
+                }
+                if ((float) ($detail->wht_amount ?? 0) > 0 && (($detail->wht_status ?? null) === 'Floating' || (($detail->wht_status ?? null) === null && ($detail->status ?? null) === 'Floating'))) {
+                    $floatingAmounts[$key]['wht'] += (float) $detail->wht_amount;
                 }
             }
         }
@@ -2910,8 +2981,21 @@ class GeneratePdfJob
         $floatingAmounts = [];
         if (! empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
-                ->whereIn('payment_type', ['Check', 'Creditable(WHT)'])
-                ->where('status', 'Floating')
+                ->where(function ($query) {
+                    $query->where(function ($checkQuery) {
+                        $checkQuery->where('payment_type', 'Check')
+                            ->where('status', 'Floating');
+                    })->orWhere(function ($whtQuery) {
+                        $whtQuery->where('wht_amount', '>', 0)
+                            ->where(function ($statusQuery) {
+                                $statusQuery->where('wht_status', 'Floating')
+                                    ->orWhere(function ($fallbackQuery) {
+                                        $fallbackQuery->whereNull('wht_status')
+                                            ->where('status', 'Floating');
+                                    });
+                            });
+                    });
+                })
                 ->get();
 
             foreach ($paymentDetails as $detail) {
@@ -2923,10 +3007,11 @@ class GeneratePdfJob
                     ];
                 }
 
-                if ($detail->payment_type === 'Check') {
+                if ($detail->payment_type === 'Check' && $detail->status === 'Floating') {
                     $floatingAmounts[$key]['pdc_dc'] += $detail->amount_paid;
-                } else {
-                    $floatingAmounts[$key]['wht'] += $detail->amount_paid;
+                }
+                if ((float) ($detail->wht_amount ?? 0) > 0 && (($detail->wht_status ?? null) === 'Floating' || (($detail->wht_status ?? null) === null && ($detail->status ?? null) === 'Floating'))) {
+                    $floatingAmounts[$key]['wht'] += (float) $detail->wht_amount;
                 }
             }
         }
@@ -3110,8 +3195,21 @@ class GeneratePdfJob
         $floatingAmounts = [];
         if (! empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
-                ->whereIn('payment_type', ['Check', 'Creditable(WHT)'])
-                ->where('status', 'Floating')
+                ->where(function ($query) {
+                    $query->where(function ($checkQuery) {
+                        $checkQuery->where('payment_type', 'Check')
+                            ->where('status', 'Floating');
+                    })->orWhere(function ($whtQuery) {
+                        $whtQuery->where('wht_amount', '>', 0)
+                            ->where(function ($statusQuery) {
+                                $statusQuery->where('wht_status', 'Floating')
+                                    ->orWhere(function ($fallbackQuery) {
+                                        $fallbackQuery->whereNull('wht_status')
+                                            ->where('status', 'Floating');
+                                    });
+                            });
+                    });
+                })
                 ->get();
 
             foreach ($paymentDetails as $detail) {
@@ -3123,10 +3221,11 @@ class GeneratePdfJob
                     ];
                 }
 
-                if ($detail->payment_type === 'Check') {
+                if ($detail->payment_type === 'Check' && $detail->status === 'Floating') {
                     $floatingAmounts[$key]['pdc_dc'] += $detail->amount_paid;
-                } else {
-                    $floatingAmounts[$key]['wht'] += $detail->amount_paid;
+                }
+                if ((float) ($detail->wht_amount ?? 0) > 0 && (($detail->wht_status ?? null) === 'Floating' || (($detail->wht_status ?? null) === null && ($detail->status ?? null) === 'Floating'))) {
+                    $floatingAmounts[$key]['wht'] += (float) $detail->wht_amount;
                 }
             }
         }
@@ -3324,8 +3423,21 @@ class GeneratePdfJob
         $floatingAmounts = [];
         if (! empty($customerCodes)) {
             $paymentDetails = PaymentDetails::whereIn('customer_code', array_keys($customerCodes))
-                ->whereIn('payment_type', ['Check', 'Creditable(WHT)'])
-                ->where('status', 'Floating')
+                ->where(function ($query) {
+                    $query->where(function ($checkQuery) {
+                        $checkQuery->where('payment_type', 'Check')
+                            ->where('status', 'Floating');
+                    })->orWhere(function ($whtQuery) {
+                        $whtQuery->where('wht_amount', '>', 0)
+                            ->where(function ($statusQuery) {
+                                $statusQuery->where('wht_status', 'Floating')
+                                    ->orWhere(function ($fallbackQuery) {
+                                        $fallbackQuery->whereNull('wht_status')
+                                            ->where('status', 'Floating');
+                                    });
+                            });
+                    });
+                })
                 ->get();
 
             foreach ($paymentDetails as $detail) {
@@ -3337,10 +3449,11 @@ class GeneratePdfJob
                     ];
                 }
 
-                if ($detail->payment_type === 'Check') {
+                if ($detail->payment_type === 'Check' && $detail->status === 'Floating') {
                     $floatingAmounts[$key]['pdc_dc'] += $detail->amount_paid;
-                } else {
-                    $floatingAmounts[$key]['wht'] += $detail->amount_paid;
+                }
+                if ((float) ($detail->wht_amount ?? 0) > 0 && (($detail->wht_status ?? null) === 'Floating' || (($detail->wht_status ?? null) === null && ($detail->status ?? null) === 'Floating'))) {
+                    $floatingAmounts[$key]['wht'] += (float) $detail->wht_amount;
                 }
             }
         }
@@ -3985,10 +4098,17 @@ class GeneratePdfJob
                     $floatingWht = (float) PaymentDetails::where([
                         ['customer_code', $customerCode],
                         ['document_no', $paymentDetail->invoice_number],
-                        ['payment_type', 'Creditable(WHT)'],
                         ['type', $paymentDetail->type],
-                        ['status', 'Floating'],
-                    ])->sum('amount_paid');
+                    ])
+                        ->where('wht_amount', '>', 0)
+                        ->where(function ($query) {
+                            $query->where('wht_status', 'Floating')
+                                ->orWhere(function ($fallbackQuery) {
+                                    $fallbackQuery->whereNull('wht_status')
+                                        ->where('status', 'Floating');
+                                });
+                        })
+                        ->sum('wht_amount');
 
                     $balance = ($this->validatedData['soatype'] ?? 'SOA') === 'SOA'
                         ? $paymentDetail->running_balance
@@ -4121,10 +4241,17 @@ class GeneratePdfJob
                     $floatingWht = (float) PaymentDetails::where([
                         ['customer_code', $customerCode],
                         ['document_no', $paymentDetail->invoice_number],
-                        ['payment_type', 'Creditable(WHT)'],
                         ['type', $paymentDetail->type],
-                        ['status', 'Floating'],
-                    ])->sum('amount_paid');
+                    ])
+                        ->where('wht_amount', '>', 0)
+                        ->where(function ($query) {
+                            $query->where('wht_status', 'Floating')
+                                ->orWhere(function ($fallbackQuery) {
+                                    $fallbackQuery->whereNull('wht_status')
+                                        ->where('status', 'Floating');
+                                });
+                        })
+                        ->sum('wht_amount');
 
                     $balance = $this->validatedData['soatype'] === 'SOA'
                         ? $paymentDetail->running_balance
