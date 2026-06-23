@@ -27,7 +27,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'gp') && str_contains($identifier, 'jagna')) {
-            return 'LOURDES JALOR';
+            return 'LOURDES JALOP';
         }
 
         if (str_contains($identifier, 'ice') && str_contains($identifier, 'plant')) {
@@ -122,7 +122,7 @@ class SignatoryService
         }
 
         if (str_contains($identifier, 'gp') && str_contains($identifier, 'jagna')) {
-            return 'LOURDES JALOR';
+            return 'LOURDES JALOP';
         }
 
         if (str_contains($identifier, 'ice') && str_contains($identifier, 'plant')) {
