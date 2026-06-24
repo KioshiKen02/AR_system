@@ -1224,8 +1224,9 @@ class GeneratePdfJob
                             'ds_no' => $payment->ds_no,
                             'reference_no' => $payment->reference_no,
                             'amount' => $displayAmount,
-                            'amount_paid' => $detail->amount_paid,
-                            'overpayment_amount' => $detail->overpayment_amount ?? 0,
+                            'amount_paid' => $detail->status === 'Cancelled' ? null : $detail->amount_paid,
+                            'overpayment_amount' => $detail->status === 'Cancelled' ? null : ($detail->overpayment_amount ?? 0),
+                            'status' => $detail->status,
                             'document_date' => $detail->document_date,
                             'remarks' => $detail->remarks,
                         ];

@@ -300,7 +300,9 @@
                             <td class="col-docno">{{ $detail['document_no'] }}</td>
                             <td class="col-customer">{{ $payment['customer'] }}</td>
                             <td class="col-amount">{{ number_format($detail['amount'], 2) }}</td>
-                            <td class="col-amountpaid">{{ number_format($detail['amount_paid'], 2) }}</td>
+                            <td class="col-amountpaid">
+                                {{ $detail['amount_paid'] !== null ? number_format($detail['amount_paid'], 2) : '' }}
+                            </td>
                             @if ($show_overpayment ?? true)
                                 <td class="col-amountpaid">
                                     {{ ($detail['overpayment_amount'] ?? 0) > 0 ? number_format($detail['overpayment_amount'], 2) : '' }}
@@ -340,15 +342,12 @@
         <table class="grand-table" style=" border-top: 1px solid black;">
             <tbody>
                 <tr class="totals">
-                    <td class="col-date">Grand Total: </td>
-                    <td class="col-trans-no"></td>
-                    <td class="col-docno"></td>
-                    <td class="col-customer"></td>
-                    <td class="col-amount"></td>
-                    <td class="col-amountpaid"></td>
-                    <td class="col-amountpaid"></td>
-                    <td class="col-cash"> {{ number_format($grandTotalAmountPaid, 2) }}
-                    </td>
+                    <td colspan="5" style="text-align: left;">Grand Total:</td>
+                    <td class="col-amountpaid">{{ number_format($grandTotalAmountPaid, 2) }}</td>
+                    @if ($show_overpayment ?? true)
+                        <td class="col-amountpaid"></td>
+                    @endif
+                    <td colspan="2"></td>
                 </tr>
             </tbody>
         </table>
