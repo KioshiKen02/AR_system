@@ -148,15 +148,45 @@
         }
 
         .signatory-table td {
-            text-align: justify;
-            padding: 10px;
-            font-size: 10px;
+            text-align: left;
+            vertical-align: top;
+            padding: 14px 16px;
+            font-size: 12px;
+            line-height: 1.4;
             color: #000000;
             border-top: 1px solid black;
         }
 
         .signatory-table div {
             margin: 0;
+        }
+
+        .signatory-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .signatory-line {
+            border-bottom: 1px solid black;
+            text-align: center;
+            padding-bottom: 2px;
+            margin-bottom: 6px;
+            min-height: 18px;
+        }
+
+        .signatory-name-line {
+            margin-top: 14px;
+        }
+
+        .signatory-caption {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+
+        .signatory-label {
+            margin-bottom: 4px;
+            font-weight: bold;
         }
 
         .footer {
@@ -278,44 +308,37 @@
     <table class="signatory-table">
         <tr>
             <td>
-                <div>Prepared By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;">{{ $preparedBy }}
-                </div>
-                <div style="text-align: center;">(Signature Over Printed Name)</div>
-                <div>Date:</div>
-                <div style="border-bottom: 1px solid black; text-align: center; margin-bottom: 2px;">
-                    {{ \Carbon\Carbon::now()->format('m/d/Y') }}</div>
-                <div>Time:</div>
-                <div style="border-bottom: 1px solid black; text-align: center; margin-bottom: 2px;">
-                    {{ \Carbon\Carbon::now()->format(' h:i:s A') }}</div>
-                <div>Designation:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;"></div>
+                <div class="signatory-title">Prepared By:</div>
+                <div class="signatory-line signatory-name-line">{{ $preparedBy }}</div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <div class="signatory-label">Date:</div>
+                <div class="signatory-line">{{ \Carbon\Carbon::now()->format('m/d/Y') }}</div>
+                <div class="signatory-label">Time:</div>
+                <div class="signatory-line">{{ \Carbon\Carbon::now()->format('h:i:s A') }}</div>
+                <div class="signatory-label">Designation:</div>
+                <div class="signatory-line">&nbsp;</div>
             </td>
             <td>
-                <div>Checked By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 22px; text-align: center;"></div>
-                <div style="text-align: center;">(Signature Over Printed Name)</div>
-                <div>Date:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Time:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Designation:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;"></div>
+                <div class="signatory-title">Checked By:</div>
+                <div class="signatory-line signatory-name-line">&nbsp;</div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <div class="signatory-label">Date:</div>
+                <div class="signatory-line">&nbsp;</div>
+                <div class="signatory-label">Time:</div>
+                <div class="signatory-line">&nbsp;</div>
+                <div class="signatory-label">Designation:</div>
+                <div class="signatory-line">&nbsp;</div>
             </td>
             <td>
-                <div>Note By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 22px; text-align: center;">{{ $notedBy ?? '' }}</div>
-                <div style="text-align: center;">(Signature Over Printed Name)</div>
-                <div>Date:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Time:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Designation:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;"></div>
+                <div class="signatory-title">Note By:</div>
+                <div class="signatory-line signatory-name-line">{{ $notedBy ?? '' }}</div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <div class="signatory-label">Date:</div>
+                <div class="signatory-line">&nbsp;</div>
+                <div class="signatory-label">Time:</div>
+                <div class="signatory-line">&nbsp;</div>
+                <div class="signatory-label">Designation:</div>
+                <div class="signatory-line">&nbsp;</div>
             </td>
         </tr>
     </table>

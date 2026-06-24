@@ -2709,14 +2709,6 @@ class GeneratePdfJob
             $query->where('customer_code', $this->validatedData['customer_code']);
         }
 
-        $invoiceNumbers = (clone $query)->pluck('invoice_number')->unique();
-
-        $adjustmentsGrouped = Adjustment::whereIn('invoice_no', $invoiceNumbers)
-            ->selectRaw("invoice_no, apply_to, SUM(CASE WHEN type='Positive' THEN amount WHEN type='Negative' THEN -amount ELSE 0 END) as total_adjustment")
-            ->groupBy('invoice_no', 'apply_to')
-            ->get()
-            ->groupBy(['invoice_no', 'apply_to']);
-
         $totalRows = (clone $query)->count();
         $processedRows = 0;
         $lastProgress = 1;
@@ -2777,7 +2769,6 @@ class GeneratePdfJob
             &$processedRows,
             $totalRows,
             &$lastProgress,
-            $adjustmentsGrouped,
             &$runningBalances
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
@@ -2821,26 +2812,13 @@ class GeneratePdfJob
                     $overageVal = $val($outstandingBalance->overage);
                     $returnVal = $val($outstandingBalance->return);
 
-                    $applyTo = $outstandingBalance->type;
-                    if ($outstandingBalance->type === 'BG') {
-                        $applyTo = 'Beginning Balance';
-                    } elseif ($outstandingBalance->type === 'Charge Invoice') {
-                        $applyTo = 'Other Income';
-                    }
-
-                    $adjustedAmount = $adjustmentsGrouped
-                        ->get($outstandingBalance->invoice_number, collect())
-                        ->get($applyTo, collect())
-                        ->first()
-                        ->total_adjustment ?? 0;
+                    $positiveAdjustmentAmount = $val($outstandingBalance->positive_adjustment_amount);
+                    $negativeAdjustmentAmount = $val($outstandingBalance->negative_adjustment_amount);
+                    $adjustmentAmount = $positiveAdjustmentAmount - $negativeAdjustmentAmount;
 
                     $grossDebit = $amount - $shrinkageVal + $overageVal - $returnVal;
 
-                    if ($outstandingBalance->type === 'BG' || $outstandingBalance->type === 'Beginning Balance') {
-                        $netDebit = $grossDebit;
-                    } else {
-                        $netDebit = $grossDebit + $adjustedAmount;
-                    }
+                    $netDebit = $grossDebit + $adjustmentAmount;
 
                     $credit = $val($outstandingBalance->amount_paid);
 
@@ -2854,7 +2832,7 @@ class GeneratePdfJob
                         'gross_amount' => $outstandingBalance->amount,
                         'shrinkage_overage' => $shrinkage_overage,
                         'return' => $outstandingBalance->return,
-                        'adjustment' => $outstandingBalance->adjusted_amount,
+                        'adjustment' => $adjustmentAmount,
                         'partial_payment' => $outstandingBalance->amount_paid,
                         'floating_pdc_dc' => $floatingPdcDc,
                         'floating_wht' => $floatingWht,
@@ -2879,6 +2857,16 @@ class GeneratePdfJob
                 }
             }
         });
+
+        $groupedData = array_values(array_filter(array_map(function ($group) {
+            $group['outstandingBalances'] = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
+                return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
+            }));
+
+            return $group;
+        }, $groupedData), function ($group) {
+            return ! empty($group['outstandingBalances']) && round((float) ($group['customerAmountTotal'] ?? 0), 2) != 0;
+        }));
 
         $customerOverallAmountTotal = collect($groupedData)->sum('customerAmountTotal');
 
@@ -3055,6 +3043,13 @@ class GeneratePdfJob
                     $arNetAmount = $outstandingBalance->running_balance;
                     $customerData['customerAmountTotal'] += $arNetAmount;
 
+                    $val = function ($v) {
+                        return (float) str_replace(',', '', (string) ($v ?? 0));
+                    };
+                    $positiveAdjustmentAmount = $val($outstandingBalance->positive_adjustment_amount);
+                    $negativeAdjustmentAmount = $val($outstandingBalance->negative_adjustment_amount);
+                    $adjustmentAmount = $positiveAdjustmentAmount - $negativeAdjustmentAmount;
+
                     $customerData['outstandingBalances'][] = [
                         'document_no' => $outstandingBalance->invoice_number,
                         'type' => $outstandingBalance->type,
@@ -3062,7 +3057,7 @@ class GeneratePdfJob
                         'gross_amount' => $outstandingBalance->amount,
                         'shrinkage_overage' => $shrinkage_overage,
                         'return' => $outstandingBalance->return,
-                        'adjustment' => $outstandingBalance->adjusted_amount,
+                        'adjustment' => $adjustmentAmount,
                         'partial_payment' => $outstandingBalance->amount_paid,
                         'floating_pdc_dc' => $floatingPdcDc,
                         'floating_wht' => $floatingWht,
@@ -3085,6 +3080,16 @@ class GeneratePdfJob
                 }
             }
         });
+
+        $groupedData = array_values(array_filter(array_map(function ($group) {
+            $group['outstandingBalances'] = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
+                return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
+            }));
+
+            return $group;
+        }, $groupedData), function ($group) {
+            return ! empty($group['outstandingBalances']) && round((float) ($group['customerAmountTotal'] ?? 0), 2) != 0;
+        }));
 
         $customerOverallAmountTotal = collect($groupedData)->sum('customerAmountTotal');
 
@@ -3170,14 +3175,6 @@ class GeneratePdfJob
             $query->where('customer_code', $this->validatedData['customer_code']);
         }
 
-        $invoiceNumbers = (clone $query)->pluck('invoice_number')->unique();
-
-        $adjustmentsGrouped = Adjustment::whereIn('invoice_no', $invoiceNumbers)
-            ->selectRaw("invoice_no, apply_to, SUM(CASE WHEN type='Positive' THEN amount WHEN type='Negative' THEN -amount ELSE 0 END) as total_adjustment")
-            ->groupBy('invoice_no', 'apply_to')
-            ->get()
-            ->groupBy(['invoice_no', 'apply_to']);
-
         $totalRows = (clone $query)->count();
         $processedRows = 0;
         $lastProgress = 1;
@@ -3238,7 +3235,6 @@ class GeneratePdfJob
             &$processedRows,
             $totalRows,
             &$lastProgress,
-            $adjustmentsGrouped,
             &$runningBalances
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
@@ -3282,26 +3278,13 @@ class GeneratePdfJob
                     $overageVal = $val($outstandingBalance->overage);
                     $returnVal = $val($outstandingBalance->return);
 
-                    $applyTo = $outstandingBalance->type;
-                    if ($outstandingBalance->type === 'BG') {
-                        $applyTo = 'Beginning Balance';
-                    } elseif ($outstandingBalance->type === 'Charge Invoice') {
-                        $applyTo = 'Other Income';
-                    }
-
-                    $adjustedAmount = $adjustmentsGrouped
-                        ->get($outstandingBalance->invoice_number, collect())
-                        ->get($applyTo, collect())
-                        ->first()
-                        ->total_adjustment ?? 0;
+                    $positiveAdjustmentAmount = $val($outstandingBalance->positive_adjustment_amount);
+                    $negativeAdjustmentAmount = $val($outstandingBalance->negative_adjustment_amount);
+                    $adjustmentAmount = $positiveAdjustmentAmount - $negativeAdjustmentAmount;
 
                     $grossDebit = $amount - $shrinkageVal + $overageVal - $returnVal;
 
-                    if ($outstandingBalance->type === 'BG' || $outstandingBalance->type === 'Beginning Balance') {
-                        $netDebit = $grossDebit;
-                    } else {
-                        $netDebit = $grossDebit + $adjustedAmount;
-                    }
+                    $netDebit = $grossDebit + $adjustmentAmount;
 
                     $credit = $val($outstandingBalance->amount_paid);
 
@@ -3315,7 +3298,7 @@ class GeneratePdfJob
                         'gross_amount' => $outstandingBalance->amount,
                         'shrinkage_overage' => $shrinkage_overage,
                         'return' => $outstandingBalance->return,
-                        'adjustment' => $outstandingBalance->adjusted_amount,
+                        'adjustment' => $adjustmentAmount,
                         'partial_payment' => $outstandingBalance->amount_paid,
                         'floating_pdc_dc' => $floatingPdcDc,
                         'floating_wht' => $floatingWht,
@@ -3340,6 +3323,16 @@ class GeneratePdfJob
                 }
             }
         });
+
+        $groupedData = array_values(array_filter(array_map(function ($group) {
+            $group['outstandingBalances'] = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
+                return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
+            }));
+
+            return $group;
+        }, $groupedData), function ($group) {
+            return ! empty($group['outstandingBalances']) && round((float) ($group['customerAmountTotal'] ?? 0), 2) != 0;
+        }));
 
         $customerOverallAmountTotal = collect($groupedData)->sum('customerAmountTotal');
 
@@ -3497,6 +3490,13 @@ class GeneratePdfJob
                     $arNetAmount = $outstandingBalance->running_balance;
                     $customerData['customerAmountTotal'] += $arNetAmount;
 
+                    $val = function ($v) {
+                        return (float) str_replace(',', '', (string) ($v ?? 0));
+                    };
+                    $positiveAdjustmentAmount = $val($outstandingBalance->positive_adjustment_amount);
+                    $negativeAdjustmentAmount = $val($outstandingBalance->negative_adjustment_amount);
+                    $adjustmentAmount = $positiveAdjustmentAmount - $negativeAdjustmentAmount;
+
                     $customerData['outstandingBalances'][] = [
                         'document_no' => $outstandingBalance->invoice_number,
                         'type' => $outstandingBalance->type,
@@ -3504,7 +3504,7 @@ class GeneratePdfJob
                         'gross_amount' => $outstandingBalance->amount,
                         'shrinkage_overage' => $shrinkage_overage,
                         'return' => $outstandingBalance->return,
-                        'adjustment' => $outstandingBalance->adjusted_amount,
+                        'adjustment' => $adjustmentAmount,
                         'partial_payment' => $outstandingBalance->amount_paid,
                         'floating_pdc_dc' => $floatingPdcDc,
                         'floating_wht' => $floatingWht,
@@ -3527,6 +3527,16 @@ class GeneratePdfJob
                 }
             }
         });
+
+        $groupedData = array_values(array_filter(array_map(function ($group) {
+            $group['outstandingBalances'] = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
+                return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
+            }));
+
+            return $group;
+        }, $groupedData), function ($group) {
+            return ! empty($group['outstandingBalances']) && round((float) ($group['customerAmountTotal'] ?? 0), 2) != 0;
+        }));
 
         $customerOverallAmountTotal = collect($groupedData)->sum('customerAmountTotal');
 

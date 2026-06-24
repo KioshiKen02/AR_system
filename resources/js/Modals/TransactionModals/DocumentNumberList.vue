@@ -964,26 +964,29 @@ const onManualWhtInput = (invoice, rawValue = invoice.wht_amount) => {
     const balance = getRealBalance(invoice);
 
     if (rawValue === "" || rawValue === null || typeof rawValue === "undefined") {
-        rawValue = 0;
+        rawValue = "";
     }
 
-    let manualWht = Number(rawValue);
-    if (!Number.isFinite(manualWht) || Number.isNaN(manualWht)) {
+    const cleaned = String(rawValue).replace(/,/g, "").trim();
+    const normalized = cleaned.startsWith(".") ? `0${cleaned}` : cleaned;
+    if (normalized !== "" && !/^\d*(\.\d*)?$/.test(normalized)) {
         invoice.wht_error = "Invalid tax amount";
-        showWarningToast("Invalid tax amount");
+        return;
+    }
+
+    let manualWht = normalized === "" ? 0 : parseFloat(normalized);
+    if (!Number.isFinite(manualWht) || Number.isNaN(manualWht)) {
         manualWht = 0;
-        invoice.wht_amount = 0;
     }
 
     if (manualWht < 0) {
         invoice.wht_error = "Tax must be 0 or greater";
         showWarningToast("Tax must be 0 or greater");
         manualWht = 0;
-        invoice.wht_amount = 0;
     }
 
     if (invoice.wht_error === "") {
-        invoice.wht_amount = manualWht;
+        invoice.wht_amount = normalized;
     }
 
     if (manualWht > 0 && !canApplyWhtToInvoice(invoice)) {
@@ -999,7 +1002,7 @@ const onManualWhtInput = (invoice, rawValue = invoice.wht_amount) => {
         showWarningToast("Tax exceeds balance. Automatically adjusted.");
     } else if (manualWht === 0) {
         whtIsActive.value = false;
-        invoice.wht_amount = 0;
+        invoice.wht_amount = normalized;
     }
     invoice.total_amount_less_wht = Math.max(0, balance - manualWht).toFixed(2);
     invoice.amountToPay = Math.max(0, balance - manualWht).toFixed(2);
