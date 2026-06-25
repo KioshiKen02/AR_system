@@ -206,7 +206,7 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         Route::post('/addAdjustment', [AdjustmentControllers::class, 'addAdjustment'])->name('addAdjustment');
         Route::post('/adjustment/{adjustment}/sync-sales', [AdjustmentControllers::class, 'syncAdjustmentSales'])->middleware(EnsureUserIsAdmin::class)->name('adjustment.syncSales');
         Route::put('/editAdjustment/{id}', [AdjustmentControllers::class, 'editAdjustment'])->name('editAdjustment');
-        Route::delete('/deleteAdjustment/{id}', [AdjustmentControllers::class, 'destroy'])->name('deleteAdjustment');
+        Route::delete('/deleteAdjustment/{id}', [AdjustmentControllers::class, 'destroy'])->middleware(EnsureUserIsAdmin::class)->name('deleteAdjustment');
         Route::get('/getlatestadjustmentno', [AdjustmentControllers::class, 'latest'])->name('getlatestadjustmentno');
         Route::get('/adjustment-reason-setup', [AdjustmentControllers::class, 'getAdjustmentReasonSetup'])->name('getAdjustmentReasonSetup');
         Route::get('/adjustment-latest-adjustmentNumber', function () { //GETTING ADJUSTMENT NUMBER FOR PDF PRINT PURPOSES (NOT REPRINTING!)

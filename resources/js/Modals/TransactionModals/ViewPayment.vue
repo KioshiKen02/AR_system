@@ -281,16 +281,54 @@ const formatCurrency = (amount) => {
 };
 
 const toNumber = (value) => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return 0;
+        const cleaned = trimmed.replace(/,/g, "").replace(/[^\d.-]/g, "");
+        const parsed = parseFloat(cleaned);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const getDisplayAmountPaid = (selected) => {
-    const netAmount = toNumber(selected?.total_amount_less_wht);
-    const whtAmount = toNumber(selected?.wht_amount);
+    const netRaw = selected?.total_amount_less_wht;
+    const whtRaw = selected?.wht_amount;
 
-    // Show the gross paid amount in View Payment so it matches payment_details.amount_paid.
-    return netAmount + whtAmount;
+    const hasNet =
+        netRaw !== null && netRaw !== undefined && String(netRaw).trim() !== "";
+    const hasWht =
+        whtRaw !== null && whtRaw !== undefined && String(whtRaw).trim() !== "";
+
+    if (hasNet || hasWht) {
+        const gross = toNumber(netRaw) + toNumber(whtRaw);
+        if (gross > 0) return gross;
+    }
+
+    const paidRaw = selected?.amount_paid;
+    if (
+        paidRaw !== null &&
+        paidRaw !== undefined &&
+        String(paidRaw).trim() !== ""
+    ) {
+        const paid = toNumber(paidRaw);
+        if (paid > 0) return paid;
+    }
+
+    const totalRaw = selected?.total_amount;
+    if (
+        totalRaw !== null &&
+        totalRaw !== undefined &&
+        String(totalRaw).trim() !== ""
+    ) {
+        const total = toNumber(totalRaw);
+        if (total > 0) return total;
+    }
+
+    return 0;
 };
 
 const emit = defineEmits(["close", "closeSuccess"]);

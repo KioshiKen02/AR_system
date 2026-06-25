@@ -21,6 +21,7 @@
             </h2>
             <div class="flex justify-center gap-4">
                 <button
+                    type="button"
                     @click="confirm(false)"
                     class="px-8 py-2 rounded-md cursor-pointer hover:bg-[var(--color-primary-hover)]/20 border border-[var(--color-border)] text-[var(--color-text-primary)] font-medium relative overflow-hidden"
                     :disabled="form.processing"
@@ -28,6 +29,7 @@
                     No
                 </button>
                 <button
+                    type="button"
                     @click="confirm(true)"
                     class="px-8 py-2 rounded-md cursor-pointer bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-medium relative overflow-hidden disabled:opacity-50"
                     :disabled="form.processing"

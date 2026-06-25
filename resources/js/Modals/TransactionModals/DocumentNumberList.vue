@@ -164,7 +164,7 @@
                             <span><svg-icon type="mdi" :path="mdiCalendarClock" class="w-20 h-20" /></span>
                             <span v-if="filteredData.length !== 0" class="font-extrabold text-2xl">OLDEST TO NEWEST
                                 SELECTED</span>
-                            <span v-else class="font-extrabold text-2xl">NO DATA FOUND FOR THIS CUSTOMER</span>
+                            <span v-else class="font-extrabold text-2xl">{{ emptyStateMessage }}</span>
                         </div>
                     </div>
                     <div v-if="payment_mode === 'Manual Select'"
@@ -446,8 +446,7 @@
                                                             d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                     </svg>
                                                     <p class="font-medium">
-                                                        No data found for this
-                                                        customer
+                                                        {{ emptyStateMessage }}
                                                     </p>
                                                 </div>
                                             </td>
@@ -553,6 +552,27 @@ const applyBir2307 = ref(false);
 const allowOverpayment = computed(
     () => page.props.tenantSettings?.allow_overpayment ?? true
 );
+const emptyStateMessage = computed(() =>
+    props.date
+        ? "No transactions available on or before the selected receipt date."
+        : "No data found for this customer."
+);
+
+const isWithinSelectedReceiptDate = (documentDate) => {
+    if (!props.date || !documentDate) return true;
+
+    const selectedDate = new Date(props.date);
+    const transactionDate = new Date(documentDate);
+
+    if (Number.isNaN(selectedDate.getTime()) || Number.isNaN(transactionDate.getTime())) {
+        return true;
+    }
+
+    selectedDate.setHours(23, 59, 59, 999);
+    transactionDate.setHours(0, 0, 0, 0);
+
+    return transactionDate <= selectedDate;
+};
 
 watch([taxRate, applyBir2307], () => {
     if (props.whtEnabled) {
@@ -584,9 +604,10 @@ const infoDialogMessage = computed(() => {
 
 // Watch for changes in customer_code
 watch(
-    () => [props.customer_code],
-    async ([newCode]) => {
-        if (!newCode) {
+    () => [props.customer_code, props.date],
+    async ([newCode, newDate]) => {
+        if (!newCode || !newDate) {
+            resetValues();
             filteredData.value = [];
             documents.value = [];
             return;
@@ -594,6 +615,7 @@ watch(
 
         try {
             isLoading.value = true;
+            resetValues();
 
             const response = await axios.get(
                 route("getInvoiceListForPayment", { tenant: page.props.tenant }),
@@ -630,7 +652,8 @@ watch(
                         invoice.has_wht_floating_payments,
                     has_wht_transaction: invoice.has_wht_transaction,
                     wht_transaction_count: invoice.wht_transaction_count,
-                }));
+                }))
+                .filter((invoice) => isWithinSelectedReceiptDate(invoice.date));
             filteredData.value = documents.value;
         } catch (error) {
             console.error("Error fetching invoices:", error);
@@ -1070,7 +1093,7 @@ const updateSelectedValues = () => {
         .map((inv) => inv.type);
 };
 
-const resetValues = () => {
+function resetValues() {
     selectedInvoices.value = [];
     selectedInvoiceNumbers.value = [];
     selectedInvoiceType.value = [];
@@ -1082,7 +1105,7 @@ const resetValues = () => {
     hasdcFloating.value = false;
     whtfloatingAmount.value = 0;
     haswhtFloating.value = false;
-};
+}
 
 const validateAmount = (invoice) => {
     if (!isInvoiceSelected(invoice)) return;
@@ -1420,7 +1443,9 @@ watch(
         if (debounceTimeout) clearTimeout(debounceTimeout);
 
         debounceTimeout = setTimeout(() => {
-            let filtered = documents.value;
+            let filtered = documents.value.filter((document) =>
+                isWithinSelectedReceiptDate(document.date)
+            );
 
             // Apply search filter
             if (query && query.trim()) {

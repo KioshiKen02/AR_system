@@ -232,7 +232,7 @@
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
             enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
             leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
-            <ConfirmationDialog :show="showDialog" message="Are you sure about deleting this?" @close="handleConfirm" />
+            <ConfirmationDialog :show="showDialog" :message="confirmMessage" @close="handleConfirm" />
         </Transition>
 
         <div class="bg-[var(--color-bg-secondary)]/20 p-4 rounded-md shadow-[0_0_20px_var(--color-shadow)]/20 mt-4">
@@ -349,6 +349,10 @@
                                     class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100 disabled:opacity-70 disabled:cursor-not-allowed">
                                     <svg-icon type="mdi" :path="mdiSync" class="w-4 h-4 text-[var(--color-primary)]" />
                                 </button>
+                                <button type="button" v-if="isAdmin" @click="deleteItem(adjustment)"
+                                    class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-red-500/20 hover:bg-red-500/30 hover:shadow-lg group-hover:opacity-100">
+                                    <svg-icon type="mdi" :path="mdiDelete" class="w-4 h-4 text-red-400" />
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -386,7 +390,7 @@ import ToastAlert from "./Components/ToastAlert.vue";
 import ConfirmationDialog from "./Components/ConfirmationDialog.vue";
 import AddAdjustment from "../Modals/TransactionModals/AddAdjustment.vue";
 import ViewAdjustment from "../Modals/TransactionModals/ViewAdjustment.vue";
-import { mdiClose, mdiEye, mdiMagnify, mdiPlus, mdiSync } from "@mdi/js";
+import { mdiClose, mdiDelete, mdiEye, mdiMagnify, mdiPlus, mdiSync } from "@mdi/js";
 import { FunnelIcon } from "@heroicons/vue/24/solid";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import DatePicker from "./Components/DatePicker.vue";
@@ -415,6 +419,8 @@ const toastMessage = ref("");
 const showDialog = ref(false);
 const pendingDeleteID = ref(null);
 const showManagerModal = ref(false);
+const confirmMessage =
+    "Are you sure you want to cancel this adjustment? This will revert the affected customer ledger data.";
 
 const search = ref(props.searchTerm);
 
@@ -561,11 +567,15 @@ const handleConfirm = async (confirmed) => {
             router.delete(route("deleteAdjustment", { tenant: page.props.tenant, id: pendingDeleteID.value.id }), {
                 onSuccess: () => {
                     showSuccessToast(
-                        "Adjustment has been deleted successfully"
+                        "Adjustment has been cancelled successfully"
                     );
                 },
                 onError: (errors) => {
-                    console.error("Failed to delete Adjustment:", errors);
+                    showSuccessToast(
+                        errors?.general ||
+                            errors?.message ||
+                            "Failed to cancel adjustment."
+                    );
                 },
             });
         } catch (error) {

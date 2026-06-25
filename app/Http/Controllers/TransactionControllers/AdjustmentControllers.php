@@ -60,7 +60,7 @@ class AdjustmentControllers extends Controller
         $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
             && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
 
-        $rows = PaymentDetails::where('document_no', $documentNo)
+        $rows = PaymentDetails::on('tenant')->where('document_no', $documentNo)
             ->where('type', $type)
             ->orderBy('payment_date')
             ->orderBy('id')
@@ -98,7 +98,7 @@ class AdjustmentControllers extends Controller
         $shrinkage = (float) ($ledger->shrinkage ?? 0);
         $returnAmount = (float) ($ledger->return ?? 0);
         $debit = $baseAmount + $overage - $shrinkage - $returnAmount;
-        $totalCollectiblePaid = (float) PaymentDetails::where('document_no', $ledger->invoice_number)
+        $totalCollectiblePaid = (float) PaymentDetails::on('tenant')->where('document_no', $ledger->invoice_number)
             ->where('type', $ledger->type)
             ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
             ->sum('amount_paid');
@@ -115,7 +115,7 @@ class AdjustmentControllers extends Controller
             return 0.0;
         }
 
-        $query = PaymentDetails::where('document_no', $documentNo)
+        $query = PaymentDetails::on('tenant')->where('document_no', $documentNo)
             ->where('type', $type)
             ->where('status', '!=', 'Cancelled')
             ->where('wht_amount', '>', 0);
@@ -137,7 +137,7 @@ class AdjustmentControllers extends Controller
             return 0.0;
         }
 
-        $query = PaymentDetails::where('document_no', $documentNo)
+        $query = PaymentDetails::on('tenant')->where('document_no', $documentNo)
             ->where('type', $type)
             ->where('status', '!=', 'Cancelled')
             ->where('wht_amount', '>', 0);
@@ -150,6 +150,128 @@ class AdjustmentControllers extends Controller
         }
 
         return (float) $query->sum('wht_amount');
+    }
+
+    private function paymentDetailsEffectivePaidSelect(bool $hasPaymentDetailsWhtColumns): string
+    {
+        if (!$hasPaymentDetailsWhtColumns) {
+            return 'document_no, type, SUM(amount_paid) as total_paid';
+        }
+
+        return "document_no, type,
+            SUM(
+                CASE
+                    WHEN COALESCE(wht_amount, 0) > 0
+                    THEN GREATEST(COALESCE(amount_paid, 0) - COALESCE(wht_amount, 0), 0)
+                    ELSE COALESCE(amount_paid, 0)
+                END
+            ) as total_paid";
+    }
+
+    private function recomputeLedgerFromCurrentState(CustomerLedger $ledger): void
+    {
+        $hasLedgerWhtAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount');
+        $hasLedgerOverpaymentAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount');
+        $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
+
+        $ledger->refresh();
+
+        $applyTo = $ledger->type;
+        if ($ledger->type === 'Charge Invoice') {
+            $applyTo = 'Other Income';
+        } elseif ($ledger->type === 'BG' || $ledger->type === 'Beginning Balance') {
+            $applyTo = 'Beginning Balance';
+        }
+
+        $amount = (float) ($ledger->amount ?? 0);
+        if ($ledger->type === 'BG' || $ledger->type === 'Beginning Balance') {
+            $beginRow = BeginningBalance::on('tenant')->where('beginningbalance_no', $ledger->invoice_number)->first();
+            if ($beginRow) {
+                $amount = (float) $beginRow->balance_amount;
+            }
+        }
+
+        $posNeg = Adjustment::on('tenant')->where('invoice_no', $ledger->invoice_number)
+            ->where('apply_to', $applyTo)
+            ->selectRaw("
+                SUM(CASE WHEN type='Positive' THEN amount ELSE 0 END) as pos_sum,
+                SUM(CASE WHEN type='Negative' THEN amount ELSE 0 END) as neg_sum
+            ")
+            ->first();
+
+        $posSum = (float) ($posNeg->pos_sum ?? 0);
+        $negSum = (float) ($posNeg->neg_sum ?? 0);
+        $netAdjustment = $posSum - $negSum;
+
+        $shrinkage = (float) ($ledger->shrinkage ?? 0);
+        $overage = (float) ($ledger->overage ?? 0);
+        $returnAmount = (float) ($ledger->return ?? 0);
+
+        $debit = $amount + $netAdjustment - $shrinkage + $overage - $returnAmount;
+        $adjustedAmount = $amount + $netAdjustment;
+
+        $paidRow = PaymentDetails::on('tenant')->where('document_no', $ledger->invoice_number)
+            ->where('type', $ledger->type)
+            ->whereIn('status', ['Paid', 'Cleared'])
+            ->selectRaw($this->paymentDetailsEffectivePaidSelect($hasPaymentDetailsWhtColumns))
+            ->groupBy('document_no', 'type')
+            ->first();
+        $paid = (float) ($paidRow->total_paid ?? 0);
+
+        $grossRow = PaymentDetails::on('tenant')->where('document_no', $ledger->invoice_number)
+            ->where('type', $ledger->type)
+            ->whereIn('status', ['Floating', 'Paid', 'Cleared'])
+            ->selectRaw('document_no, type, SUM(COALESCE(amount_paid, 0)) as total_gross_paid')
+            ->groupBy('document_no', 'type')
+            ->first();
+        $grossPaid = (float) ($grossRow->total_gross_paid ?? 0);
+
+        $wht = 0.0;
+        if ($hasLedgerWhtAmount && Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+            $whtQuery = PaymentDetails::on('tenant')->where('document_no', $ledger->invoice_number)
+                ->where('type', $ledger->type)
+                ->whereIn('status', ['Paid', 'Cleared'])
+                ->where('wht_amount', '>', 0);
+
+            if ($hasPaymentDetailsWhtColumns) {
+                $whtQuery->where(function ($q) {
+                    $q->whereNull('wht_status')
+                        ->orWhere('wht_status', 'Cleared');
+                });
+            }
+
+            $whtRow = $whtQuery
+                ->selectRaw('document_no, type, SUM(wht_amount) as total_wht')
+                ->groupBy('document_no', 'type')
+                ->first();
+
+            $wht = (float) ($whtRow->total_wht ?? 0);
+        }
+
+        $totalCredited = $paid + $wht;
+        $runningBalance = max(0, $debit - $totalCredited);
+        $overpaymentAmount = max(0, $grossPaid - $debit);
+
+        $ledgerUpdate = [
+            'amount' => $amount,
+            'amount_paid' => $paid,
+            'adjusted_amount' => $adjustedAmount,
+            'positive_adjustment_amount' => $posSum,
+            'negative_adjustment_amount' => $negSum,
+            'running_balance' => $runningBalance,
+        ];
+
+        if ($hasLedgerWhtAmount) {
+            $ledgerUpdate['wht_amount'] = $wht;
+        }
+        if ($hasLedgerOverpaymentAmount) {
+            $ledgerUpdate['overpayment_amount'] = $overpaymentAmount;
+        }
+
+        $ledger->update($ledgerUpdate);
+        $ledger->refresh();
+        $this->syncPaymentDetailOverpayment($ledger->invoice_number, $ledger->type, $debit);
     }
 
     public function index(Request $request)
@@ -685,10 +807,89 @@ class AdjustmentControllers extends Controller
         };
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $tenant, $id)
     {
-        $adj = Adjustment::findorFail($id);
-        $adj->delete();
+        $routeId = $request->route('id');
+        $targetId = is_numeric($routeId) ? (int) $routeId : $id;
+
+        DB::connection('tenant')->transaction(function () use ($request, $targetId, $id, $routeId) {
+            $adj = Adjustment::on('tenant')->withTrashed()->lockForUpdate()->find($targetId);
+            if (!$adj) {
+                $tenantSlug = (string) ($request->route('tenant') ?? '');
+                $dbName = (string) (DB::connection('tenant')->getDatabaseName() ?? '');
+                throw ValidationException::withMessages([
+                    'general' => trim("Adjustment not found. Tenant: {$tenantSlug} DB: {$dbName} ID: {$targetId} (route id: {$routeId}, arg id: {$id})"),
+                ]);
+            }
+            if ($adj->trashed()) {
+                throw ValidationException::withMessages([
+                    'general' => 'Adjustment is already cancelled.',
+                ]);
+            }
+
+            $ledgerTypes = match ($adj->apply_to) {
+                'Sales Invoice' => ['Sales Invoice'],
+                'Other Income' => ['Charge Invoice'],
+                'Beginning Balance' => ['BG', 'Beginning Balance'],
+                default => [],
+            };
+
+            if (empty($ledgerTypes)) {
+                throw ValidationException::withMessages([
+                    'general' => 'Unsupported adjustment type.',
+                ]);
+            }
+
+            $ledger = CustomerLedger::on('tenant')->where('invoice_number', $adj->invoice_no)
+                ->whereIn('type', $ledgerTypes)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$ledger) {
+                throw ValidationException::withMessages([
+                    'general' => 'No matching customer ledger record was found for this adjustment.',
+                ]);
+            }
+
+            $adj->delete();
+
+            $this->recomputeLedgerFromCurrentState($ledger);
+            $this->syncLedgerOverpayment($ledger);
+
+            if ($adj->apply_to === 'Sales Invoice') {
+                $userAppSetting = $request->user()?->appSetting;
+                $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
+
+                $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
+                if ($baseUrl) {
+                    $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
+                    if (filter_var($url, FILTER_VALIDATE_URL)) {
+                        try {
+                            Http::timeout(3)
+                                ->retry(2, 200)
+                                ->withHeaders([
+                                    'Accept' => 'application/json',
+                                ])->post($url, [
+                                    'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                                    'tds_no' => $adj->invoice_no,
+                                ]);
+                        } catch (\Throwable $e) {
+                            Log::error('Adjustment cancel sales sync failed', [
+                                'adjustment_id' => $adj->id,
+                                'invoice_no' => $adj->invoice_no,
+                                'url' => $url,
+                                'exception' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                }
+            }
+        });
+
+        event(new NewCreated('adjustment'));
+        event(new NewCreated('customerledger'));
+
+        return redirect()->back();
     }
 
     public function latest()

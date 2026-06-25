@@ -454,6 +454,7 @@ class GenerateTextFile
 
                     if (!empty($idsToMark)) {
                         DB::table('adjustment')
+                            ->whereNull('deleted_at')
                             ->whereIn('id', $idsToMark)
                             ->update(['exported' => true]);
                     }
@@ -486,6 +487,7 @@ class GenerateTextFile
 
             $walkInCustomerCodes = $this->getWalkInCustomerCodes();
             DB::table('adjustment')
+                ->whereNull('deleted_at')
                 ->whereBetween('receipt_date', [
                     $this->validatedData['start_date'],
                     $this->validatedData['end_date']
@@ -619,8 +621,24 @@ class GenerateTextFile
                         $custCodeHolderName = $custCodeCustomer?->cus_name ?? '';
 
                         $accCodeName = $accCodes->get($payment->acc_code)?->gl_account_name ?? '';
+                        $hasExportedDetail = false;
 
                         foreach ($payment->paymentDetails as $detail) {
+                            $detailStatus = trim((string) ($detail->status ?? ''));
+                            $detailWhtStatus = trim((string) ($detail->wht_status ?? ''));
+                            $detailPaymentType = trim((string) ($detail->payment_type ?? ''));
+                            $hasFloatingCheck = strcasecmp($detailPaymentType, 'Check') === 0
+                                && strcasecmp($detailStatus, 'Floating') === 0;
+                            $hasFloatingWht = (float) ($detail->wht_amount ?? 0) > 0
+                                && (
+                                    strcasecmp($detailWhtStatus, 'Floating') === 0
+                                    || ($detailWhtStatus === '' && strcasecmp($detailStatus, 'Floating') === 0)
+                                );
+
+                            if ($hasFloatingCheck || $hasFloatingWht) {
+                                continue;
+                            }
+
                             $detailCustomerCode = trim((string) ($detail->customer_code ?? ''));
                             $lineCustomer = $paymentCustomer;
                             $lineCustomerCusCode = $paymentCustomerCusCode;
@@ -662,6 +680,8 @@ class GenerateTextFile
                                     $detail,
                                     $bankName,
                                     $lineCustomerExportCode,
+                                    $lineCustomerCusPosting,
+                                    $paymentReferenceNo,
                                     $docCode,
                                     $lineCustomerLocCode
                                 );
@@ -718,28 +738,30 @@ class GenerateTextFile
                                 );
                             }
 
-                            $shouldGenerateWhtLine = (float) ($detail->wht_amount ?? 0) > 0
-                                && ($detail->wht_status ?? null) !== 'Floating'
-                                && (($detail->wht_status ?? null) !== null || ($detail->status ?? null) !== 'Floating');
+                            $hasExportedDetail = true;
 
-                            if ($shouldGenerateWhtLine) {
-                                $lines[] = $this->generateWHTLine(
-                                    $auto_increment,
-                                    $detail,
-                                    $paymentAccountCode,
-                                    $paymentAccountCodeDescription,
-                                    $bankCode,
-                                    $bankName,
-                                    $lineCustomerExportCode,
-                                    $lineCustomerCusPosting,
-                                    $lineCustomerExportCode,
-                                    $customerName,
-                                    $accCode,
-                                    $accCodeName,
-                                    $docCode,
-                                    $lineCustomerLocCode
-                                );
-                            }
+                            // $shouldGenerateWhtLine = (float) ($detail->wht_amount ?? 0) > 0
+                            //     && ($detail->wht_status ?? null) !== 'Floating'
+                            //     && (($detail->wht_status ?? null) !== null || ($detail->status ?? null) !== 'Floating');
+
+                            // if ($shouldGenerateWhtLine) {
+                            //     $lines[] = $this->generateWHTLine(
+                            //         $auto_increment,
+                            //         $detail,
+                            //         $paymentAccountCode,
+                            //         $paymentAccountCodeDescription,
+                            //         $bankCode,
+                            //         $bankName,
+                            //         $lineCustomerExportCode,
+                            //         $lineCustomerCusPosting,
+                            //         $lineCustomerExportCode,
+                            //         $customerName,
+                            //         $accCode,
+                            //         $accCodeName,
+                            //         $docCode,
+                            //         $lineCustomerLocCode
+                            //     );
+                            // }
                             $processedRows++;
                         }
 
@@ -750,7 +772,7 @@ class GenerateTextFile
                             $lastProgress = $progress;
                         }
 
-                        if ($payment->paymentDetails->isNotEmpty()) {
+                        if ($hasExportedDetail) {
                             $idsToMark[] = $payment->id;
                         }
                     }
@@ -1126,7 +1148,7 @@ class GenerateTextFile
         return $this->formatLines($headerLine, $detailLine);
     }
 
-    protected function generateCashPaymentLine(&$auto_increment, $bankCode, $detail, $bankName, $customerNavCode, string $docCode, $locCode = null)
+    protected function generateCashPaymentLine(&$auto_increment, $bankCode, $detail, $bankName, $customerNavCode, $customerCusPosting, string $paymentReferenceNo, string $docCode, $locCode = null)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
@@ -1134,7 +1156,18 @@ class GenerateTextFile
         $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
-       
+        
+        $grossAmountValue = (float) ($detail->amount_paid ?? 0);
+        $whtAmountValue = (float) ($detail->wht_amount ?? 0);
+        $cashAmountValue = $grossAmountValue;
+        if ($whtAmountValue > 0) {
+            $cashAmountValue = max($grossAmountValue - $whtAmountValue, 0);
+        }
+
+        $cashAmount = $this->fmt($cashAmountValue);
+        $cashAmountNegative = $this->fmt($cashAmountValue * -1);
+        $grossAmount = $this->fmt($grossAmountValue);
+        $grossAmountNegative = $this->fmt($grossAmountValue * -1);
         
         $headerLine = [
             'CASH RECEI',
@@ -1147,11 +1180,11 @@ class GenerateTextFile
             $prefix . 'PY' . $detail->payment_no,
             $bankName,
             'PHP',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid),
+            $cashAmount,
+            $cashAmount,
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid),
+            $cashAmount,
+            $cashAmount,
             '1',
             '',
             '',
@@ -1161,14 +1194,14 @@ class GenerateTextFile
             '',
             '',
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1),
+            $cashAmount,
+            $cashAmountNegative,
             $formattedDate,
-            $prefix . $docCode . '#' . $detail->document_no,
+            $prefix . $docCode . '#' . $paymentReferenceNo,
             'Bank Account',
             $bankCode,
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1)
+            $cashAmount,
+            $cashAmountNegative
         ];
 
         $detailLine = [
@@ -1182,31 +1215,71 @@ class GenerateTextFile
             $prefix . 'PY' . $detail->payment_no,
             $this->sanitizeCustomerName($detail->customer_name),
             'PHP',
-            $this->fmt($detail->amount_paid * -1),
+            $grossAmountNegative,
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid * -1),
+            $grossAmount,
+            $grossAmountNegative,
+            $grossAmountNegative,
             '1',
             $customerNavCode,
-            'INT-TRADE',
+            $customerCusPosting,
             $companyCode,
             $deptCode,
             'CASHRECJNL',
             'Invoice',
             $prefix . $docCode . $detail->document_no,
             $formattedDate,
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid),
+            $grossAmountNegative,
+            $grossAmount,
             $formattedDate,
-            $prefix . $docCode . '#' . $detail->document_no,
+            $prefix . $docCode . '#' . $paymentReferenceNo,
             'Customer',
-            $bankCode,
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid)
+            $customerNavCode,
+            $grossAmountNegative,
+            $grossAmount
         ];
+        $whtLineString = '';
+        if (!empty($detail->wht_amount) && $detail->wht_amount > 0) {
+            $whtLine = [
+                'CASH RECEI',
+                $prefix1 . 'COLL',
+                ($auto_increment += 10000),
+                'G/L Account',
+                '10.07.01.01',
+                $formattedDate,
+                'Payment',
+                $prefix . 'PY' . $detail->payment_no,
+                'Withholding Tax Receivable Customer',
+                'PHP',
+                $this->fmt($detail->wht_amount),
+                $this->fmt($detail->wht_amount),
+                '',
+                $this->fmt($detail->wht_amount),
+                $this->fmt($detail->wht_amount),
+                '1',
+                '10.07.01.01',
+                $customerCusPosting,
+                $companyCode,
+                $deptCode,
+                'CASHRECJNL',
+                '',
+                '',
+                '',
+                $this->fmt($detail->wht_amount),
+                $this->fmt($detail->wht_amount * -1),
+                $formattedDate,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
+                'Customer',
+                '10.07.01.01',
+                $this->fmt($detail->wht_amount),
+                $this->fmt($detail->wht_amount * -1)
+            ];
+            $whtLineString = implode(',', $whtLine) . "\r\n";
+        }
 
-        return $this->formatLines($headerLine, $detailLine);
+        return implode(',', $headerLine) . "\r\n"
+            . $whtLineString
+            . implode(',', $detailLine) . "\r\n";
     }
 
     protected function generateJournalVoucherLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
