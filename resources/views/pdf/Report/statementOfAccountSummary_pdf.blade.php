@@ -161,12 +161,14 @@
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
+            margin-top: 14px;
         }
 
         .signatory-table td {
             vertical-align: top;
-            padding: 10px;
-            font-size: 10px;
+            width: 33.33%;
+            padding: 14px 20px 10px;
+            font-size: 12px;
             color: #000000;
             border-top: 1px solid black;
         }
@@ -177,35 +179,66 @@
 
         .signatory-label {
             margin: 0;
+            font-weight: bold;
+            font-size: 12px;
         }
 
         .signatory-signature-line {
             border-bottom: 1px solid black;
-            margin-top: 10px;
-            height: 14px;
-            line-height: 14px;
+            margin-top: 22px;
+            min-height: 20px;
+            line-height: 20px;
             text-align: center;
             white-space: nowrap;
             overflow: hidden;
+            font-size: 12px;
         }
 
         .signatory-caption {
             text-align: center;
-            margin-top: 2px;
+            margin-top: 6px;
+            font-size: 12px;
         }
 
         .signatory-field-label {
-            margin-top: 6px;
+            margin-top: 0;
+            font-size: 12px;
         }
 
         .signatory-field-line {
             border-bottom: 1px solid black;
-            margin-top: 2px;
-            height: 14px;
-            line-height: 14px;
-            text-align: center;
+            margin-top: 0;
+            min-height: 16px;
+            line-height: 16px;
+            text-align: left;
             white-space: nowrap;
             overflow: hidden;
+            font-size: 12px;
+            padding-left: 6px;
+        }
+
+        .signatory-meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin-top: 16px;
+        }
+
+        .signatory-meta-table td {
+            border-top: none;
+            padding: 4px 0 0;
+            font-size: 12px;
+            vertical-align: middle;
+        }
+
+        .signatory-meta-label-cell {
+            width: 30%;
+            padding-right: 8px;
+            white-space: nowrap;
+        }
+
+        .signatory-meta-line-cell {
+            width: 70%;
         }
 
         .signatory-compact-container {
@@ -334,34 +367,94 @@
                 <div class="signatory-label">Prepared By:</div>
                 <div class="signatory-signature-line">{{ $preparedBy }}</div>
                 <div class="signatory-caption">(Signature Over Printed Name)</div>
-                <div class="signatory-field-label">Date:</div>
-                <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format('m/d/Y') }}</div>
-                <div class="signatory-field-label">Time:</div>
-                <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format(' h:i:s A') }}</div>
-                <div class="signatory-field-label">Designation:</div>
-                <div class="signatory-field-line"></div>
+                <table class="signatory-meta-table">
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Date:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format('m/d/Y') }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Time:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format('h:i:s A') }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Designation:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                </table>
             </td>
             <td>
                 <div class="signatory-label">Checked By:</div>
                 <div class="signatory-signature-line"></div>
                 <div class="signatory-caption">(Signature Over Printed Name)</div>
-                <div class="signatory-field-label">Date:</div>
-                <div class="signatory-field-line"></div>
-                <div class="signatory-field-label">Time:</div>
-                <div class="signatory-field-line"></div>
-                <div class="signatory-field-label">Designation:</div>
-                <div class="signatory-field-line"></div>
+                <table class="signatory-meta-table">
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Date:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Time:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Designation:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                </table>
             </td>
             <td>
                 <div class="signatory-label">Note By:</div>
                 <div class="signatory-signature-line">{{ $notedBy ?? '' }}</div>
                 <div class="signatory-caption">(Signature Over Printed Name)</div>
-                <div class="signatory-field-label">Date:</div>
-                <div class="signatory-field-line"></div>
-                <div class="signatory-field-label">Time:</div>
-                <div class="signatory-field-line"></div>
-                <div class="signatory-field-label">Designation:</div>
-                <div class="signatory-field-line"></div>
+                <table class="signatory-meta-table">
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Date:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Time:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Designation:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>

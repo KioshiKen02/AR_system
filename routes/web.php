@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\MasterfileControllers\AdjustmentReasonSetupController;
+use App\Http\Controllers\MasterfileControllers\AnnouncementController;
 use App\Http\Controllers\MasterfileControllers\AppSettingController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Controller;
@@ -134,6 +135,13 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
             Route::post('/app-settings', [AppSettingController::class, 'store'])->name('app-settings.store');
             Route::put('/app-settings/{appSetting}', [AppSettingController::class, 'update'])->name('app-settings.update');
             Route::delete('/app-settings/{appSetting}', [AppSettingController::class, 'destroy'])->name('app-settings.destroy');
+        });
+
+        Route::middleware(EnsureUserIsAdmin::class)->group(function () {
+            Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
+            Route::post('/announcements', [AnnouncementController::class, 'store'])->name('announcements.store');
+            Route::put('/announcements/{announcement}', [AnnouncementController::class, 'update'])->name('announcements.update');
+            Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
         });
 
         //Checkers page

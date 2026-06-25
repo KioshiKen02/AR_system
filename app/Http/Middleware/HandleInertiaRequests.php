@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\AppSetting;
+use App\Models\Announcement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
@@ -129,6 +130,30 @@ class HandleInertiaRequests extends Middleware
                         ];
                     })
                     ->toArray();
+            },
+            'activeAnnouncement' => function () {
+                $currentAppSettingId = config('tenant.current_app_setting_id');
+                if (!$currentAppSettingId) {
+                    return null;
+                }
+
+                if (!Schema::connection('mysql')->hasTable('announcements')) {
+                    return null;
+                }
+
+                $announcement = Announcement::query()
+                    ->select('id', 'title', 'message', 'show_banner', 'show_modal', 'is_dismissible', 'created_at')
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($currentAppSettingId) {
+                        $q->where('applies_to_all', true)
+                            ->orWhereHas('appSettings', function ($tq) use ($currentAppSettingId) {
+                                $tq->where('app_settings.id', $currentAppSettingId);
+                            });
+                    })
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                return $announcement?->toArray();
             },
         ]);
     }

@@ -24,13 +24,13 @@
             />
             <ToastAlertWarning :show="showToast" :message="toastMessage" />
             <div id="app" class="flex h-screen" v-cloak>
-                <!-- Sidebar -->
-                <aside
-                    class="bg-[var(--color-bg-secondary)] border-r border-[var(--color-border)] backdrop-blur-sm flex flex-col z-30 relative shadow-[6px_0_12px_-2px_rgba(0,0,0,0.3)] transition-all duration-300 ease-in-out h-full"
-                    :class="{
-                        'w-60': !sidebarCollapsed,
-                        'w-20': sidebarCollapsed,
-                    }">
+                    <!-- Sidebar -->
+                    <aside
+                        class="bg-[var(--color-bg-secondary)] border-r border-[var(--color-border)] backdrop-blur-sm flex flex-col z-30 relative shadow-[6px_0_12px_-2px_rgba(0,0,0,0.3)] transition-all duration-300 ease-in-out h-full"
+                        :class="{
+                            'w-60': !sidebarCollapsed,
+                            'w-20': sidebarCollapsed,
+                        }">
                     <!-- Header and Logo -->
                     <div class="h-[67px] p-2 backdrop-blur-sm flex items-center justify-between pl-4" :class="{
                         'pr-4': sidebarCollapsed,
@@ -325,8 +325,8 @@ sub, subIndex
                     </div>
                 </aside>
 
-                <!-- Main content -->
-                <main class="flex-1 flex flex-col min-h-0 transition-all duration-300 ease-in-out">
+                    <!-- Main content -->
+                    <main class="flex-1 flex flex-col min-h-0 transition-all duration-300 ease-in-out">
                     <!-- Sticky Header -->
                     <header
                         class="sticky top-0 z-10 bg-[var(--color-bg-secondary)] backdrop-blur-sm p-2 border-b border-[var(--color-border)] shadow-[0_6px_12px_-2px_rgba(0,0,0,0.3)]">
@@ -870,6 +870,7 @@ const user_menus = computed(() => [
             ...(page.props.auth.user.role === 'Admin' ? [
                 { name: "User Masterfile", link: route("user-masterfile.index", { tenant: page.props.tenant }) },
                 { name: "Database Setup", link: route("app-settings.index", { tenant: page.props.tenant }) },
+                { name: "Announcements", link: route("announcements.index", { tenant: page.props.tenant }) },
             ] : []),
             { name: "Logout", link: route("logout", { tenant: page.props.tenant }) },
         ],

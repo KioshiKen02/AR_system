@@ -119,6 +119,27 @@ class GeneratePdfJob
         return $displayBalance + max(0, $grossPaid - $overpayment);
     }
 
+    private function normalizeReportAmount($value): float
+    {
+        return (float) str_replace(',', '', (string) ($value ?? 0));
+    }
+
+    private function calculateOutstandingDocumentBalance(CustomerLedger $ledger): float
+    {
+        $amount = $this->normalizeReportAmount($ledger->amount);
+        $shrinkage = $this->normalizeReportAmount($ledger->shrinkage);
+        $overage = $this->normalizeReportAmount($ledger->overage);
+        $return = $this->normalizeReportAmount($ledger->return);
+        $positiveAdjustment = $this->normalizeReportAmount($ledger->positive_adjustment_amount);
+        $negativeAdjustment = $this->normalizeReportAmount($ledger->negative_adjustment_amount);
+        $amountPaid = $this->normalizeReportAmount($ledger->amount_paid);
+
+        $grossDebit = $amount - $shrinkage + $overage - $return;
+        $netDebit = $grossDebit + ($positiveAdjustment - $negativeAdjustment);
+
+        return $netDebit - $amountPaid;
+    }
+
     public function handle()
     {
         ini_set('memory_limit', '1024M');
@@ -2716,7 +2737,6 @@ class GeneratePdfJob
         $groupedData = [];
         $customerOverallAmountTotal = 0;
         $customerCodes = [];
-        $runningBalances = [];
 
         $query->chunkById(500, function ($chunk) use (&$customerCodes) {
             $chunk->each(function ($item) use (&$customerCodes) {
@@ -2768,8 +2788,7 @@ class GeneratePdfJob
             $floatingAmounts,
             &$processedRows,
             $totalRows,
-            &$lastProgress,
-            &$runningBalances
+            &$lastProgress
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
                 return $item->customer_code.'|'.$item->customer_name;
@@ -2801,29 +2820,11 @@ class GeneratePdfJob
                     $val = function ($v) {
                         return (float) str_replace(',', '', (string) ($v ?? 0));
                     };
-
-                    $balanceKey = $customerCode;
-                    if (! isset($runningBalances[$balanceKey])) {
-                        $runningBalances[$balanceKey] = 0;
-                    }
-
-                    $amount = $val($outstandingBalance->amount);
-                    $shrinkageVal = $val($outstandingBalance->shrinkage);
-                    $overageVal = $val($outstandingBalance->overage);
-                    $returnVal = $val($outstandingBalance->return);
-
                     $positiveAdjustmentAmount = $val($outstandingBalance->positive_adjustment_amount);
                     $negativeAdjustmentAmount = $val($outstandingBalance->negative_adjustment_amount);
                     $adjustmentAmount = $positiveAdjustmentAmount - $negativeAdjustmentAmount;
-
-                    $grossDebit = $amount - $shrinkageVal + $overageVal - $returnVal;
-
-                    $netDebit = $grossDebit + $adjustmentAmount;
-
-                    $credit = $val($outstandingBalance->amount_paid);
-
-                    $runningBalances[$balanceKey] += $netDebit - $credit;
-                    $arNetAmount = $runningBalances[$balanceKey];
+                    $arNetAmount = $this->calculateOutstandingDocumentBalance($outstandingBalance);
+                    $customerData['customerAmountTotal'] += $arNetAmount;
 
                     $customerData['outstandingBalances'][] = [
                         'document_no' => $outstandingBalance->invoice_number,
@@ -2847,8 +2848,6 @@ class GeneratePdfJob
                         $lastProgress = $progress;
                     }
                 }
-
-                $customerData['customerAmountTotal'] = $runningBalances[$customerCode] ?? 0;
 
                 if ($customerIndex !== false) {
                     $groupedData[$customerIndex] = $customerData;
@@ -3040,7 +3039,7 @@ class GeneratePdfJob
                     $overage = $outstandingBalance->overage ?? 0;
                     $shrinkage_overage = $overage - $shrinkage;
 
-                    $arNetAmount = $outstandingBalance->running_balance;
+                    $arNetAmount = $this->calculateOutstandingDocumentBalance($outstandingBalance);
                     $customerData['customerAmountTotal'] += $arNetAmount;
 
                     $val = function ($v) {
@@ -3182,7 +3181,6 @@ class GeneratePdfJob
         $groupedData = [];
         $customerOverallAmountTotal = 0;
         $customerCodes = [];
-        $runningBalances = [];
 
         $query->chunkById(500, function ($chunk) use (&$customerCodes) {
             $chunk->each(function ($item) use (&$customerCodes) {
@@ -3234,8 +3232,7 @@ class GeneratePdfJob
             $floatingAmounts,
             &$processedRows,
             $totalRows,
-            &$lastProgress,
-            &$runningBalances
+            &$lastProgress
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
                 return $item->customer_code.'|'.$item->customer_name;
@@ -3267,29 +3264,11 @@ class GeneratePdfJob
                     $val = function ($v) {
                         return (float) str_replace(',', '', (string) ($v ?? 0));
                     };
-
-                    $balanceKey = $customerCode;
-                    if (! isset($runningBalances[$balanceKey])) {
-                        $runningBalances[$balanceKey] = 0;
-                    }
-
-                    $amount = $val($outstandingBalance->amount);
-                    $shrinkageVal = $val($outstandingBalance->shrinkage);
-                    $overageVal = $val($outstandingBalance->overage);
-                    $returnVal = $val($outstandingBalance->return);
-
                     $positiveAdjustmentAmount = $val($outstandingBalance->positive_adjustment_amount);
                     $negativeAdjustmentAmount = $val($outstandingBalance->negative_adjustment_amount);
                     $adjustmentAmount = $positiveAdjustmentAmount - $negativeAdjustmentAmount;
-
-                    $grossDebit = $amount - $shrinkageVal + $overageVal - $returnVal;
-
-                    $netDebit = $grossDebit + $adjustmentAmount;
-
-                    $credit = $val($outstandingBalance->amount_paid);
-
-                    $runningBalances[$balanceKey] += $netDebit - $credit;
-                    $arNetAmount = $runningBalances[$balanceKey];
+                    $arNetAmount = $this->calculateOutstandingDocumentBalance($outstandingBalance);
+                    $customerData['customerAmountTotal'] += $arNetAmount;
 
                     $customerData['outstandingBalances'][] = [
                         'document_no' => $outstandingBalance->invoice_number,
@@ -3313,8 +3292,6 @@ class GeneratePdfJob
                         $lastProgress = $progress;
                     }
                 }
-
-                $customerData['customerAmountTotal'] = $runningBalances[$customerCode] ?? 0;
 
                 if ($customerIndex !== false) {
                     $groupedData[$customerIndex] = $customerData;
@@ -3487,7 +3464,7 @@ class GeneratePdfJob
                     $overage = $outstandingBalance->overage ?? 0;
                     $shrinkage_overage = $overage - $shrinkage;
 
-                    $arNetAmount = $outstandingBalance->running_balance;
+                    $arNetAmount = $this->calculateOutstandingDocumentBalance($outstandingBalance);
                     $customerData['customerAmountTotal'] += $arNetAmount;
 
                     $val = function ($v) {
@@ -4121,9 +4098,21 @@ class GeneratePdfJob
                         })
                         ->sum('wht_amount');
 
+                    $documentBalance = $this->calculateOutstandingDocumentBalance($paymentDetail);
                     $balance = ($this->validatedData['soatype'] ?? 'SOA') === 'SOA'
-                        ? $paymentDetail->running_balance
-                        : $paymentDetail->running_balance - ($floatingPdcDc + $floatingWht);
+                        ? $documentBalance
+                        : $documentBalance - ($floatingPdcDc + $floatingWht);
+
+                    if (round((float) $balance, 2) == 0) {
+                        $processedRows++;
+                        $progress = intval(($processedRows / $totalRows) * 100);
+
+                        if ($progress > $lastProgress) {
+                            $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
+                            $lastProgress = $progress;
+                        }
+                        continue;
+                    }
 
                     $totalBalance += $balance;
 
@@ -4162,7 +4151,9 @@ class GeneratePdfJob
 
                 $customerData['total_balance'] = $totalBalance;
                 $customerData['total_balance_words'] = $this->convertToPesosWords($totalBalance);
-                $groupedData[] = $customerData;
+                if (! empty($customerData['paymentDetails']) && round((float) $totalBalance, 2) != 0) {
+                    $groupedData[] = $customerData;
+                }
             }
         });
 
@@ -4264,9 +4255,21 @@ class GeneratePdfJob
                         })
                         ->sum('wht_amount');
 
-                    $balance = $this->validatedData['soatype'] === 'SOA'
-                        ? $paymentDetail->running_balance
-                        : $paymentDetail->running_balance - ($floatingPdcDc + $floatingWht);
+                    $documentBalance = $this->calculateOutstandingDocumentBalance($paymentDetail);
+                    $balance = ($this->validatedData['soatype'] ?? 'SOA') === 'SOA'
+                        ? $documentBalance
+                        : $documentBalance - ($floatingPdcDc + $floatingWht);
+
+                    if (round((float) $balance, 2) == 0) {
+                        $processedRows++;
+                        $progress = intval(($processedRows / $totalRows) * 100);
+
+                        if ($progress > $lastProgress) {
+                            $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
+                            $lastProgress = $progress;
+                        }
+                        continue;
+                    }
 
                     $totalBalance += $balance;
 
@@ -4304,9 +4307,10 @@ class GeneratePdfJob
                 }
 
                 $customerData['total_balance'] = number_format($totalBalance, 2, '.', '');
-
                 $customerData['total_balance_words'] = $this->convertToPesosWords($totalBalance);
-                $groupedData[] = $customerData;
+                if (! empty($customerData['paymentDetails']) && round((float) $totalBalance, 2) != 0) {
+                    $groupedData[] = $customerData;
+                }
             }
         });
 
@@ -4421,12 +4425,24 @@ class GeneratePdfJob
                         $customerData['paymentDetails'][$type] = [];
                     }
 
-                    $customerAmountTotal += $paymentDetail->running_balance;
+                    $balance = $this->calculateOutstandingDocumentBalance($paymentDetail);
+                    if (round((float) $balance, 2) == 0) {
+                        $processedRows++;
+                        $progress = intval(($processedRows / $totalRows) * 100);
+
+                        if ($progress > $lastProgress) {
+                            $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
+                            $lastProgress = $progress;
+                        }
+                        continue;
+                    }
+
+                    $customerAmountTotal += $balance;
 
                     $customerData['paymentDetails'][$type][] = [
                         'document_no' => $paymentDetail->invoice_number,
                         'date' => $paymentDetail->date,
-                        'amount' => $paymentDetail->running_balance,
+                        'amount' => $balance,
                     ];
 
                     $processedRows++;
@@ -4439,15 +4455,28 @@ class GeneratePdfJob
                 }
 
                 $customerData['customerAmountTotal'] += $customerAmountTotal;
-                $customerOverallAmountTotal += $customerAmountTotal;
+                if (! empty($customerData['paymentDetails']) && round((float) $customerData['customerAmountTotal'], 2) != 0) {
+                    $customerOverallAmountTotal += $customerAmountTotal;
+                }
 
                 if ($existingCustomerIndex !== false) {
                     $groupedData[$existingCustomerIndex] = $customerData;
                 } else {
-                    $groupedData[] = $customerData;
+                    if (! empty($customerData['paymentDetails']) && round((float) $customerData['customerAmountTotal'], 2) != 0) {
+                        $groupedData[] = $customerData;
+                    }
                 }
             }
         });
+
+        $groupedData = array_values(array_filter($groupedData, function ($group) {
+            $paymentDetails = array_filter($group['paymentDetails'] ?? [], function ($details) {
+                return ! empty($details);
+            });
+
+            return ! empty($paymentDetails) && round((float) ($group['customerAmountTotal'] ?? 0), 2) != 0;
+        }));
+        $customerOverallAmountTotal = collect($groupedData)->sum('customerAmountTotal');
 
         $this->updateProgress(99, 'Preparing Excel Data...');
 
@@ -4540,12 +4569,24 @@ class GeneratePdfJob
                         $customerData['paymentDetails'][$type] = [];
                     }
 
-                    $customerAmountTotal += $paymentDetail->running_balance;
+                    $balance = $this->calculateOutstandingDocumentBalance($paymentDetail);
+                    if (round((float) $balance, 2) == 0) {
+                        $processedRows++;
+                        $progress = intval(($processedRows / $totalRows) * 100);
+
+                        if ($progress > $lastProgress) {
+                            $this->updateProgress($progress, "Processing Report... ({$processedRows}/{$totalRows})");
+                            $lastProgress = $progress;
+                        }
+                        continue;
+                    }
+
+                    $customerAmountTotal += $balance;
 
                     $customerData['paymentDetails'][$type][] = [
                         'document_no' => $paymentDetail->invoice_number,
                         'date' => $paymentDetail->date,
-                        'amount' => $paymentDetail->running_balance,
+                        'amount' => $balance,
                     ];
 
                     $processedRows++;
@@ -4558,15 +4599,28 @@ class GeneratePdfJob
                 }
 
                 $customerData['customerAmountTotal'] += $customerAmountTotal;
-                $customerOverallAmountTotal += $customerAmountTotal;
+                if (! empty($customerData['paymentDetails']) && round((float) $customerData['customerAmountTotal'], 2) != 0) {
+                    $customerOverallAmountTotal += $customerAmountTotal;
+                }
 
                 if ($existingCustomerIndex !== false) {
                     $groupedData[$existingCustomerIndex] = $customerData;
                 } else {
-                    $groupedData[] = $customerData;
+                    if (! empty($customerData['paymentDetails']) && round((float) $customerData['customerAmountTotal'], 2) != 0) {
+                        $groupedData[] = $customerData;
+                    }
                 }
             }
         });
+
+        $groupedData = array_values(array_filter($groupedData, function ($group) {
+            $paymentDetails = array_filter($group['paymentDetails'] ?? [], function ($details) {
+                return ! empty($details);
+            });
+
+            return ! empty($paymentDetails) && round((float) ($group['customerAmountTotal'] ?? 0), 2) != 0;
+        }));
+        $customerOverallAmountTotal = collect($groupedData)->sum('customerAmountTotal');
 
         $this->updateProgress(98, 'Generating Report...');
 
