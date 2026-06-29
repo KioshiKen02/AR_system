@@ -317,7 +317,7 @@
             </td>
             <td>
                 <div class="signatory-title">Checked By:</div>
-                <div class="signatory-line signatory-name-line">&nbsp;</div>
+                <div class="signatory-line signatory-name-line">{{ $checkedBy ?? '' }}</div>
                 <div class="signatory-caption">(Signature Over Printed Name)</div>
                 <div class="signatory-label">Date:</div>
                 <div class="signatory-line">&nbsp;</div>

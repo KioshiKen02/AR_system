@@ -4,6 +4,142 @@ namespace App\Services;
 
 class SignatoryService
 {
+    private const SIGNATORY_RULES = [
+        [
+            'keywords' => ['bilar', 'breeder', 'local'],
+            'noted' => '',
+            'reviewed' => '',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['bilar', 'breeder'],
+            'noted' => 'MARCELA M. OROT',
+            'reviewed' => 'MARCELA M. OROT',
+            'checked' => 'ELVIE SEIT',
+        ],
+        [
+            'keywords' => ['gp', 'jagna'],
+            'noted' => 'LOURDES JALOP',
+            'reviewed' => 'LOURDES JALOP',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['ice', 'plant'],
+            'noted' => '',
+            'reviewed' => '',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['peanut', 'kisses'],
+            'noted' => 'GABATO, DENNIS T.',
+            'reviewed' => 'GABATO, DENNIS T.',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['cortes', 'poultry'],
+            'noted' => 'SAMUEL LUCIP',
+            'reviewed' => '',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['cortes', 'piggery'],
+            'noted' => '',
+            'reviewed' => '',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['canhayupon', 'breeder'],
+            'noted' => 'MELISSA A. QUIÑANOLA',
+            'reviewed' => 'MELISSA A. QUIÑANOLA',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['bilar', 'hatchery'],
+            'noted' => 'ANTONIO ATAN',
+            'reviewed' => 'ANTONIO ATAN',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['lapsaon', 'breeder'],
+            'noted' => 'EMMANUEL DORIA',
+            'reviewed' => 'EMMANUEL DORIA',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['rizal', 'breeder'],
+            'noted' => 'JENNIFER BALBIDO',
+            'reviewed' => 'JENNIFER BALBIDO',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['feedmill'],
+            'noted' => '',
+            'reviewed' => '',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['growout'],
+            'noted' => '',
+            'reviewed' => '',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['cortes', 'fertilizer'],
+            'noted' => 'ALEXIO AVENIDO JR.',
+            'reviewed' => 'ALEXIO AVENIDO JR.',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['ubay', 'fertilizer'],
+            'noted' => 'ALEXIO AVENIDO JR.',
+            'reviewed' => 'ALEXIO AVENIDO JR.',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['piggery', 'untaga'],
+            'noted' => '',
+            'reviewed' => '',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['demo', 'farm'],
+            'noted' => '',
+            'reviewed' => '',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['dressing', 'plant'],
+            'noted' => 'JERAMIE ARTIAGA/MARILOU ORFANO',
+            'reviewed' => 'JERAMIE ARTIAGA/MARILOU ORFANO',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['farmers', 'market'],
+            'noted' => 'JERAMIE ARTIAGA/MARILOU ORFANO',
+            'reviewed' => 'JERAMIE ARTIAGA/MARILOU ORFANO',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['meat', 'processing'],
+            'noted' => 'JERAMIE ARTIAGA/MARILOU ORFANO',
+            'reviewed' => 'JERAMIE ARTIAGA/MARILOU ORFANO',
+            'checked' => '',
+        ],
+        [
+            'keywords' => ['rendering'],
+            'noted' => 'JERAMIE ARTIAGA/MARILOU ORFANO',
+            'reviewed' => 'JERAMIE ARTIAGA/MARILOU ORFANO',
+            'checked' => '',
+        ],
+    ];
+
+    private const HIDE_PREPARED_CHECKED_RULES = [
+        ['ubay', 'fertilizer'],
+        ['cortes', 'fertilizer'],
+        ['dressing', 'plant'],
+        ['meat', 'processing'],
+    ];
+
     /**
      * Get the 'Noted By' signatory for a given tenant identifier.
      *
@@ -12,192 +148,17 @@ class SignatoryService
      */
     public static function getNotedBy(?string $tenantIdentifier): ?string
     {
-         if (! $tenantIdentifier) {
-            return null;
-        }
-
-        $identifier = strtolower($tenantIdentifier);
-
-        if (str_contains($identifier, 'bilar') && str_contains($identifier, 'breeder') && str_contains($identifier, 'local')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'bilar') && str_contains($identifier, 'breeder')) {
-            return 'MARCELA M. OROT';
-        }
-
-        if (str_contains($identifier, 'gp') && str_contains($identifier, 'jagna')) {
-            return 'LOURDES JALOP';
-        }
-
-        if (str_contains($identifier, 'ice') && str_contains($identifier, 'plant')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'peanut') && str_contains($identifier, 'kisses')) {
-            return 'GABATO, DENNIS T.';
-        }
-
-        if (str_contains($identifier, 'cortes') && str_contains($identifier, 'poultry')) {
-            return 'SAMUEL LUCIP';
-        }
-
-        if (str_contains($identifier, 'cortes') && str_contains($identifier, 'piggery')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'canhayupon') && str_contains($identifier, 'breeder')) {
-            return 'MELISSA A. QUIÑANOLA';
-        }
-
-        if (str_contains($identifier, 'bilar') && str_contains($identifier, 'hatchery')) {
-            return 'ANTONIO ATAN';
-        }
-
-        if (str_contains($identifier, 'lapsaon') && str_contains($identifier, 'breeder')) {
-            return 'EMMANUEL DORIA';
-        }
-
-        if (str_contains($identifier, 'rizal') && str_contains($identifier, 'breeder')) {
-            return 'JENNIFER BALBIDO';
-        }
-
-        if (str_contains($identifier, 'feedmill')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'growout')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'cortes') && str_contains($identifier, 'fertilizer')) {
-            return 'ALEXIO AVENIDO JR.';
-        }
-
-        if (str_contains($identifier, 'ubay') && str_contains($identifier, 'fertilizer')) {
-            return 'ALEXIO AVENIDO JR.';
-        }
-
-        if (str_contains($identifier, 'piggery') && str_contains($identifier, 'untaga')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'demo') && str_contains($identifier, 'farm')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'dressing') && str_contains($identifier, 'plant')) {
-            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
-        }
-
-        if (str_contains($identifier, 'farmers') && str_contains($identifier, 'market')) {
-            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
-        }
-
-        if (str_contains($identifier, 'meat') && str_contains($identifier, 'processing')) {
-            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
-        }
-
-        if (str_contains($identifier, 'rendering')) {
-            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
-        }
-
-        return null;
+        return self::resolveSignatory($tenantIdentifier, 'noted');
     }
 
     public static function getReviewedBy(?string $tenantIdentifier): ?string
     {
-        if (! $tenantIdentifier) {
-            return null;
-        }
+        return self::resolveSignatory($tenantIdentifier, 'reviewed');
+    }
 
-        $identifier = strtolower($tenantIdentifier);
-
-        if (str_contains($identifier, 'bilar') && str_contains($identifier, 'breeder') && str_contains($identifier, 'local')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'bilar') && str_contains($identifier, 'breeder')) {
-            return 'MARCELA M. OROT';
-        }
-
-        if (str_contains($identifier, 'gp') && str_contains($identifier, 'jagna')) {
-            return 'LOURDES JALOP';
-        }
-
-        if (str_contains($identifier, 'ice') && str_contains($identifier, 'plant')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'peanut') && str_contains($identifier, 'kisses')) {
-            return 'GABATO, DENNIS T.';
-        }
-
-        if (str_contains($identifier, 'cortes') && str_contains($identifier, 'poultry')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'cortes') && str_contains($identifier, 'piggery')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'canhayupon') && str_contains($identifier, 'breeder')) {
-            return 'MELISSA A. QUIÑANOLA';
-        }
-
-        if (str_contains($identifier, 'bilar') && str_contains($identifier, 'hatchery')) {
-            return 'ANTONIO ATAN';
-        }
-
-        if (str_contains($identifier, 'lapsaon') && str_contains($identifier, 'breeder')) {
-            return 'EMMANUEL DORIA';
-        }
-
-        if (str_contains($identifier, 'rizal') && str_contains($identifier, 'breeder')) {
-            return 'JENNIFER BALBIDO';
-        }
-
-        if (str_contains($identifier, 'feedmill')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'growout')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'cortes') && str_contains($identifier, 'fertilizer')) {
-            return 'ALEXIO AVENIDO JR.';
-        }
-
-        if (str_contains($identifier, 'ubay') && str_contains($identifier, 'fertilizer')) {
-            return 'ALEXIO AVENIDO JR.';
-        }
-
-        if (str_contains($identifier, 'piggery') && str_contains($identifier, 'untaga')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'demo') && str_contains($identifier, 'farm')) {
-            return '';
-        }
-
-        if (str_contains($identifier, 'dressing') && str_contains($identifier, 'plant')) {
-            return 'MARILOU ORFANO/JERAMIE ARTIAGA ';
-        }
-
-        if (str_contains($identifier, 'farmers') && str_contains($identifier, 'market')) {
-            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
-        }
-
-        if (str_contains($identifier, 'meat') && str_contains($identifier, 'processing')) {
-            return 'MARILOU ORFANO/JERAMIE ARTIAGA ';
-        }
-
-        if (str_contains($identifier, 'rendering')) {
-            return 'JERAMIE ARTIAGA/MARILOU ORFANO';
-        }
-
-        return null;
+    public static function getCheckedBy(?string $tenantIdentifier): ?string
+    {
+        return self::resolveSignatory($tenantIdentifier, 'checked');
     }
 
     public static function shouldHidePreparedChecked(?string $tenantIdentifier): bool
@@ -208,30 +169,40 @@ class SignatoryService
 
         $identifier = strtolower($tenantIdentifier);
 
-        // List of tenants (keywords) that should hide Prepared/Checked By
-        // Add new tenant keywords here to enable hiding for them
-        $tenantsToHide = [
-            ['ubay', 'fertilizer'],
-            ['cortes', 'fertilizer'],
-            ['dressing', 'plant'],
-            ['meat', 'processing'],
-
-            // ['another', 'tenant'], // Example: Un-comment to enable
-        ];
-
-        foreach ($tenantsToHide as $keywords) {
-            $match = true;
-            foreach ($keywords as $keyword) {
-                if (!str_contains($identifier, $keyword)) {
-                    $match = false;
-                    break;
-                }
-            }
-            if ($match) {
+        foreach (self::HIDE_PREPARED_CHECKED_RULES as $keywords) {
+            if (self::matchesKeywords($identifier, $keywords)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static function resolveSignatory(?string $tenantIdentifier, string $role): ?string
+    {
+        if (! $tenantIdentifier) {
+            return null;
+        }
+
+        $identifier = strtolower($tenantIdentifier);
+
+        foreach (self::SIGNATORY_RULES as $rule) {
+            if (self::matchesKeywords($identifier, $rule['keywords'])) {
+                return $rule[$role] ?? null;
+            }
+        }
+
+        return null;
+    }
+
+    private static function matchesKeywords(string $identifier, array $keywords): bool
+    {
+        foreach ($keywords as $keyword) {
+            if (! str_contains($identifier, $keyword)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

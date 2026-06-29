@@ -388,6 +388,7 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
@@ -395,6 +396,7 @@ class GeneratePdfJob
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
             'groupedData' => array_values($groupedData),
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
@@ -665,6 +667,7 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
@@ -672,6 +675,7 @@ class GeneratePdfJob
             'date_type' => 'Receipt',
             'invoices' => $flatInvoices,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'grandTotalAR' => $grandTotalAR,
             'grandTotalCash' => $grandTotalCash,
@@ -900,6 +904,7 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
@@ -907,6 +912,7 @@ class GeneratePdfJob
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
             'groupedData' => array_values($groupedData),
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -1192,6 +1198,7 @@ class GeneratePdfJob
 
             $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
             $notedBy = \App\Services\SignatoryService::getNotedBy($tenantDatabase);
+            $checkedBy = \App\Services\SignatoryService::getCheckedBy($tenantDatabase);
             $hidePreparedChecked = \App\Services\SignatoryService::shouldHidePreparedChecked($tenantDatabase);
 
             $data = [
@@ -1202,6 +1209,7 @@ class GeneratePdfJob
                 'groupedData' => $groupedData,
                 'show_overpayment' => $this->shouldShowOverpayment(),
                 'preparedBy' => $this->preparedBy,
+                'checkedBy' => $checkedBy,
                 'notedBy' => $notedBy,
                 'hidePreparedChecked' => $hidePreparedChecked,
                 'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -1283,6 +1291,7 @@ class GeneratePdfJob
 
             $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
             $notedBy = \App\Services\SignatoryService::getNotedBy($tenantDatabase);
+            $checkedBy = \App\Services\SignatoryService::getCheckedBy($tenantDatabase);
             $hidePreparedChecked = \App\Services\SignatoryService::shouldHidePreparedChecked($tenantDatabase);
 
             $data = [
@@ -1292,6 +1301,7 @@ class GeneratePdfJob
                 'payments' => $formattedPayments,
                 'show_overpayment' => $this->shouldShowOverpayment(),
                 'preparedBy' => $this->preparedBy,
+                'checkedBy' => $checkedBy,
                 'notedBy' => $notedBy,
                 'hidePreparedChecked' => $hidePreparedChecked,
                 'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -1656,6 +1666,7 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
@@ -1663,6 +1674,7 @@ class GeneratePdfJob
             'date_type' => $this->validatedData['date_type'] === 'Payment Date' ? 'Payment' : 'Due',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -2305,12 +2317,14 @@ class GeneratePdfJob
 
             $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
             $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+            $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
             $data = [
                 'dateRange' => "$formattedAsOfDate",
                 'currency' => 'PHP',
                 'groupedData' => $groupedData,
                 'preparedBy' => $this->preparedBy,
+                'checkedBy' => $checkedBy,
                 'notedBy' => $notedBy,
                 'grandTotals' => $grandTotals,
                 'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -2510,12 +2524,14 @@ class GeneratePdfJob
 
             $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
             $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+            $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
             $data = [
                 'dateRange' => "$formattedAsOfDate",
                 'currency' => 'PHP',
                 'groupedData' => $groupedData,
                 'preparedBy' => $this->preparedBy,
+                'checkedBy' => $checkedBy,
                 'notedBy' => $notedBy,
                 'grandTotals' => $grandTotals,
                 'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -2652,6 +2668,7 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
@@ -2659,6 +2676,7 @@ class GeneratePdfJob
             'begBals' => $formattedBegBals,
             'totalAmount' => $totalAmount,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
@@ -2873,12 +2891,14 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedAsOfDate",
             'currency' => 'PHP',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -3096,12 +3116,14 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -3666,12 +3688,14 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'currency' => 'PHP',
             'salesperItems' => $formattedSalesPerItem,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'totalAmount' => $totalAmount,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -3984,6 +4008,7 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'grandTotal' => $grandTotal,
@@ -3992,6 +4017,7 @@ class GeneratePdfJob
             'date_type' => $this->validatedData['date_type'] === 'Receipt Date' ? 'Receipt' : 'Transaction',
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
         ];
@@ -4318,6 +4344,7 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
         $hidePreparedChecked = \App\Services\SignatoryService::shouldHidePreparedChecked($tenantDatabase);
 
         $data = [
@@ -4325,6 +4352,7 @@ class GeneratePdfJob
             'statement_date' => $formattedStatementDate,
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'hidePreparedChecked' => $hidePreparedChecked,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),
@@ -4626,11 +4654,13 @@ class GeneratePdfJob
 
         $tenantDatabase = \Illuminate\Support\Facades\Config::get('database.connections.tenant.database');
         $notedBy = SignatoryService::getNotedBy($tenantDatabase);
+        $checkedBy = SignatoryService::getCheckedBy($tenantDatabase);
 
         $data = [
             'dateRange' => "$formattedStartDate to $formattedEndDate",
             'groupedData' => $groupedData,
             'preparedBy' => $this->preparedBy,
+            'checkedBy' => $checkedBy,
             'notedBy' => $notedBy,
             'customerOverallAmountTotal' => $customerOverallAmountTotal,
             'reportName' => ReportIndicatorService::reportIndicator(\App\Models\MasterfileModels\User::find($this->userId)),

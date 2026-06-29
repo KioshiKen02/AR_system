@@ -30,7 +30,7 @@ class TenantConfigService
             'Cortes Piggery' => 'PGRY',
             'Canhayupon Breeder' => 'CB',
             'Bilar Hatchery' => 'BH',
-            'Lapsaon Breeder' => 'LP',
+            'Lapsaon Breeder' => 'LB',
             'Rizal Breeder' => 'RB',
 
             'Growout' => 'GRW',
@@ -56,7 +56,7 @@ class TenantConfigService
             'Cortes Piggery' => 'PGRY',
             'Canhayupon Breeder' => 'DP',
             'Bilar Hatchery' => 'BH',
-            'Lapsaon Breeder' => 'LP',
+            'Lapsaon Breeder' => 'LB',
             'Rizal Breeder' => 'RB',
 
             'Feedmill' => 'FM',

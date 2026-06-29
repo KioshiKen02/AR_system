@@ -267,7 +267,7 @@
             </td>
             <td>
                 <div>Checked By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 22px; text-align: center;"></div>
+                <div style="border-bottom: 1px solid black; margin-top: 22px; text-align: center;">{{ $checkedBy ?? '' }}</div>
                 <div style="text-align: center;">(Signature Over Printed Name)</div>
                 <div>Date:</div>
                 <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
