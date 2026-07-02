@@ -257,12 +257,12 @@ class TenantConfigService
                 'charges invoice ar' => 'RB_OCRDTSALES',
             ],
             'Lapsaon Breeder' => [
-                'payment' => 'LP_LPCOLL',
-                'adjustment' => 'LP_ADJSALES',
-                'charge invoice cash' => 'LP_OCASHSALES',
-                'charges invoice cash' => 'LP_OCASHSALES',
-                'charge invoice ar' => 'LP_OCRDTSALES',
-                'charges invoice ar' => 'LP_OCRDTSALES',
+                'payment' => 'LB_LPCOLL',
+                'adjustment' => 'LB_ADJSALES',
+                'charge invoice cash' => 'LB_OCASHSALES',
+                'charges invoice cash' => 'LB_OCASHSALES',
+                'charge invoice ar' => 'LB_OCRDTSALES',
+                'charges invoice ar' => 'LB_OCRDTSALES',
             ],
             'Bilar Breeder' => [
                 'payment' => 'BB_BBCOLL',

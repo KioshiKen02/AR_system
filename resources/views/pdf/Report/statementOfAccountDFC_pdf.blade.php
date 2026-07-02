@@ -165,7 +165,7 @@
         .signatory-table td {
             vertical-align: top;
             width: 33.33%;
-            padding: 14px 20px 10px;
+            padding: 14px 12px 10px;
             font-size: 12px;
             color: #000000;
             border-top: 1px solid black;
@@ -190,6 +190,19 @@
             white-space: nowrap;
             overflow: hidden;
             font-size: 12px;
+            padding: 0 2px;
+        }
+
+        .signatory-signature-line.signatory-font-11 {
+            font-size: 11px;
+        }
+
+        .signatory-signature-line.signatory-font-10 {
+            font-size: 10px;
+        }
+
+        .signatory-signature-line.signatory-font-9 {
+            font-size: 9px;
         }
 
         .signatory-caption {
@@ -399,6 +412,19 @@
                 in words <strong> {{ $group['total_balance_words'] }} </strong> .
             </div>
 
+            @php
+                $notedByValue = $notedBy ?? '';
+                $notedByLength = function_exists('mb_strlen') ? mb_strlen($notedByValue) : strlen($notedByValue);
+                $notedByFontSize = 12;
+                if ($notedByLength > 36) {
+                    $notedByFontSize = 9;
+                } elseif ($notedByLength > 28) {
+                    $notedByFontSize = 10;
+                } elseif ($notedByLength > 22) {
+                    $notedByFontSize = 11;
+                }
+            @endphp
+
             <table class="signatory-table">
                 <tr>
                     <td>
@@ -465,7 +491,7 @@
                     </td>
                     <td>
                         <div class="signatory-label">Note By:</div>
-                        <div class="signatory-signature-line">{{ $notedBy ?? '' }}</div>
+                        <div class="signatory-signature-line signatory-font-{{ $notedByFontSize }}">{{ $notedByValue }}</div>
                         <div class="signatory-caption">(Signature Over Printed Name)</div>
                         <table class="signatory-meta-table">
                             <tr>
