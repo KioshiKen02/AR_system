@@ -403,8 +403,8 @@
                             filteredRows.length !== 0 &&
                             generateTableData
                         "
-                        v-for="customerledger in renderedRows"
-                        :key="customerledger.id"
+                        v-for="(customerledger, idx) in renderedRows"
+                        :key="customerledger.id ?? idx"
                         data-testid="ledger-row"
                         class="hover:bg-[var(--color-primary)]/20 transition-colors duration-150 group h-10"
                     >
@@ -474,10 +474,10 @@
                             }}
                         </td>
                         <td class="px-3 py-1 text-right">
-                            {{ formatCurrency(customerledger.amount_paid) }}
+                            {{ formatCurrency(getDisplayCredit(customerledger, idx)) }}
                         </td>
                         <td class="px-3 py-1 text-right">
-                            {{ formatCurrency(customerledger.running_balance) }}
+                            {{ formatCurrency(getDisplayRunningBalance(customerledger, idx)) }}
                         </td>
                         <td class="px-3 py-1">
                             <div class="flex justify-center gap-2">
@@ -702,8 +702,17 @@ const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString(undefined, options);
 };
 
+const toNumber = (value) => {
+    if (value === null || value === undefined || value === "") return 0;
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+    const normalized = String(value).replace(/[^0-9.-]/g, "");
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const calculateNetAmount = (ledger) => {
-    return parseFloat(ledger.debit_amount || 0);
+    return toNumber(ledger?.debit_amount);
 };
 
 const formatCurrency = (amount) => {
@@ -790,6 +799,50 @@ const filteredRows = computed(() => {
         return haystack.includes(q);
     });
 });
+
+const ledgerDisplayMap = computed(() => {
+    const map = new Map();
+    let runningAdjustment = 0;
+
+    filteredRows.value.forEach((row, index) => {
+        const key = row?.id ?? `row-${index}`;
+
+        const debit = Math.max(0, toNumber(row?.debit_amount));
+        const credit = Math.max(0, toNumber(row?.amount_paid));
+
+        const overpay = debit > 0 ? Math.max(credit - debit, 0) : 0;
+        const displayCredit = credit - overpay;
+
+        runningAdjustment += overpay;
+
+        const displayRunningBalance = Math.max(
+            0,
+            toNumber(row?.running_balance) + runningAdjustment
+        );
+
+        map.set(key, {
+            credit: displayCredit,
+            runningBalance: displayRunningBalance,
+        });
+    });
+
+    return map;
+});
+
+const getDisplayKey = (row, idx) => row?.id ?? `row-${idx}`;
+
+const getDisplayCredit = (row, idx) => {
+    const key = getDisplayKey(row, idx);
+    return ledgerDisplayMap.value.get(key)?.credit ?? toNumber(row?.amount_paid);
+};
+
+const getDisplayRunningBalance = (row, idx) => {
+    const key = getDisplayKey(row, idx);
+    return (
+        ledgerDisplayMap.value.get(key)?.runningBalance ??
+        Math.max(0, toNumber(row?.running_balance))
+    );
+};
 
 const renderLimit = ref(250);
 const shouldUseInfiniteScroll = computed(() => filteredRows.value.length > 1000);
@@ -1004,7 +1057,7 @@ const exportToExcel = async () => {
             cell.alignment = { horizontal: "center", vertical: "middle" };
         });
 
-        exportRows.forEach((customerledger) => {
+        exportRows.forEach((customerledger, idx) => {
             const row = worksheet.addRow([
                 customerledger.invoice_number || "",
                 customerledger.date ? formatDate(customerledger.date) : "",
@@ -1012,8 +1065,8 @@ const exportToExcel = async () => {
                 customerledger.customer_code || "No Code",
                 customerledger.type || "",
                 calculateNetAmount(customerledger) || 0,
-                customerledger.amount_paid || 0,
-                customerledger.running_balance || 0,
+                getDisplayCredit(customerledger, idx),
+                getDisplayRunningBalance(customerledger, idx),
             ]);
 
             row.eachCell((cell) => {

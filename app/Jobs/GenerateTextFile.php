@@ -1159,6 +1159,7 @@ class GenerateTextFile
         
         $grossAmountValue = (float) ($detail->amount_paid ?? 0);
         $whtAmountValue = (float) ($detail->wht_amount ?? 0);
+        $overpaymentAmountValue = (float) ($detail->overpayment_amount ?? 0);
         $cashAmountValue = $grossAmountValue;
         if ($whtAmountValue > 0) {
             $cashAmountValue = max($grossAmountValue - $whtAmountValue, 0);
@@ -1166,8 +1167,9 @@ class GenerateTextFile
 
         $cashAmount = $this->fmt($cashAmountValue);
         $cashAmountNegative = $this->fmt($cashAmountValue * -1);
-        $grossAmount = $this->fmt($grossAmountValue);
-        $grossAmountNegative = $this->fmt($grossAmountValue * -1);
+        $customerGrossAmountValue = max($grossAmountValue - $overpaymentAmountValue, 0);
+        $grossAmount = $this->fmt($customerGrossAmountValue);
+        $grossAmountNegative = $this->fmt($customerGrossAmountValue * -1);
         
         $headerLine = [
             'CASH RECEI',
@@ -1276,10 +1278,51 @@ class GenerateTextFile
             ];
             $whtLineString = implode(',', $whtLine) . "\r\n";
         }
+        $overpaymentLineString = '';
+        if ($overpaymentAmountValue > 0) {
+            $overpaymentAmount = $this->fmt($overpaymentAmountValue);
+            $overpaymentAmountNegative = $this->fmt($overpaymentAmountValue * -1);
+            $overpaymentLine = [
+                'CASH RECEI',
+                $prefix1 . 'COLL',
+                ($auto_increment += 10000),
+                'G/L Account',
+                '90.02.09',
+                $formattedDate,
+                'Payment',
+                $prefix . 'PY' . $detail->payment_no,
+                'Cash Overage',
+                'PHP',
+                $overpaymentAmountNegative,
+                '',
+                $overpaymentAmount,
+                $overpaymentAmountNegative,
+                $overpaymentAmountNegative,
+                '1',
+                '',
+                '',
+                $companyCode,
+                $deptCode,
+                'CASHRECJNL',
+                '',
+                '',
+                '',
+                $overpaymentAmountNegative,
+                $overpaymentAmount,
+                $formattedDate,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
+                'G/L Account',
+                $bankCode,
+                $overpaymentAmountNegative,
+                $overpaymentAmount
+            ];
+            $overpaymentLineString = implode(',', $overpaymentLine) . "\r\n";
+        }
 
         return implode(',', $headerLine) . "\r\n"
             . $whtLineString
-            . implode(',', $detailLine) . "\r\n";
+            . implode(',', $detailLine) . "\r\n"
+            . $overpaymentLineString;
     }
 
     protected function generateJournalVoucherLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
@@ -1312,6 +1355,7 @@ class GenerateTextFile
 
         $grossAmountValue = (float) ($detail->amount_paid ?? 0);
         $whtAmountValue = (float) ($detail->wht_amount ?? 0);
+        $overpaymentAmountValue = (float) ($detail->overpayment_amount ?? 0);
         $headerAmountValue = $grossAmountValue;
         if ($accountType === 'Bank Account' && $whtAmountValue > 0) {
             $headerAmountValue = max($grossAmountValue - $whtAmountValue, 0);
@@ -1394,6 +1438,9 @@ class GenerateTextFile
             $whtLineString = implode(',', $whtLine) . "\r\n";
         }
 
+        $detailAmountValue = max($grossAmountValue - $overpaymentAmountValue, 0);
+        $detailAmount = $this->fmt($detailAmountValue);
+        $detailAmountNegative = $this->fmt($detailAmountValue * -1);
         $detailLine = [
             'CASH RECEI',
             $prefix1 . 'COLL',
@@ -1405,11 +1452,11 @@ class GenerateTextFile
             $prefix . 'PY' . $detail->payment_no,
             $this->sanitizeCustomerName($customerName),
             'PHP',
-            $this->fmt($detail->amount_paid * -1),
+            $detailAmountNegative,
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid * -1),
+            $detailAmount,
+            $detailAmountNegative,
+            $detailAmountNegative,
             '1',
             $customerCode,
             $customerCusPosting,
@@ -1419,19 +1466,60 @@ class GenerateTextFile
             'Invoice',
             $prefix . $docCode . $detail->document_no,
             $formattedDate,
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid),
+            $detailAmountNegative,
+            $detailAmount,
             $formattedDate,
             $prefix . $docCode . '#' . $paymentReferenceNo,
             'Customer',
             $customerCode,
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid)
+            $detailAmountNegative,
+            $detailAmount
         ];
+        $overpaymentLineString = '';
+        if ($overpaymentAmountValue > 0) {
+            $overpaymentAmount = $this->fmt($overpaymentAmountValue);
+            $overpaymentAmountNegative = $this->fmt($overpaymentAmountValue * -1);
+            $overpaymentLine = [
+                'CASH RECEI',
+                $prefix1 . 'COLL',
+                ($auto_increment += 10000),
+                'G/L Account',
+                '90.02.09',
+                $formattedDate,
+                'Payment',
+                $prefix . 'PY' . $detail->payment_no,
+                'Cash Overage',
+                'PHP',
+                $overpaymentAmountNegative,
+                '',
+                $overpaymentAmount,
+                $overpaymentAmountNegative,
+                $overpaymentAmountNegative,
+                '1',
+                '',
+                '',
+                $companyCode,
+                $deptCode,
+                'CASHRECJNL',
+                '',
+                '',
+                '',
+                $overpaymentAmountNegative,
+                $overpaymentAmount,
+                $formattedDate,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
+                'G/L Account',
+                $bankCode,
+                $overpaymentAmountNegative,
+                $overpaymentAmount
+            ];
+            $overpaymentLineString = implode(',', $overpaymentLine) . "\r\n";
+        }
 
         return implode(',', $headerLine) . "\r\n"
             . $whtLineString
-            . implode(',', $detailLine) . "\r\n";
+            . implode(',', $detailLine) . "\r\n"
+            . $overpaymentLineString;
     }
 
     protected function generateOnlineDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
@@ -1443,8 +1531,6 @@ class GenerateTextFile
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
 
-        $amount = $this->fmt($detail->amount_paid);
-        $amountNegative = $this->fmt($detail->amount_paid * -1);
         $accCode = trim((string) $accCode);
         $custCode = trim((string) $custCode);
 
@@ -1468,6 +1554,7 @@ class GenerateTextFile
 
         $grossAmountValue = (float) ($detail->amount_paid ?? 0);
         $whtAmountValue = (float) ($detail->wht_amount ?? 0);
+        $overpaymentAmountValue = (float) ($detail->overpayment_amount ?? 0);
         $headerAmountValue = $grossAmountValue;
         if ($accountType === 'Bank Account' && $whtAmountValue > 0) {
             $headerAmountValue = max($grossAmountValue - $whtAmountValue, 0);
@@ -1475,6 +1562,9 @@ class GenerateTextFile
 
         $headerAmount = $this->fmt($headerAmountValue);
         $headerAmountNegative = $this->fmt($headerAmountValue * -1);
+        $detailAmountValue = max($grossAmountValue - $overpaymentAmountValue, 0);
+        $amount = $this->fmt($detailAmountValue);
+        $amountNegative = $this->fmt($detailAmountValue * -1);
 
         $headerLine = [
             'CASH RECEI',
@@ -1584,10 +1674,51 @@ class GenerateTextFile
             ];
             $whtLineString = implode(',', $whtLine) . "\r\n";
         }
+        $overpaymentLineString = '';
+        if ($overpaymentAmountValue > 0) {
+            $overpaymentAmount = $this->fmt($overpaymentAmountValue);
+            $overpaymentAmountNegative = $this->fmt($overpaymentAmountValue * -1);
+            $overpaymentLine = [
+                'CASH RECEI',
+                $prefix1 . 'COLL',
+                ($auto_increment += 10000),
+                'G/L Account',
+                '90.02.09',
+                $formattedDate,
+                $transfer,
+                $prefix . 'PY' . $detail->payment_no,
+                'Cash Overage',
+                'PHP',
+                $overpaymentAmountNegative,
+                '',
+                $overpaymentAmount,
+                $overpaymentAmountNegative,
+                $overpaymentAmountNegative,
+                '1',
+                '',
+                '',
+                $companyCode,
+                $deptCode,
+                'CASHRECJNL',
+                '',
+                '',
+                '',
+                $overpaymentAmountNegative,
+                $overpaymentAmount,
+                $formattedDate,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
+                'G/L Account',
+                $bankCode,
+                $overpaymentAmountNegative,
+                $overpaymentAmount
+            ];
+            $overpaymentLineString = implode(',', $overpaymentLine) . "\r\n";
+        }
 
         return implode(',', $headerLine) . "\r\n"
             . $whtLineString
-            . implode(',', $detailLine) . "\r\n";
+            . implode(',', $detailLine) . "\r\n"
+            . $overpaymentLineString;
     }
 
     protected function generateCheckDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
@@ -1599,8 +1730,6 @@ class GenerateTextFile
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
 
-        $amount = $this->fmt($detail->amount_paid);
-        $amountNegative = $this->fmt($detail->amount_paid * -1);
         $accCode = trim((string) $accCode);
         $custCode = trim((string) $custCode);
 
@@ -1621,6 +1750,7 @@ class GenerateTextFile
 
         $grossAmountValue = (float) ($detail->amount_paid ?? 0);
         $whtAmountValue = (float) ($detail->wht_amount ?? 0);
+        $overpaymentAmountValue = (float) ($detail->overpayment_amount ?? 0);
         $headerAmountValue = $grossAmountValue;
         if ($accountType === 'Bank Account' && $whtAmountValue > 0) {
             $headerAmountValue = max($grossAmountValue - $whtAmountValue, 0);
@@ -1628,6 +1758,9 @@ class GenerateTextFile
 
         $headerAmount = $this->fmt($headerAmountValue);
         $headerAmountNegative = $this->fmt($headerAmountValue * -1);
+        $detailAmountValue = max($grossAmountValue - $overpaymentAmountValue, 0);
+        $amount = $this->fmt($detailAmountValue);
+        $amountNegative = $this->fmt($detailAmountValue * -1);
 
         $headerLine = [
             'CASH RECEI',
@@ -1740,7 +1873,43 @@ class GenerateTextFile
 
         return implode(',', $headerLine) . "\r\n"
             . $whtLineString
-            . implode(',', $detailLine) . "\r\n";
+            . implode(',', $detailLine) . "\r\n"
+            . ($overpaymentAmountValue > 0
+                ? implode(',', [
+                    'CASH RECEI',
+                    $prefix1 . 'COLL',
+                    ($auto_increment += 10000),
+                    'G/L Account',
+                    '90.02.09',
+                    $formattedDate,
+                    'Payment',
+                    $prefix . 'PY' . $detail->payment_no,
+                    'Cash Overage',
+                    'PHP',
+                    $this->fmt($overpaymentAmountValue * -1),
+                    '',
+                    $this->fmt($overpaymentAmountValue),
+                    $this->fmt($overpaymentAmountValue * -1),
+                    $this->fmt($overpaymentAmountValue * -1),
+                    '1',
+                    '',
+                    '',
+                    $companyCode,
+                    $deptCode,
+                    'CASHRECJNL',
+                    '',
+                    '',
+                    '',
+                    $this->fmt($overpaymentAmountValue * -1),
+                    $this->fmt($overpaymentAmountValue),
+                    $formattedDate,
+                    $prefix . $docCode . '#' . $paymentReferenceNo,
+                    'G/L Account',
+                    $bankCode,
+                    $this->fmt($overpaymentAmountValue * -1),
+                    $this->fmt($overpaymentAmountValue)
+                ]) . "\r\n"
+                : '');
     }
 
     protected function generateWHTLine(&$auto_increment, $detail, $paymentAccountCode, $paymentAccountCodeDescription, $bankCode, $bankName, $customerNavCode, $customerCusPosting, $customerCode, $customerName, $accCode, $accCodeName, string $docCode, $locCode = null)

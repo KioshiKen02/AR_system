@@ -274,7 +274,7 @@ class PaymentController extends Controller
             'amount_paid' => [
                 'required',
                 'numeric',
-                'between:0,99999999.99',
+                'between:0,999999999999.99',
             ],
             'selectedDocuments' => ['nullable', 'array'],
         ];
@@ -1456,7 +1456,7 @@ class PaymentController extends Controller
                 'amount_paid' => [
                     'required',
                     'numeric',
-                    'between:0,99999999.99',
+                    'between:0,999999999999.99',
                     function ($attribute, $value, $fail) use ($request) {
                         if ($value > (float)preg_replace('/[^0-9.]/', '', $request->total_amount)) {
                             $fail('Amount Should Not Be Greater Than Available Balance');

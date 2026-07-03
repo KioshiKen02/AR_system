@@ -528,7 +528,9 @@
                                                     >
                                                         {{
                                                             formatCurrency(
-                                                                payment.amount_paid
+                                                                getCheckClearingAmount(
+                                                                    payment
+                                                                )
                                                             )
                                                         }}
                                                     </td>
@@ -833,6 +835,32 @@ const formatCurrency = (amount) => {
     }).format(amount);
 };
 
+const toNumber = (value) => {
+    if (value === null || value === undefined || value === "") return 0;
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+    const normalized = String(value).replace(/[^0-9.-]/g, "");
+    const parsed = Number.parseFloat(normalized);
+
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getCheckClearingAmount = (payment) => {
+    const netAmount = toNumber(payment?.total_amount_less_wht);
+    if (netAmount > 0) {
+        return netAmount;
+    }
+
+    const grossAmount = toNumber(payment?.amount_paid);
+    const whtAmount = toNumber(payment?.wht_amount);
+
+    if (whtAmount > 0) {
+        return Math.max(0, grossAmount - whtAmount);
+    }
+
+    return grossAmount;
+};
+
 // Helper methods for date checking
 const isDueToday = (dateString) => {
     if (!dateString) return false;
@@ -903,6 +931,8 @@ const fetchPaymentDetails = async (customerCode) => {
             due_date: payment.due_date,
             type: payment.type,
             amount_paid: payment.amount_paid,
+            wht_amount: payment.wht_amount,
+            total_amount_less_wht: payment.total_amount_less_wht,
             status: payment.status,
             remarks: payment.remarks || "",
         }));
@@ -1009,7 +1039,7 @@ const submit = () => {
         document_no: payment.document_no,
         type: payment.type,
         due_date: payment.due_date,
-        amount: payment.amount_paid,
+        amount: getCheckClearingAmount(payment),
         status: payment.status,
         remarks: payment.remarks,
     }));

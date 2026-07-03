@@ -25,8 +25,8 @@ class SignatoryService
         ],
         [
             'keywords' => ['ice', 'plant'],
-            'noted' => '',
-            'reviewed' => '',
+            'noted' => 'HAYZELMAE P. OROT',
+            'reviewed' => 'HAYZELMAE P. OROT',
             'checked' => '',
         ],
         [
@@ -38,7 +38,7 @@ class SignatoryService
         [
             'keywords' => ['cortes', 'poultry'],
             'noted' => 'SAMUEL LUCIP',
-            'reviewed' => '',
+            'reviewed' => 'SAMUEL LUCIP',
             'checked' => '',
         ],
         [

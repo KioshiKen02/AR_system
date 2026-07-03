@@ -661,7 +661,6 @@ class CustomerLedgerController extends Controller
 
     public function getFloatingChecks(Request $request)
     {
-
         $validated = $request->validate([
             'customer_code' => 'required',
             'checktype' => 'required',
@@ -671,6 +670,31 @@ class CustomerLedgerController extends Controller
         $customerCode = $validated['customer_code'];
         $checktype = $validated['checktype'];
         $clearingDate = $validated['clearingdate'];
+        $hasWhtAmount = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount');
+        $hasTotalAmountLessWht = Schema::connection('tenant')->hasColumn('payment_details', 'total_amount_less_wht');
+
+        $selectColumns = [
+            'payment_no',
+            'check_no',
+            'document_no',
+            'type',
+            'due_date',
+            'amount_paid',
+            'status',
+            'remarks',
+        ];
+
+        if ($hasWhtAmount) {
+            $selectColumns[] = 'wht_amount';
+        } else {
+            $selectColumns[] = DB::raw('0 as wht_amount');
+        }
+
+        if ($hasTotalAmountLessWht) {
+            $selectColumns[] = 'total_amount_less_wht';
+        } else {
+            $selectColumns[] = DB::raw('NULL as total_amount_less_wht');
+        }
 
         $payments = DB::table('payment_details')
             ->where('customer_code', $customerCode)
@@ -680,15 +704,7 @@ class CustomerLedgerController extends Controller
                 $query->where('status', 'Floating')
                     ->orWhereNull('status');
             })
-            ->select([
-                'payment_no',
-                'check_no',
-                'document_no',
-                'type',
-                'due_date',
-                'amount_paid',
-                'status',
-            ])
+            ->select($selectColumns)
             ->orderBy('due_date', 'asc') // Add ordering
             ->get();
 
