@@ -984,6 +984,7 @@ class GenerateTextFile
         $journalCode = $this->tenantConfig->getJournalCode();
         $applyToCode = match ($adjustment->apply_to) {
             'Sales Invoice' => 'SI',
+            'Merchandise Transfer Out' => 'MTO',
             'Beginning Balance' => 'BG',
             default => 'CI',
         };
@@ -1071,6 +1072,7 @@ class GenerateTextFile
         $journalCode = $this->tenantConfig->getJournalCode();
         $applyToCode = match ($adjustment->apply_to) {
             'Sales Invoice' => 'SI',
+            'Merchandise Transfer Out' => 'MTO',
             'Beginning Balance' => 'BG',
             default => 'CI',
         };
@@ -2032,6 +2034,7 @@ class GenerateTextFile
         return match ($key) {
             'sales invoice', 'salesinvoice', 'si' => 'SI',
             'charge invoice', 'charges invoice', 'chargeinvoice', 'ci' => 'CI',
+            'merchandise transfer out', 'merchandisetransferout', 'mto' => 'MTO',
             'bg', 'beginning balance', 'beginningbalance' => 'BG',
             default => 'CI',
         };
@@ -2045,6 +2048,7 @@ class GenerateTextFile
             'sales invoice', 'si' => 'SI',
             'beginning balance', 'beginningbalance', 'bg' => 'BG',
             'charge invoice', 'charges invoice', 'ci' => 'CI',
+            'merchandise transfer out', 'mto' => 'MTO',
             default => 'CI',
         };
     }

@@ -89,6 +89,7 @@
                                 :options="[
                                     'Sales Invoice',
                                     'Other Income',
+                                    'Merchandise Transfer Out',
                                     'Payment',
                                     'Beginning Balance',
                                 ]"

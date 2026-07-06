@@ -6,7 +6,7 @@ use App\Events\NewCreated;
 use App\Http\Controllers\Controller;
 use App\Models\MasterfileModels\AdjustmentReasonSetup;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class AdjustmentReasonSetupController extends Controller
@@ -72,7 +72,7 @@ class AdjustmentReasonSetupController extends Controller
             'acc_code' => ['required', 'string'],
             'type' => [
                 'required',
-                'in:Sales Invoice,Other Income,Payment,Beginning Balance'
+                'in:Sales Invoice,Other Income,Merchandise Transfer Out,Payment,Beginning Balance'
             ],
             'status' => ['required', 'in:Active,Inactive'],
         ]);
@@ -96,7 +96,7 @@ class AdjustmentReasonSetupController extends Controller
             'acc_code' => ['required', 'string'],
             'type' => [
                 'required',
-                'in:Sales Invoice,Other Income,Payment,Beginning Balance'
+                'in:Sales Invoice,Other Income,Merchandise Transfer Out,Payment,Beginning Balance'
             ],
             'status' => ['required', 'in:Active,Inactive'],
         ]);
@@ -122,7 +122,7 @@ class AdjustmentReasonSetupController extends Controller
         }
 
         if (!is_numeric($targetId)) {
-             \Log::warning("AdjustmentReasonSetup Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+             Log::warning("AdjustmentReasonSetup Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
              // Try to resolve from positional parameters if needed, but 'id' route param usually works.
         }
 

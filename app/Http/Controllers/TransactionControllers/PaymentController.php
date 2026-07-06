@@ -44,7 +44,7 @@ class PaymentController extends Controller
 
     private function isSingleUseWhtDocumentType(string $documentType): bool
     {
-        return in_array($documentType, ['Sales Invoice', 'Charge Invoice'], true);
+        return in_array($documentType, ['Sales Invoice', 'Charge Invoice', 'Merchandise Transfer Out'], true);
     }
 
     private function ensureDocumentAllowsAdditionalWht(string $customerCode, string $documentNo, string $documentType): void
@@ -1448,7 +1448,7 @@ class PaymentController extends Controller
                 'customer_code' => ['required', 'string'],
                 'name' => ['required', 'string'],
                 'payment_type' => ['required', 'in:5A - Cash,5B - Journal Voucher,5C - Online Deposit,5D - Check'],
-                'type' => ['required', 'in:Sales Invoice,Charge Invoice,Payment,BG'],
+                'type' => ['required', 'in:Sales Invoice,Charge Invoice,Merchandise Transfer Out,Payment,BG'],
                 'document_no' => ['required', 'string'],
                 'document_date' => ['required', 'date'],
                 'advpy_amount_paid' => ['required', 'numeric'],

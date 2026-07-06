@@ -180,6 +180,8 @@ class AdjustmentControllers extends Controller
         $applyTo = $ledger->type;
         if ($ledger->type === 'Charge Invoice') {
             $applyTo = 'Other Income';
+        } elseif ($ledger->type === 'Merchandise Transfer Out') {
+            $applyTo = 'Merchandise Transfer Out';
         } elseif ($ledger->type === 'BG' || $ledger->type === 'Beginning Balance') {
             $applyTo = 'Beginning Balance';
         }
@@ -356,7 +358,7 @@ class AdjustmentControllers extends Controller
                 'customer_code' => ['required', 'string'],
                 'name' => ['required', 'string'],
                 'type' => ['required', 'string'],
-                'apply_to' => ['required', 'in:Sales Invoice,Other Income,Beginning Balance'],
+                'apply_to' => ['required', 'in:Sales Invoice,Other Income,Merchandise Transfer Out,Beginning Balance'],
                 'invoice_no' => ['required', 'string'],
                 'balance' => ['required', 'numeric'],
                 'adjustment_reason' => ['required', 'string'],
@@ -493,21 +495,37 @@ class AdjustmentControllers extends Controller
                 ]);
             }
 
+            $existingPositive = (float) Adjustment::where('invoice_no', $validated['invoice_no'])
+                ->where('apply_to', $validated['apply_to'])
+                ->where('type', 'Positive')
+                ->sum('amount');
+
+            $existingNegative = (float) Adjustment::where('invoice_no', $validated['invoice_no'])
+                ->where('apply_to', $validated['apply_to'])
+                ->where('type', 'Negative')
+                ->sum('amount');
+
             $currentRunningBalance = $ledger->running_balance;
             $currentAmount = $ledger->adjusted_amount;
+            $newPositive = $existingPositive;
+            $newNegative = $existingNegative;
 
             if (strtolower($validated['type']) === 'positive') {
                 $newAmount = $currentRunningBalance + $validated['amount'];
                 $newAdjustmentAmount = $validated['amount'] + $currentAmount;
+                $newPositive += $validated['amount'];
             } elseif (strtolower($validated['type']) === 'negative') {
                 $newAmount = $currentRunningBalance - $validated['amount'];
                 $newAmount = max($newAmount, 0);
                 $newAdjustmentAmount = $currentAmount - $validated['amount'];
+                $newNegative += $validated['amount'];
             }
 
             $ledger->update([
                 'running_balance' => $newAmount,
-                'adjusted_amount' => $newAdjustmentAmount
+                'adjusted_amount' => $newAdjustmentAmount,
+                'positive_adjustment_amount' => $newPositive,
+                'negative_adjustment_amount' => $newNegative,
             ]);
             $ledger->refresh();
             $this->syncLedgerOverpayment($ledger);
@@ -830,6 +848,7 @@ class AdjustmentControllers extends Controller
             $ledgerTypes = match ($adj->apply_to) {
                 'Sales Invoice' => ['Sales Invoice'],
                 'Other Income' => ['Charge Invoice'],
+                'Merchandise Transfer Out' => ['Merchandise Transfer Out'],
                 'Beginning Balance' => ['BG', 'Beginning Balance'],
                 default => [],
             };

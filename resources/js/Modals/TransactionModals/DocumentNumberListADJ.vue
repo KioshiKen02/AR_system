@@ -116,6 +116,9 @@ invoice, index
                                                         'bg-cyan-700 text-cyan-300':
                                                             invoice.type ===
                                                             'Charge Invoice',
+                                                        'bg-indigo-700 text-indigo-300':
+                                                            invoice.type ===
+                                                            'Merchandise Transfer Out',
                                                         'bg-pink-700 text-pink-300':
                                                             invoice.type ===
                                                             'Payment',
@@ -221,13 +224,17 @@ watch(
                 const invoiceType =
                     props.apply_to === "Sales Invoice"
                         ? "Sales Invoice"
-                        : "Charge Invoice";
+                        : props.apply_to === "Other Income"
+                            ? "Charge Invoice"
+                            : props.apply_to === "Merchandise Transfer Out"
+                                ? "Merchandise Transfer Out"
+                                : null;
 
                 documents.value = response.data
                     .filter(
                         (invoice) =>
                             invoice.type === "Beginning Balance" ||
-                            invoice.type === invoiceType
+                            (invoiceType && invoice.type === invoiceType)
                     )
                     .filter(
                         (invoice) => Number(invoice.running_balance) !== '0.00'
