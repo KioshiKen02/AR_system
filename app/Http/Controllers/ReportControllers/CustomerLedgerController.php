@@ -124,6 +124,12 @@ class CustomerLedgerController extends Controller
             if ($recordType === 'Merchandise Transfer Out') {
                 return 'Merchandise Transfer Out';
             }
+            if ($recordType === 'Merchandise Charge Invoice') {
+                return 'Merchandise Charge Invoice';
+            }
+            if ($recordType === 'Sales Charge Invoice') {
+                return 'Sales Charge Invoice';
+            }
 
             return $recordType;
         };

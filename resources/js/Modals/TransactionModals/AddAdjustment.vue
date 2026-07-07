@@ -83,7 +83,14 @@
                             :message="form.errors.type" :disabled="!form.name" placeholder="Click to Select"
                             disabledPlaceholder="Select Customer First" />
                         <DropdownInput label="Apply To" v-model="form.apply_to"
-                            :options="['Sales Invoice', 'Other Income', 'Merchandise Transfer Out', 'Beginning Balance']"
+                            :options="[
+                                'Sales Invoice',
+                                'Other Income',
+                                'Merchandise Charge Invoice',
+                                'Merchandise Transfer Out',
+                                'Sales Charge Invoice',
+                                'Beginning Balance',
+                            ]"
                             :message="form.errors.apply_to" :disabled="!form.type" placeholder="Click to Select"
                             disabledPlaceholder="Select Type First" />
                         <TextInput label="Document Number" @click="onDocuNumberClick()" v-model="form.invoice_no"

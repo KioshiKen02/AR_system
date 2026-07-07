@@ -178,7 +178,7 @@
 
                         <div class="flex flex-col gap-2 mb-2">
                             <label class="block text-md font-bold">TYPE</label>
-                            <div class="w-full flex justify-between items-center gap-4">
+                            <div class="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                 <!-- SALES INVOICE Option -->
                                 <label class="w-full inline-flex items-center cursor-pointer group">
                                     <input type="radio" v-model="form.type" value="Sales Invoice" class="hidden peer" />
@@ -241,6 +241,99 @@
                                                 }"></div>
                                         </div>
                                         <span class="text-sm font-medium z-10">Charge Invoice</span>
+                                    </div>
+                                </label>
+
+                                <label class="w-full inline-flex items-center cursor-pointer group">
+                                    <input type="radio" v-model="form.type" value="Merchandise Charge Invoice"
+                                        class="hidden peer" />
+                                    <div class="w-full relative flex items-center justify-start p-2">
+                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
+                                            :class="{
+                                                'opacity-100':
+                                                    form.type ===
+                                                    'Merchandise Charge Invoice',
+                                            }"></div>
+                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
+                                            :class="{
+                                                'border-[var(--color-border)]': 
+                                                    form.type ===
+                                                    'Merchandise Charge Invoice',
+                                            }">
+                                            <div class="absolute inset-0 m-auto 
+w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                                :class="{
+                                                    'opacity-100':
+                                                        form.type ===
+                                                        'Merchandise Charge Invoice',
+                                                    'opacity-0':
+                                                        form.type !==
+                                                        'Merchandise Charge Invoice',
+                                                }"></div>
+                                        </div>
+                                        <span class="text-sm font-medium z-10">Merchandise Charge Invoice</span>
+                                    </div>
+                                </label>
+
+                                <label class="w-full inline-flex items-center cursor-pointer group">
+                                    <input type="radio" v-model="form.type" value="Merchandise Transfer Out"
+                                        class="hidden peer" />
+                                    <div class="w-full relative flex items-center justify-start p-2">
+                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
+                                            :class="{
+                                                'opacity-100':
+                                                    form.type ===
+                                                    'Merchandise Transfer Out',
+                                            }"></div>
+                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
+                                            :class="{
+                                                'border-[var(--color-border)]': 
+                                                    form.type ===
+                                                    'Merchandise Transfer Out',
+                                            }">
+                                            <div class="absolute inset-0 m-auto 
+w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                                :class="{
+                                                    'opacity-100':
+                                                        form.type ===
+                                                        'Merchandise Transfer Out',
+                                                    'opacity-0':
+                                                        form.type !==
+                                                        'Merchandise Transfer Out',
+                                                }"></div>
+                                        </div>
+                                        <span class="text-sm font-medium z-10">Merchandise Transfer Out</span>
+                                    </div>
+                                </label>
+
+                                <label class="w-full inline-flex items-center cursor-pointer group">
+                                    <input type="radio" v-model="form.type" value="Sales Charge Invoice"
+                                        class="hidden peer" />
+                                    <div class="w-full relative flex items-center justify-start p-2">
+                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
+                                            :class="{
+                                                'opacity-100':
+                                                    form.type ===
+                                                    'Sales Charge Invoice',
+                                            }"></div>
+                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
+                                            :class="{
+                                                'border-[var(--color-border)]': 
+                                                    form.type ===
+                                                    'Sales Charge Invoice',
+                                            }">
+                                            <div class="absolute inset-0 m-auto 
+w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                                :class="{
+                                                    'opacity-100':
+                                                        form.type ===
+                                                        'Sales Charge Invoice',
+                                                    'opacity-0':
+                                                        form.type !==
+                                                        'Sales Charge Invoice',
+                                                }"></div>
+                                        </div>
+                                        <span class="text-sm font-medium z-10">Sales Charge Invoice</span>
                                     </div>
                                 </label>
 

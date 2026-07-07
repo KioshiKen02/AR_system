@@ -416,12 +416,14 @@ class InvoiceController extends Controller
         $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
             && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
 
-        if (in_array($request->input('apply_to'), ['Sales Invoice', 'Other Income', 'Merchandise Transfer Out'])) {
+        if (in_array($request->input('apply_to'), ['Sales Invoice', 'Other Income', 'Merchandise Charge Invoice', 'Merchandise Transfer Out', 'Sales Charge Invoice'])) {
             $applyTo = $request->input('apply_to');
             $ledgerType = match ($applyTo) {
                 'Sales Invoice' => 'Sales Invoice',
                 'Other Income' => 'Charge Invoice',
+                'Merchandise Charge Invoice' => 'Merchandise Charge Invoice',
                 'Merchandise Transfer Out' => 'Merchandise Transfer Out',
+                'Sales Charge Invoice' => 'Sales Charge Invoice',
                 default => 'Charge Invoice',
             };
 
@@ -756,7 +758,7 @@ class InvoiceController extends Controller
             $ledgersToRecompute = CustomerLedger::on('tenant')
                 ->where('customer_code', $customerCode)
                 ->where('date', '<=', $date)
-                ->whereIn('type', ['Sales Invoice', 'Charge Invoice', 'Merchandise Transfer Out', 'BG', 'Beginning Balance', 'Payment'])
+                ->whereIn('type', ['Sales Invoice', 'Charge Invoice', 'Merchandise Charge Invoice', 'Merchandise Transfer Out', 'Sales Charge Invoice', 'BG', 'Beginning Balance', 'Payment'])
                 ->get([
                     'id',
                     'invoice_number',
@@ -839,6 +841,10 @@ class InvoiceController extends Controller
                         $applyTo = 'Other Income';
                     } elseif ($ledger->type === 'Merchandise Transfer Out') {
                         $applyTo = 'Merchandise Transfer Out';
+                    } elseif ($ledger->type === 'Merchandise Charge Invoice') {
+                        $applyTo = 'Merchandise Charge Invoice';
+                    } elseif ($ledger->type === 'Sales Charge Invoice') {
+                        $applyTo = 'Sales Charge Invoice';
                     } elseif ($ledger->type === 'BG' || $ledger->type === 'Beginning Balance') {
                         $applyTo = 'Beginning Balance';
                     }

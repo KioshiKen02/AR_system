@@ -460,6 +460,12 @@
                                     'bg-indigo-700 text-indigo-300':
                                         customerledger.type ===
                                         'Merchandise Transfer Out',
+                                    'bg-sky-700 text-sky-300':
+                                        customerledger.type ===
+                                        'Merchandise Charge Invoice',
+                                    'bg-teal-700 text-teal-300':
+                                        customerledger.type ===
+                                        'Sales Charge Invoice',
                                     'bg-pink-700 text-pink-300':
                                         customerledger.type === 'Payment',
                                     'bg-purple-700 text-purple-300':

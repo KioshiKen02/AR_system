@@ -234,6 +234,34 @@
                                         </label>
                                         <label class="flex items-center space-x-2">
                                             <label class="relative inline-block w-4 h-4">
+                                                <input type="checkbox" v-model="typeFilters"
+                                                    value="Merchandise Charge Invoice"
+                                                    class="peer appearance-none w-4 h-4 border-2 rounded-sm border-[var(--color-border)] bg-transparent checked:bg-[var(--color-primary)] checked:!border-[var(--color-primary)] focus:outline-none transition-colors duration-200" />
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                                    class="absolute p-0.5 top-0.5 left-0 right-0 bottom-0 w-4 h-4 text-[var(--color-bg-primary)] hidden peer-checked:block pointer-events-none"
+                                                    fill="currentColor">
+                                                    <path
+                                                        d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
+                                                </svg>
+                                            </label>
+                                            <span class="text-sm">Merchandise Charge Invoice</span>
+                                        </label>
+                                        <label class="flex items-center space-x-2">
+                                            <label class="relative inline-block w-4 h-4">
+                                                <input type="checkbox" v-model="typeFilters"
+                                                    value="Sales Charge Invoice"
+                                                    class="peer appearance-none w-4 h-4 border-2 rounded-sm border-[var(--color-border)] bg-transparent checked:bg-[var(--color-primary)] checked:!border-[var(--color-primary)] focus:outline-none transition-colors duration-200" />
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                                    class="absolute p-0.5 top-0.5 left-0 right-0 bottom-0 w-4 h-4 text-[var(--color-bg-primary)] hidden peer-checked:block pointer-events-none"
+                                                    fill="currentColor">
+                                                    <path
+                                                        d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
+                                                </svg>
+                                            </label>
+                                            <span class="text-sm">Sales Charge Invoice</span>
+                                        </label>
+                                        <label class="flex items-center space-x-2">
+                                            <label class="relative inline-block w-4 h-4">
                                                 <input type="checkbox" v-model="typeFilters" value="Payment"
                                                     class="peer appearance-none w-4 h-4 border-2 rounded-sm border-[var(--color-border)] bg-transparent checked:bg-[var(--color-primary)] checked:!border-[var(--color-primary)] focus:outline-none transition-colors duration-200" />
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
@@ -400,6 +428,10 @@
                                             ? 'bg-cyan-700 text-cyan-300'
                                             : payment.type === 'Merchandise Transfer Out'
                                                 ? 'bg-indigo-700 text-indigo-300'
+                                                : payment.type === 'Merchandise Charge Invoice'
+                                                    ? 'bg-sky-700 text-sky-300'
+                                                    : payment.type === 'Sales Charge Invoice'
+                                                        ? 'bg-teal-700 text-teal-300'
                                             : payment.type === 'Payment'
                                                 ? 'bg-pink-700 text-pink-300'
                                                 : payment.type === 'BG'

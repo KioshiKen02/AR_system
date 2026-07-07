@@ -109,6 +109,8 @@
                                     'Sales Invoice',
                                     'Charge Invoice',
                                     'Merchandise Transfer Out',
+                                    'Merchandise Charge Invoice',
+                                    'Sales Charge Invoice',
                                     'Payment',
                                     'BG',
                                 ]" placeholder="Click to Select" />
@@ -316,6 +318,12 @@
                                                         'bg-indigo-700 text-indigo-300':
                                                             invoice.type ===
                                                             'Merchandise Transfer Out',
+                                                        'bg-sky-700 text-sky-300':
+                                                            invoice.type ===
+                                                            'Merchandise Charge Invoice',
+                                                        'bg-teal-700 text-teal-300':
+                                                            invoice.type ===
+                                                            'Sales Charge Invoice',
                                                         'bg-pink-700 text-pink-300':
                                                             invoice.type ===
                                                             'Payment',
@@ -697,7 +705,9 @@ const getRequestedDocumentAmount = (doc) => {
 const isSingleUseWhtDocument = (invoice) =>
     invoice.type === "Sales Invoice" ||
     invoice.type === "Charge Invoice" ||
-    invoice.type === "Merchandise Transfer Out";
+    invoice.type === "Merchandise Transfer Out" ||
+    invoice.type === "Merchandise Charge Invoice" ||
+    invoice.type === "Sales Charge Invoice";
 
 const canApplyWhtToInvoice = (invoice, showMessage = true) => {
     if (!props.whtEnabled) {

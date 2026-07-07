@@ -828,6 +828,7 @@ class GenerateTextFile
     {
         $formattedDate = $this->formatDate($invoice->receipt_date);
         $amountValue = (float) $invoice->total_amount + (float) ($invoice->added_vat ?? 0);
+        $docCode = $this->getOtherIncomeDocumentCode($invoice);
         
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $companyCode = $this->tenantConfig->getCompanyCode();
@@ -842,7 +843,7 @@ class GenerateTextFile
             '10.01.01.01',
             $formattedDate,
             'Invoice',
-            $prefix . 'CI' . $invoice->invoice_no,
+            $prefix . $docCode . $invoice->invoice_no,
             'COH - PESO DENOMINATIONS',
             'PHP',
             $this->fmt($amountValue),
@@ -872,7 +873,7 @@ class GenerateTextFile
             $itemCode,
             $formattedDate,
             'Invoice',
-            $prefix . 'CI' . $invoice->invoice_no,
+            $prefix . $docCode . $invoice->invoice_no,
             trim((string) $itemName),
             'PHP',
             $this->fmt($amountValue * -1),
@@ -901,6 +902,7 @@ class GenerateTextFile
     {
         $formattedDate = $this->formatDate($invoice->receipt_date);
         $amountValue = (float) $invoice->total_amount + (float) ($invoice->added_vat ?? 0);
+        $docCode = $this->getOtherIncomeDocumentCode($invoice);
 
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $companyCode = $this->tenantConfig->getCompanyCode();
@@ -919,7 +921,7 @@ class GenerateTextFile
             $glAccount,
             $formattedDate,
             'Invoice',
-            $prefix . 'CI' . $invoice->invoice_no,
+            $prefix . $docCode . $invoice->invoice_no,
             $glAccountDesc,
             '0',
             '',
@@ -949,7 +951,7 @@ class GenerateTextFile
             $itemCode,
             $formattedDate,
             'Invoice',
-            $prefix . 'CI' . $invoice->invoice_no,
+            $prefix . $docCode . $invoice->invoice_no,
             trim((string) $itemName),
             '0',
             '',
@@ -985,6 +987,8 @@ class GenerateTextFile
         $applyToCode = match ($adjustment->apply_to) {
             'Sales Invoice' => 'SI',
             'Merchandise Transfer Out' => 'MTO',
+            'Merchandise Charge Invoice' => 'MCI',
+            'Sales Charge Invoice' => 'SCI',
             'Beginning Balance' => 'BG',
             default => 'CI',
         };
@@ -1073,6 +1077,8 @@ class GenerateTextFile
         $applyToCode = match ($adjustment->apply_to) {
             'Sales Invoice' => 'SI',
             'Merchandise Transfer Out' => 'MTO',
+            'Merchandise Charge Invoice' => 'MCI',
+            'Sales Charge Invoice' => 'SCI',
             'Beginning Balance' => 'BG',
             default => 'CI',
         };
@@ -1313,7 +1319,7 @@ class GenerateTextFile
                 $overpaymentAmount,
                 $formattedDate,
                 $prefix . $docCode . '#' . $paymentReferenceNo,
-                'G/L Account',
+                '',
                 $bankCode,
                 $overpaymentAmountNegative,
                 $overpaymentAmount
@@ -1510,7 +1516,7 @@ class GenerateTextFile
                 $overpaymentAmount,
                 $formattedDate,
                 $prefix . $docCode . '#' . $paymentReferenceNo,
-                'G/L Account',
+                '',
                 $bankCode,
                 $overpaymentAmountNegative,
                 $overpaymentAmount
@@ -1709,7 +1715,7 @@ class GenerateTextFile
                 $overpaymentAmount,
                 $formattedDate,
                 $prefix . $docCode . '#' . $paymentReferenceNo,
-                'G/L Account',
+                '',
                 $bankCode,
                 $overpaymentAmountNegative,
                 $overpaymentAmount
@@ -2027,6 +2033,18 @@ class GenerateTextFile
         return $collapsed === null ? $sanitized : $collapsed;
     }
 
+    protected function getOtherIncomeDocumentCode($invoice): string
+    {
+        $key = strtolower(trim((string) ($invoice->chargeinvoice_type ?? '')));
+
+        return match ($key) {
+            'merchandise transfer out', 'mto' => 'MTO',
+            'merchandise charge invoice', 'mci' => 'MCI',
+            'sales charge invoice', 'sci' => 'SCI',
+            default => 'CI',
+        };
+    }
+
     protected function getPaymentDocumentCodeFromPaymentType($type): string
     {
         $key = strtolower(trim((string) $type));
@@ -2035,6 +2053,8 @@ class GenerateTextFile
             'sales invoice', 'salesinvoice', 'si' => 'SI',
             'charge invoice', 'charges invoice', 'chargeinvoice', 'ci' => 'CI',
             'merchandise transfer out', 'merchandisetransferout', 'mto' => 'MTO',
+            'merchandise charge invoice', 'merchandisechargeinvoice', 'mci' => 'MCI',
+            'sales charge invoice', 'saleschargeinvoice', 'sci' => 'SCI',
             'bg', 'beginning balance', 'beginningbalance' => 'BG',
             default => 'CI',
         };
@@ -2049,6 +2069,8 @@ class GenerateTextFile
             'beginning balance', 'beginningbalance', 'bg' => 'BG',
             'charge invoice', 'charges invoice', 'ci' => 'CI',
             'merchandise transfer out', 'mto' => 'MTO',
+            'merchandise charge invoice', 'mci' => 'MCI',
+            'sales charge invoice', 'sci' => 'SCI',
             default => 'CI',
         };
     }

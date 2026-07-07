@@ -90,6 +90,8 @@
                                     'Sales Invoice',
                                     'Other Income',
                                     'Merchandise Transfer Out',
+                                    'Merchandise Charge Invoice',
+                                    'Sales Charge Invoice',
                                     'Payment',
                                     'Beginning Balance',
                                 ]"

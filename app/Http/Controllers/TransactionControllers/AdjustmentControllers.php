@@ -180,8 +180,12 @@ class AdjustmentControllers extends Controller
         $applyTo = $ledger->type;
         if ($ledger->type === 'Charge Invoice') {
             $applyTo = 'Other Income';
+        } elseif ($ledger->type === 'Merchandise Charge Invoice') {
+            $applyTo = 'Merchandise Charge Invoice';
         } elseif ($ledger->type === 'Merchandise Transfer Out') {
             $applyTo = 'Merchandise Transfer Out';
+        } elseif ($ledger->type === 'Sales Charge Invoice') {
+            $applyTo = 'Sales Charge Invoice';
         } elseif ($ledger->type === 'BG' || $ledger->type === 'Beginning Balance') {
             $applyTo = 'Beginning Balance';
         }
@@ -358,7 +362,7 @@ class AdjustmentControllers extends Controller
                 'customer_code' => ['required', 'string'],
                 'name' => ['required', 'string'],
                 'type' => ['required', 'string'],
-                'apply_to' => ['required', 'in:Sales Invoice,Other Income,Merchandise Transfer Out,Beginning Balance'],
+                'apply_to' => ['required', 'in:Sales Invoice,Other Income,Merchandise Charge Invoice,Merchandise Transfer Out,Sales Charge Invoice,Beginning Balance'],
                 'invoice_no' => ['required', 'string'],
                 'balance' => ['required', 'numeric'],
                 'adjustment_reason' => ['required', 'string'],
@@ -848,7 +852,9 @@ class AdjustmentControllers extends Controller
             $ledgerTypes = match ($adj->apply_to) {
                 'Sales Invoice' => ['Sales Invoice'],
                 'Other Income' => ['Charge Invoice'],
+                'Merchandise Charge Invoice' => ['Merchandise Charge Invoice'],
                 'Merchandise Transfer Out' => ['Merchandise Transfer Out'],
+                'Sales Charge Invoice' => ['Sales Charge Invoice'],
                 'Beginning Balance' => ['BG', 'Beginning Balance'],
                 default => [],
             };
