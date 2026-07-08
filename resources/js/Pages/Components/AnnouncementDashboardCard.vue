@@ -1,176 +1,208 @@
 <template>
     <Transition
-        enter-active-class="transition-all duration-500 ease-out"
-        enter-from-class="opacity-0 -translate-y-8 scale-95"
-        enter-to-class="opacity-100 translate-y-0 scale-100"
-        leave-active-class="transition-all duration-300 ease-in"
-        leave-from-class="opacity-100 translate-y-0 scale-100"
-        leave-to-class="opacity-0 -translate-y-8 scale-95"
+        enter-active-class="transition-all duration-300 ease-out"
+        enter-from-class="opacity-0 -translate-y-2"
+        enter-to-class="opacity-100 translate-y-0"
+        leave-active-class="transition-all duration-200 ease-in"
+        leave-from-class="opacity-100 translate-y-0"
+        leave-to-class="opacity-0 -translate-y-2"
     >
         <div
-            v-if="props.announcement"
+            v-if="currentAnnouncement"
             role="alert"
             aria-live="polite"
-            class="announcement-card w-full relative rounded-xl overflow-hidden shadow-2xl border border-[var(--color-border)]/40"
+            aria-roledescription="carousel"
+            @mouseenter="stopAutoplay"
+            @mouseleave="startAutoplay"
+            class="w-full relative bg-white border border-slate-200 rounded-md shadow-sm overflow-hidden"
         >
-            <!-- Animated Shimmer Overlay (light sweep) -->
-            <div class="shimmer-overlay"></div>
-
-            <!-- Main Content -->
-            <div class="relative z-10 p-5 sm:p-6 flex items-start gap-4">
-                <!-- Floating Emoji Icon -->
-                <div class="flex-shrink-0 mt-1 float-icon">
-                    <span class="text-4xl sm:text-5xl drop-shadow-lg" aria-hidden="true">📢</span>
-                </div>
-
-                <!-- Text & Actions -->
-                <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                        <!-- Pulsing "NEW" Badge -->
-                        <span class="badge-pulse inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-white text-[var(--color-primary)] shadow-lg">
-                            <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                            Latest
-                        </span>
-                        <h3 class="text-base sm:text-lg font-bold text-white drop-shadow-md truncate">
-                            {{ props.announcement.title }}
-                        </h3>
-                    </div>
-
-                    <p class="mt-2 text-sm sm:text-base text-white/90 leading-relaxed drop-shadow line-clamp-3 whitespace-pre-line">
-                        {{ props.announcement.message }}
-                    </p>
-
-                    <div class="mt-4 flex items-center gap-3">
-                        <button
-                            type="button"
-                            @click="$emit('open')"
-                            class="cta-button group inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
-                        >
-                            View details
-                            <svg class="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="5" y1="12" x2="19" y2="12" />
-                                <polyline points="12 5 19 12 12 19" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Dismiss Button -->
+            <div class="absolute top-0 left-0 h-[3px] w-full bg-[var(--color-primary)] z-10"></div>
+            <div v-if="hasMultipleAnnouncements" class="absolute right-5 sm:right-6 top-1/2 -translate-y-1/2 flex items-center gap-2 z-20">
                 <button
-                    v-if="props.announcement.is_dismissible"
                     type="button"
-                    @click="$emit('dismiss')"
-                    class="flex-shrink-0 p-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/20 transition-colors backdrop-blur-sm"
-                    aria-label="Dismiss announcement"
+                    @click="prevAnnouncement"
+                    class="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    aria-label="Previous announcement"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                </button>
+                <button
+                    type="button"
+                    @click="nextAnnouncement"
+                    class="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    aria-label="Next announcement"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
                     </svg>
                 </button>
             </div>
+            <Transition
+                mode="out-in"
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 translate-x-4"
+                enter-to-class="opacity-100 translate-x-0"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0"
+                leave-to-class="opacity-0 -translate-x-4"
+            >
+                <div
+                    :key="currentAnnouncement.id"
+                    class="relative z-10 flex flex-col justify-center p-5 sm:p-6 pr-24 sm:pr-32 min-h-[130px]"
+                >
+                    <div class="flex items-center gap-1.5 text-[var(--color-primary)] mb-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <path d="M9 12l2 2 4-4"/>
+                        </svg>
+                        <span class="text-[11px] font-bold uppercase tracking-wider">
+                            Announcement
+                        </span>
+                    </div>
+
+                    <h3 class="text-lg sm:text-xl font-bold text-slate-900 mb-1 leading-tight">
+                        {{ currentAnnouncement.title }}
+                    </h3>
+
+                    <p class="text-sm text-slate-600 mb-4 line-clamp-2">
+                        {{ currentAnnouncement.message }}
+                    </p>
+
+                    <div class="flex items-center gap-4 mt-auto">
+                        <button
+                            type="button"
+                            @click="$emit('open', currentAnnouncement)"
+                            class="bg-[var(--color-primary)] text-white px-4 py-1.5 rounded-sm text-sm font-semibold hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-primary)]"
+                        >
+                            Read Full Details
+                        </button>
+
+                        <div v-if="hasMultipleAnnouncements" class="flex items-center gap-1">
+                            <button
+                                v-for="(announcement, index) in normalizedAnnouncements"
+                                :key="announcement.id"
+                                type="button"
+                                @click="goToAnnouncement(index)"
+                                class="w-1.5 h-1.5 rounded-full transition-colors focus:outline-none"
+                                :class="index === currentIndex ? 'bg-[var(--color-primary)]' : 'bg-slate-300 hover:bg-slate-400'"
+                                :aria-label="`Go to announcement ${index + 1}`"
+                                :aria-current="index === currentIndex ? 'true' : 'false'"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </Transition>
         </div>
     </Transition>
 </template>
 
 <script setup>
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+
 const props = defineProps({
     announcement: {
         type: Object,
         default: null,
     },
+    announcements: {
+        type: Array,
+        default: () => [],
+    },
 });
 
-defineEmits(["open", "dismiss"]);
-</script>
+defineEmits(["open"]);
 
-<style scoped>
-/* ----------------------------------------------
-   Catchy Animated Gradient Background
-   ---------------------------------------------- */
-.announcement-card {
-    background: linear-gradient(135deg, #8bf8ac 0%, #1a441a 40%, #4facfe 100%);
-    background-size: 300% 300%;
-    animation: gradientShift 5s ease-in-out infinite;
-    box-shadow: 0 0 40px rgba(245, 87, 108, 0.4);
-}
+const currentIndex = ref(0);
+let autoplayTimer = null;
 
-@keyframes gradientShift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
+const normalizedAnnouncements = computed(() => {
+    if (Array.isArray(props.announcements) && props.announcements.length > 0) {
+        return props.announcements.filter(Boolean);
+    }
 
-/* ----------------------------------------------
-   Shimmer (Light Sweep)
-   ---------------------------------------------- */
-.shimmer-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    background: linear-gradient(
-        105deg,
-        transparent 40%,
-        rgba(255, 255, 255, 0.25) 50%,
-        transparent 60%
+    return props.announcement ? [props.announcement] : [];
+});
+
+const currentAnnouncement = computed(() => {
+    if (!normalizedAnnouncements.value.length) return null;
+
+    return (
+        normalizedAnnouncements.value[currentIndex.value] ??
+        normalizedAnnouncements.value[0]
     );
-    background-size: 200% 100%;
-    animation: shimmer 4s ease-in-out infinite;
-    pointer-events: none;
-}
+});
 
-@keyframes shimmer {
-    0% { background-position: -200% 0%; }
-    100% { background-position: 200% 0%; }
-}
+const hasMultipleAnnouncements = computed(
+    () => normalizedAnnouncements.value.length > 1
+);
 
-/* ----------------------------------------------
-   Floating Emoji
-   ---------------------------------------------- */
-.float-icon {
-    animation: float 3s ease-in-out infinite;
-}
+const stopAutoplay = () => {
+    if (autoplayTimer && typeof window !== "undefined") {
+        window.clearInterval(autoplayTimer);
+        autoplayTimer = null;
+    }
+};
 
-@keyframes float {
-    0%, 100% { transform: translateY(0px) rotate(-2deg); }
-    50% { transform: translateY(-10px) rotate(2deg); }
-}
+const startAutoplay = () => {
+    stopAutoplay();
+    if (typeof window === "undefined" || !hasMultipleAnnouncements.value) return;
 
-/* ----------------------------------------------
-   Pulsing Badge (Extra attention)
-   ---------------------------------------------- */
-.badge-pulse {
-    animation: badgeGlow 2s ease-in-out infinite;
-}
+    autoplayTimer = window.setInterval(() => {
+        currentIndex.value =
+            (currentIndex.value + 1) % normalizedAnnouncements.value.length;
+    }, 6000);
+};
 
-@keyframes badgeGlow {
-    0%, 100% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
-    50% { box-shadow: 0 0 25px rgba(255, 255, 255, 0.7); }
-}
+const nextAnnouncement = () => {
+    if (!normalizedAnnouncements.value.length) return;
 
-/* ----------------------------------------------
-   Accessibility: Respect reduced-motion
-   ---------------------------------------------- */
-@media (prefers-reduced-motion: reduce) {
-    .announcement-card {
-        animation: none;
-        background: linear-gradient(135deg, #58f54a 0%, hsl(108, 86%, 61%) 100%);
-        box-shadow: 0 0 30px rgba(245, 87, 108, 0.3);
-    }
-    .shimmer-overlay {
-        display: none;
-    }
-    .float-icon {
-        animation: none;
-    }
-    .badge-pulse {
-        animation: none;
-    }
-    .cta-button {
-        transition: none;
-    }
-    .cta-button:hover {
-        transform: none !important;
-    }
-}
-</style>
+    currentIndex.value =
+        (currentIndex.value + 1) % normalizedAnnouncements.value.length;
+    startAutoplay();
+};
+
+const prevAnnouncement = () => {
+    if (!normalizedAnnouncements.value.length) return;
+
+    currentIndex.value =
+        (currentIndex.value - 1 + normalizedAnnouncements.value.length) %
+        normalizedAnnouncements.value.length;
+    startAutoplay();
+};
+
+const goToAnnouncement = (index) => {
+    currentIndex.value = index;
+    startAutoplay();
+};
+
+watch(
+    () =>
+        normalizedAnnouncements.value
+            .map((announcement) => announcement?.id)
+            .join(","),
+    () => {
+        if (!normalizedAnnouncements.value.length) {
+            currentIndex.value = 0;
+            stopAutoplay();
+            return;
+        }
+
+        if (currentIndex.value >= normalizedAnnouncements.value.length) {
+            currentIndex.value = 0;
+        }
+
+        startAutoplay();
+    },
+    { immediate: true }
+);
+
+onMounted(() => {
+    startAutoplay();
+});
+
+onBeforeUnmount(() => {
+    stopAutoplay();
+});
+</script>

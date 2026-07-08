@@ -6,16 +6,9 @@
     <!-- Main Dashboard Grid -->
     <div class="dashboard-grid w-full">
         <AnnouncementDashboardCard
-            v-if="cardAnnouncement"
-            :announcement="cardAnnouncement"
-            @open="showAnnouncementModal = true"
-            @dismiss="dismissAnnouncementCard"
-        />
-        <AnnouncementPopup
-            :show="showAnnouncementModal"
-            :announcement="activeAnnouncement"
-            @close="showAnnouncementModal = false"
-            @dismiss="showAnnouncementModal = false"
+            v-if="cardAnnouncements.length"
+            :announcements="cardAnnouncements"
+            @open="openAnnouncementModal"
         />
         <!-- Top Stats Cards -->
         <div class="stats-grid w-full">
@@ -557,7 +550,7 @@ customer, index
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onMounted, ref, watch } from "vue";
+import { computed, defineComponent, h, inject, onMounted, ref, watch } from "vue";
 import DashboardCard from "./Components/DashboardCard.vue";
 import Chart from "chart.js/auto";
 import SvgIcon from "@jamescoyle/vue-icon";
@@ -575,7 +568,6 @@ import { usePage } from "@inertiajs/vue3";
 import ToastAlertWarning from "./Components/ToastAlertWarning.vue";
 import ToastAlert from "./Components/ToastAlert.vue";
 import AnnouncementDashboardCard from "./Components/AnnouncementDashboardCard.vue";
-import AnnouncementPopup from "./Components/AnnouncementPopup.vue";
 
 const props = defineProps({
     ledgerTotals: Object,
@@ -584,50 +576,23 @@ const props = defineProps({
 
 const page = usePage();
 
-const showAnnouncementModal = ref(false);
 const activeAnnouncement = computed(() => page.props.activeAnnouncement ?? null);
-const isAnnouncementCardDismissed = ref(false);
-
-const getDismissKey = (announcementId) => {
-    if (!announcementId) return null;
-    return `announcement_dismissed:${page.props.tenant}:${announcementId}`;
-};
-
-const refreshDismissed = () => {
-    if (typeof window === "undefined") return;
-    const id = activeAnnouncement.value?.id;
-    const key = getDismissKey(id);
-    if (!key) {
-        isAnnouncementCardDismissed.value = false;
-        return;
+const activeAnnouncements = computed(() => {
+    const announcements = page.props.activeAnnouncements;
+    if (Array.isArray(announcements) && announcements.length > 0) {
+        return announcements;
     }
-    isAnnouncementCardDismissed.value = !!window.localStorage.getItem(key);
-};
 
-const dismissAnnouncementCard = () => {
-    if (typeof window === "undefined") return;
-    const id = activeAnnouncement.value?.id;
-    const key = getDismissKey(id);
-    if (!key) return;
-    window.localStorage.setItem(key, "1");
-    isAnnouncementCardDismissed.value = true;
-    showAnnouncementModal.value = false;
-};
+    return activeAnnouncement.value ? [activeAnnouncement.value] : [];
+});
+const openAnnouncementModal =
+    inject("openAnnouncementModal", null) ?? (() => {});
 
-watch(
-    () => activeAnnouncement.value?.id,
-    () => {
-        refreshDismissed();
-        showAnnouncementModal.value = false;
-    },
-    { immediate: true }
-);
-
-const cardAnnouncement = computed(() => {
-    const a = activeAnnouncement.value;
-    if (!a?.show_banner) return null;
-    if (!a?.is_dismissible) return a;
-    return isAnnouncementCardDismissed.value ? null : a;
+const cardAnnouncements = computed(() => {
+    return activeAnnouncements.value.filter((announcement) => {
+        if (!announcement?.show_banner) return false;
+        return true;
+    });
 });
 
 const getCssVar = (name) => {

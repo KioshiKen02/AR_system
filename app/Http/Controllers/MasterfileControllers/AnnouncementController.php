@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Models\Announcement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class AnnouncementController extends Controller
@@ -106,5 +108,34 @@ class AnnouncementController extends Controller
         $announcement->delete();
 
         return redirect()->back()->with('success', 'Announcement deleted successfully.');
+    }
+
+    public function dismiss(Request $request, $tenant, Announcement $announcement)
+    {
+        if (!Schema::connection('mysql')->hasTable('announcement_dismissals')) {
+            return response()->json(['success' => false], 500);
+        }
+
+        $userId = $request->user()?->id;
+        if (!$userId) {
+            return response()->json(['success' => false], 401);
+        }
+
+        $now = now();
+        DB::connection('mysql')
+            ->table('announcement_dismissals')
+            ->updateOrInsert(
+                [
+                    'announcement_id' => $announcement->id,
+                    'user_id' => $userId,
+                ],
+                [
+                    'dismissed_at' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]
+            );
+
+        return response()->json(['success' => true]);
     }
 }

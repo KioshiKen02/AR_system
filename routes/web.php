@@ -144,6 +144,9 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
             Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
         });
 
+        Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss'])
+            ->name('announcements.dismiss');
+
         //Checkers page
         Route::get('/checkers', [CheckerController::class, 'index'])->middleware('check.permission:0103-CHKR,view')->name('checker');
         Route::post('/addChecker', [CheckerController::class, 'addChecker'])->name('addChecker'); //Add Checker

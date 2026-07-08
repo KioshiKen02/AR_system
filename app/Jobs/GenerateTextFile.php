@@ -136,7 +136,7 @@ class GenerateTextFile
                 ->where('exported', false)
                 ->orderBy('receipt_date');
 
-           /* Commented out to prevent local file creation - direct network save only */
+            /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
 
             $baseNameCash = $this->tenantConfig->getTextFileBaseName('Charge Invoice Cash');
@@ -149,6 +149,7 @@ class GenerateTextFile
             $cashNetworkStoragePath = $cashFilename;
             $arNetworkStoragePath = $arFilename;
 
+            $walkInCustomerCodes = $this->getWalkInCustomerCodes();
             $customers = Customer::all()->keyBy('cus_code');
             $accCodes = AccCode::all()->keyBy('gl_account_navcode');
             $bankNames = Payment::all()->keyBy('document_no');
@@ -189,6 +190,7 @@ class GenerateTextFile
                 $banks,
                 $itemsList,
                 $locCodeByCustomer,
+                $walkInCustomerCodes,
             ) {
 
                 $query->chunkById(500, function ($invoices) use (
@@ -207,11 +209,21 @@ class GenerateTextFile
                     $banks,
                     $itemsList,
                     $locCodeByCustomer,
+                    $walkInCustomerCodes,
                 ) {
                     $idsToMark = [];
                     $cashLines = [];
                     $arLines = [];
                     foreach ($invoices as $invoice) {
+                        // Skip walk-in customers only if payment mode is Cash
+                        $isWalkInCustomer = in_array($invoice->customer_code, $walkInCustomerCodes, true)
+                            || str_contains(strtolower(trim((string) $invoice->customer_code)), 'walkin')
+                            || str_contains(strtolower(trim((string) $invoice->name)), 'walkin');
+                        $isCashPayment = strcasecmp(trim((string) $invoice->payment_mode), 'Cash') === 0;
+                        
+                        if ($isWalkInCustomer && $isCashPayment) {
+                            continue;
+                        }
 
                         $customerCusNavCode = $customers->get($invoice->customer_code)?->nav_code ?? '';
                         $customerCusNavCodeDescription = $accCodes->get($customerCusNavCode)?->gl_account_name ?? '';
@@ -309,11 +321,27 @@ class GenerateTextFile
             /* $privateUrl = route('exports.download', ['filename' => $filename]); */
             $privateUrl = null;
 
+            // Update exported status: exclude only walk-in customers with Cash payment mode
             DB::table('invoice')
                 ->whereBetween('receipt_date', [
                     $this->validatedData['start_date'],
                     $this->validatedData['end_date']
                 ])
+                ->where(function ($query) use ($walkInCustomerCodes) {
+                    // Include non-walk-in customers (all payment modes)
+                    $query->whereNotIn('customer_code', $walkInCustomerCodes)
+                        ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
+                        ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%']);
+                })
+                ->orWhere(function ($query) use ($walkInCustomerCodes) {
+                    // Include walk-in customers with non-Cash payment modes
+                    $query->where(function ($q) use ($walkInCustomerCodes) {
+                        $q->whereIn('customer_code', $walkInCustomerCodes)
+                            ->orWhereRaw($this->normalizedSql('customer_code') . " LIKE ?", ['%walkin%'])
+                            ->orWhereRaw($this->normalizedSql('name') . " LIKE ?", ['%walkin%']);
+                    })
+                    ->whereRaw("LOWER(TRIM(payment_mode)) != ?", ['cash']);
+                })
                 ->update(['exported' => true]);
 
             $this->updateProgress(100, 'Ready to Download!');
@@ -369,9 +397,7 @@ class GenerateTextFile
                 ->where('exported', false)
                 ->orderBy('receipt_date');
 
-            $this->excludeWalkInFromQuery($query);
-
-            /* Commented out to prevent local file creation - direct network save only */
+             /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
 
             $baseName = $this->tenantConfig->getTextFileBaseName($this->validatedData['export_type']);
@@ -485,16 +511,12 @@ class GenerateTextFile
             /* $privateUrl = route('exports.download', ['filename' => $filename]); */
             $privateUrl = null;
 
-            $walkInCustomerCodes = $this->getWalkInCustomerCodes();
             DB::table('adjustment')
                 ->whereNull('deleted_at')
                 ->whereBetween('receipt_date', [
                     $this->validatedData['start_date'],
                     $this->validatedData['end_date']
                 ])
-                ->whereNotIn('customer_code', $walkInCustomerCodes)
-                ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
-                ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%'])
                 ->update(['exported' => true]);
 
             $this->updateProgress(100, 'Ready to Download!');
@@ -530,7 +552,7 @@ class GenerateTextFile
             $this->excludeWalkInFromQuery($query);
 
 
-            /* Commented out to prevent local file creation - direct network save only */
+             /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
 
             $baseName = $this->tenantConfig->getTextFileBaseName($this->validatedData['export_type']);

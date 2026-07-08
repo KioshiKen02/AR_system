@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\AppSetting;
 use App\Models\Announcement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
 use App\Models\MasterfileModels\TenantUser;
@@ -154,6 +155,63 @@ class HandleInertiaRequests extends Middleware
                     ->first();
 
                 return $announcement?->toArray();
+            },
+            'activeAnnouncements' => function () {
+                $currentAppSettingId = config('tenant.current_app_setting_id');
+                if (!$currentAppSettingId) {
+                    return [];
+                }
+
+                if (!Schema::connection('mysql')->hasTable('announcements')) {
+                    return [];
+                }
+
+                return Announcement::query()
+                    ->select('id', 'title', 'message', 'show_banner', 'show_modal', 'is_dismissible', 'created_at')
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($currentAppSettingId) {
+                        $q->where('applies_to_all', true)
+                            ->orWhereHas('appSettings', function ($tq) use ($currentAppSettingId) {
+                                $tq->where('app_settings.id', $currentAppSettingId);
+                            });
+                    })
+                    ->orderByDesc('created_at')
+                    ->get()
+                    ->toArray();
+            },
+            'dismissedAnnouncementIds' => function () use ($request) {
+                $userId = $request->user()?->id;
+                if (!$userId) {
+                    return [];
+                }
+
+                $currentAppSettingId = config('tenant.current_app_setting_id');
+                if (!$currentAppSettingId) {
+                    return [];
+                }
+
+                if (!Schema::connection('mysql')->hasTable('announcements') || !Schema::connection('mysql')->hasTable('announcement_dismissals')) {
+                    return [];
+                }
+
+                return DB::connection('mysql')
+                    ->table('announcement_dismissals')
+                    ->join('announcements', 'announcement_dismissals.announcement_id', '=', 'announcements.id')
+                    ->where('announcement_dismissals.user_id', $userId)
+                    ->whereNull('announcements.deleted_at')
+                    ->where('announcements.is_active', true)
+                    ->where(function ($q) use ($currentAppSettingId) {
+                        $q->where('announcements.applies_to_all', true)
+                            ->orWhereExists(function ($sub) use ($currentAppSettingId) {
+                                $sub->selectRaw(1)
+                                    ->from('announcement_app_setting')
+                                    ->whereColumn('announcement_app_setting.announcement_id', 'announcements.id')
+                                    ->where('announcement_app_setting.app_setting_id', $currentAppSettingId);
+                            });
+                    })
+                    ->pluck('announcement_dismissals.announcement_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
             },
         ]);
     }

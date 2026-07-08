@@ -292,8 +292,8 @@ const props = defineProps({
         default: "no",
     },
     rows: {
-        type: String,
-        default: "",
+        type: [String, Number],
+        default: 3,
     },
     placeholder: String,
 });

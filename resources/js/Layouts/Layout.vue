@@ -23,6 +23,12 @@
                 @refresh-users="fetchUsers"
             />
             <ToastAlertWarning :show="showToast" :message="toastMessage" />
+            <AnnouncementPopup
+                :show="showAnnouncementModal"
+                :announcement="selectedAnnouncement"
+                @close="closeAnnouncementModal"
+                @dismiss="dismissAnnouncement(selectedAnnouncement)"
+            />
             <div id="app" class="flex h-screen" v-cloak>
                     <!-- Sidebar -->
                     <aside
@@ -447,6 +453,7 @@ sub, subIndex
 <script setup>
 import {
     computed,
+    provide,
     ref,
     onMounted,
     onBeforeUnmount,
@@ -475,11 +482,151 @@ import { mdiBell, mdiMessage, mdiDatabaseSync } from "@mdi/js";
 import Notifications from "../Modals/Notifications.vue";
 import Messages from "../Modals/Messages.vue";
 import ToastAlertWarning from "../Pages/Components/ToastAlertWarning.vue";
+import AnnouncementPopup from "../Pages/Components/AnnouncementPopup.vue";
 import { first } from "lodash";
 
 const { canView } = usePermissions();
 
 const { props } = usePage();
+const page = usePage();
+
+const showAnnouncementModal = ref(false);
+const selectedAnnouncement = ref(null);
+const dismissedAnnouncementIds = ref(
+    Array.isArray(page.props.dismissedAnnouncementIds)
+        ? page.props.dismissedAnnouncementIds
+        : []
+);
+
+const activeAnnouncement = computed(() => page.props.activeAnnouncement ?? null);
+const activeAnnouncements = computed(() => {
+    const announcements = page.props.activeAnnouncements;
+    if (Array.isArray(announcements) && announcements.length > 0) {
+        return announcements;
+    }
+
+    return activeAnnouncement.value ? [activeAnnouncement.value] : [];
+});
+
+const getDismissKey = (announcementId) => {
+    if (!announcementId) return null;
+    return `announcement_dismissed:${page.props.tenant}:${announcementId}`;
+};
+
+const mergeDismissedFromLocalStorage = () => {
+    if (typeof window === "undefined") return;
+    const localDismissed = activeAnnouncements.value
+        .map((a) => a?.id)
+        .filter(Boolean)
+        .filter((id) => {
+            const key = getDismissKey(id);
+            return key ? !!window.localStorage.getItem(key) : false;
+        });
+
+    dismissedAnnouncementIds.value = Array.from(
+        new Set([
+            ...(Array.isArray(page.props.dismissedAnnouncementIds)
+                ? page.props.dismissedAnnouncementIds
+                : []),
+            ...localDismissed,
+        ])
+    );
+};
+
+watch(
+    () => page.props.dismissedAnnouncementIds,
+    () => {
+        mergeDismissedFromLocalStorage();
+    },
+    { immediate: true }
+);
+
+watch(
+    () => activeAnnouncements.value.map((a) => a?.id).join(","),
+    () => {
+        mergeDismissedFromLocalStorage();
+        showAnnouncementModal.value = false;
+        selectedAnnouncement.value = null;
+    },
+    { immediate: true }
+);
+
+const openAnnouncementModal = (announcement) => {
+    if (!announcement) return;
+    selectedAnnouncement.value = announcement;
+    showAnnouncementModal.value = true;
+};
+
+const dismissAnnouncement = async (announcement) => {
+    const id = announcement?.id;
+    if (!id) return;
+
+    if (typeof window !== "undefined") {
+        const key = getDismissKey(id);
+        if (key) {
+            window.localStorage.setItem(key, "1");
+        }
+    }
+
+    try {
+        await axios.post(
+            route("announcements.dismiss", {
+                tenant: page.props.tenant,
+                announcement: id,
+            })
+        );
+    } catch (e) {
+    }
+
+    if (!dismissedAnnouncementIds.value.includes(id)) {
+        dismissedAnnouncementIds.value = [...dismissedAnnouncementIds.value, id];
+    }
+
+    if (selectedAnnouncement.value?.id === id) {
+        selectedAnnouncement.value = null;
+    }
+    showAnnouncementModal.value = false;
+};
+
+const closeAnnouncementModal = () => {
+    if (selectedAnnouncement.value?.show_modal) {
+        dismissAnnouncement(selectedAnnouncement.value);
+        return;
+    }
+    showAnnouncementModal.value = false;
+    selectedAnnouncement.value = null;
+};
+
+provide("openAnnouncementModal", openAnnouncementModal);
+
+const autoModalAnnouncement = computed(() => {
+    const announcement = activeAnnouncements.value.find((a) => a?.show_modal);
+    if (!announcement) return null;
+
+    if (!announcement.is_dismissible) {
+        return dismissedAnnouncementIds.value.includes(announcement.id)
+            ? null
+            : announcement;
+    }
+
+    return dismissedAnnouncementIds.value.includes(announcement.id)
+        ? null
+        : announcement;
+});
+
+const hasAutoShownModal = ref(false);
+watch(
+    () => autoModalAnnouncement.value?.id ?? null,
+    () => {
+        if (hasAutoShownModal.value) return;
+        if (showAnnouncementModal.value) return;
+        if (!autoModalAnnouncement.value) return;
+
+        openAnnouncementModal(autoModalAnnouncement.value);
+        hasAutoShownModal.value = true;
+    },
+    { immediate: true }
+);
 
 // const appName = page.props.appName;
 
@@ -595,7 +742,6 @@ const notifications = ref([]);
 const loading = ref(false);
 const error = ref(null);
 const channel = ref(null);
-const page = usePage();
 const appName = ref({});
 const availableTenants = ref([]);
 const showTenantDropdown = ref(false);

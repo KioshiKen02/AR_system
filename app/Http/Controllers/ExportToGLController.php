@@ -77,12 +77,8 @@ class ExportToGLController extends Controller
                     ->orderBy('receipt_date');
             }
 
-            if ($validated["export_type"] !== "Other Income") {
-                $walkInCustomerCodes = $this->walkInCustomerCodes();
-                $query->whereNotIn('customer_code', $walkInCustomerCodes)
-                    ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
-                    ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%']);
-            }
+            // No longer exclude walk-in customers for Adjustment and Payment
+            // For Other Income, we handle the conditional exclusion inside the job
 
             if (!$query->exists()) {
                 return response()->json([
