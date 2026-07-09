@@ -185,6 +185,9 @@
                         <th class="px-3 py-2 w-[15%] text-center font-semibold tracking-wider">
                             STATUS
                         </th>
+                        <th class="px-3 py-2 w-[10%] text-center font-semibold tracking-wider">
+                            HRMS BYPASS
+                        </th>
                         <th class="px-3 py-2 w-[15%] text-center font-semibold tracking-wider">
                             ACTION
                         </th>
@@ -194,7 +197,7 @@
                 <!-- Loading State -->
                 <tbody v-if="isLoading">
                     <tr>
-                        <td colspan="8" class="text-center py-8">
+                        <td colspan="7" class="text-center py-8">
                             <div class="flex justify-center items-center">
                                 <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
                                     fill="var(--color-icon)">
@@ -285,6 +288,14 @@
                                 </span>
                             </span>
                         </td>
+                        <td class="px-3 py-2 text-center">
+                            <span v-if="user.allow_hrms_bypass" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                                Yes
+                            </span>
+                            <span v-else class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                                No
+                            </span>
+                        </td>
 
                         <!-- Actions -->
                         <td class="px-3 py-2 text-center">
@@ -312,7 +323,7 @@
 
                     <!-- Empty State -->
                     <tr v-if="!isLoading && users.data.length === 0">
-                        <td colspan="8" class="px-5 py-6 text-center">
+                        <td colspan="7" class="px-5 py-6 text-center">
                             <div class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2" fill="none"
                                     viewBox="0 0 24 24" stroke="var(--color-icon)">

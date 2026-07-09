@@ -37,6 +37,7 @@ class User extends Authenticatable
         'created_by',
         'is_online',
         'last_seen_at',
+        'allow_hrms_bypass',
     ];
 
     /**
@@ -57,6 +58,7 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'allow_hrms_bypass' => 'boolean',
         ];
     }
 

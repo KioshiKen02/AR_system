@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'hrms' => [
+        'login_fail_open' => env('HRMS_LOGIN_FAIL_OPEN', false),
+    ],
+
 ];

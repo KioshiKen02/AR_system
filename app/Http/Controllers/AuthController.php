@@ -54,14 +54,21 @@ class AuthController extends Controller
                         if ($status !== 'Active') {
                             Auth::logout();
                             return back()->withErrors([
-                                'username' => 'Your account is inactive. Please contact the administrator.',
+                                'username' => 'Unable to verify user. Account is disabled in HRMS.',
                             ])->onlyInput('username');
                         }
                     } else {
-                        Auth::logout();
-                        return back()->withErrors([
-                            'username' => 'API request failed with status: ' . $response->status(),
-                        ])->onlyInput('username');
+                        $user = Auth::user();
+                        $allowBypass = $user->role === 'Admin' || $user->allow_hrms_bypass || config('services.hrms.login_fail_open');
+                        
+                        if (!$allowBypass) {
+                            Auth::logout();
+                            return back()->withErrors([
+                                'username' => 'API request failed with status: ' . $response->status(),
+                            ])->onlyInput('username');
+                        } else {
+                            session()->flash('warning', 'HRMS connection error. User verification was bypassed.');
+                        }
                     }
                 }
 
@@ -207,10 +214,17 @@ class AuthController extends Controller
             } catch (Exception $e) {
                 Log::error('Status API error during login: ' . $e->getMessage());
 
-                Auth::logout();
-                return back()->withErrors([
-                    'username' => 'Unable to verify account status. Please try again later.',
-                ])->onlyInput('username');
+                $user = Auth::user();
+                $allowBypass = $user && ($user->role === 'Admin' || $user->allow_hrms_bypass || config('services.hrms.login_fail_open'));
+
+                if (!$allowBypass) {
+                    Auth::logout();
+                    return back()->withErrors([
+                        'username' => 'Unable to verify account status. Please try again later.',
+                    ])->onlyInput('username');
+                } else {
+                    session()->flash('warning', 'HRMS connection error. User verification was bypassed.');
+                }
             }
         }
 

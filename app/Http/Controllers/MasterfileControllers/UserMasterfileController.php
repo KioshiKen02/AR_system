@@ -53,6 +53,7 @@ class UserMasterfileController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => 'required|in:Admin,Invoicing,Accounting,Bookkeeper,IAD',
             'status' => ['required', 'in:Active,Not Active'],
+            'allow_hrms_bypass' => ['boolean'],
             'app_setting_ids' => ['nullable', 'array'],
             'app_setting_ids.*' => ['exists:mysql.app_settings,id'], // Force check on mysql connection
         ]);
@@ -85,7 +86,7 @@ class UserMasterfileController extends Controller
         }
         
         if (!is_numeric($targetId)) {
-             \Log::warning("UserMasterfile Update: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
+             Log::warning("UserMasterfile Update: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
              $params = array_values($request->route()->parameters());
              if (count($params) >= 2) {
                   $targetId = $params[1];
@@ -105,6 +106,7 @@ class UserMasterfileController extends Controller
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'role' => 'required|in:Admin,Invoicing,Accounting,Bookkeeper,IAD',
             'status' => ['required', 'in:Active,Not Active'],
+            'allow_hrms_bypass' => ['boolean'],
             'app_setting_ids' => ['nullable', 'array'],
             'app_setting_ids.*' => ['exists:mysql.app_settings,id'],
         ]);
@@ -137,7 +139,7 @@ class UserMasterfileController extends Controller
         }
 
         if (!is_numeric($targetId)) {
-             \Log::warning("UserMasterfile Delete: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
+             Log::warning("UserMasterfile Delete: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
              $params = array_values($request->route()->parameters());
              if (count($params) >= 2) {
                   $targetId = $params[1];

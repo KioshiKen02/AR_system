@@ -99,6 +99,14 @@
                             <DropdownInput label="Status" v-model="form.status" :options="['Active', 'Not Active']"
                                 placeholder="Click to Select" :message="form.errors.status" />
 
+                            <div class="flex items-center mt-2 mb-2">
+                                <input type="checkbox" id="allow_hrms_bypass" v-model="form.allow_hrms_bypass"
+                                    class="w-4 h-4 text-blue-600 bg-[var(--color-bg-primary)] border-[var(--color-border)] rounded focus:ring-blue-500 focus:ring-2 cursor-pointer" />
+                                <label for="allow_hrms_bypass" class="ml-2 text-sm font-medium text-[var(--color-text-primary)] cursor-pointer">
+                                    Allow HRMS bypass when server is down
+                                </label>
+                            </div>
+
                             <MultiSelectDropdown label="App Settings (Databases)" v-model="form.app_setting_ids"
                                 :options="appSettingOptions" placeholder="Select App Settings"
                                 :message="form.errors.app_setting_ids" />
@@ -166,6 +174,7 @@ const form = useForm({
     password_confirmation: null,
     role: null,
     status: null,
+    allow_hrms_bypass: false,
     app_setting_ids: [],
 });
 
@@ -231,6 +240,7 @@ const fetchEmployeeData = async () => {
             form.username = props.user.username;
             form.role = props.user.role;
             form.status = props.user.status;
+            form.allow_hrms_bypass = !!props.user.allow_hrms_bypass;
             // Map app_settings array to IDs
             form.app_setting_ids = props.user.app_settings ? props.user.app_settings.map(s => s.id) : (props.user.app_setting_id ? [props.user.app_setting_id] : []);
             
@@ -245,6 +255,7 @@ const fetchEmployeeData = async () => {
             form.username = props.user.username;
             form.role = props.user.role;
             form.status = props.user.status;
+            form.allow_hrms_bypass = !!props.user.allow_hrms_bypass;
             form.app_setting_ids = props.user.app_settings ? props.user.app_settings.map(s => s.id) : (props.user.app_setting_id ? [props.user.app_setting_id] : []);
         }
         modalLoading.value = false;
