@@ -149,6 +149,9 @@ class PaymentController extends Controller
             $types = is_array($request->type_filters)
                 ? $request->type_filters
                 : explode(',', $request->type_filters);
+            if (in_array('BG', $types, true) && !in_array('Beginning Balance', $types, true)) {
+                $types[] = 'Beginning Balance';
+            }
             $query->whereIn('type', $types);
         }
 
@@ -1454,7 +1457,7 @@ class PaymentController extends Controller
                 'customer_code' => ['required', 'string'],
                 'name' => ['required', 'string'],
                 'payment_type' => ['required', 'in:5A - Cash,5B - Journal Voucher,5C - Online Deposit,5D - Check'],
-                'type' => ['required', 'in:Sales Invoice,Charge Invoice,Merchandise Charge Invoice,Merchandise Transfer Out,Sales Charge Invoice,Payment,BG'],
+                'type' => ['required', 'in:Sales Invoice,Charge Invoice,Merchandise Charge Invoice,Merchandise Transfer Out,Sales Charge Invoice,Payment,BG,Beginning Balance'],
                 'document_no' => ['required', 'string'],
                 'document_date' => ['required', 'date'],
                 'advpy_amount_paid' => ['required', 'numeric'],

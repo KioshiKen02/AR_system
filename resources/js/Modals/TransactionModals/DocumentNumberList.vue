@@ -329,9 +329,11 @@
                                                             'Payment',
                                                         'bg-purple-700 text-purple-300':
                                                             invoice.type ===
-                                                            'BG',
+                                                            'BG' ||
+                                                            invoice.type ===
+                                                            'Beginning Balance',
                                                     }">
-                                                    {{ invoice.type }}
+                                                    {{ invoice.type === 'Beginning Balance' ? 'BG' : invoice.type }}
                                                 </span>
                                             </td>
                                             <td class="px-2 py-1.5 text-center w-[95px]" @click="
@@ -1476,7 +1478,12 @@ watch(
             // Apply type filter
             if (typeFilter !== "All Types") {
                 filtered = filtered.filter(
-                    (document) => document.type === typeFilter
+                    (document) =>
+                        typeFilter === "BG"
+                            ? ["BG", "Beginning Balance"].includes(
+                                  document.type
+                              )
+                            : document.type === typeFilter
                 );
             }
 

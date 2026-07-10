@@ -434,11 +434,12 @@
                                                         ? 'bg-teal-700 text-teal-300'
                                             : payment.type === 'Payment'
                                                 ? 'bg-pink-700 text-pink-300'
-                                                : payment.type === 'BG'
+                                                : payment.type === 'BG' ||
+                                                    payment.type === 'Beginning Balance'
                                                     ? 'bg-purple-700 text-purple-300'
                                                     : 'bg-[var(--color-bg-avatar)] text-white',
                                 ]">
-                                {{ payment.type }}
+                                {{ payment.type === 'Beginning Balance' ? 'BG' : payment.type }}
                             </span>
                         </td>
                         <td class="px-3 py-2 text-right">
@@ -706,7 +707,13 @@ watch(search, (q) => {
 // Filter functionality (new)
 const showFilters = ref(false);
 const codeSort = ref(props.filters?.code_sort || null);
-const typeFilters = ref(props.filters?.type_filters || []);
+const typeFilters = ref([
+    ...new Set(
+        (props.filters?.type_filters || []).map((type) =>
+            type === "Beginning Balance" ? "BG" : type
+        )
+    ),
+]);
 const typeFiltersPaymentType = ref(
     props.filters?.type_filtersPaymentType || []
 );
