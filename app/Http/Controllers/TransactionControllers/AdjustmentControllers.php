@@ -541,77 +541,94 @@ class AdjustmentControllers extends Controller
             $dbData['created_by'] = $request->user()->name;
             Adjustment::create($dbData);
 
-            if ($cl_type === 'Sales Invoice') {
-                //DYNAMIC API LINK
-                // Use App Setting of the authenticated user
-                $userAppSetting = $request->user()->appSetting;
-                
-                // We need a mapping between App Settings (DB config) and the Centralized Invoicing API URLs.
-                // The switch case below hardcodes URLs based on app name. 
-                // We should ideally store these URLs in the AppSetting model or derive them.
-                // For now, we will try to use the user's app setting NAME to switch, 
-                // effectively replacing config('app.name') with $userAppSetting->app_name.
-                
-                $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
-                
-                $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
-                if ($baseUrl === null && $appName !== 'Ar System') {
-                    throw new \Exception("Unknown app name: {$appName}");
+            //DYNAMIC API LINK - Send API request for all adjustment types
+            $userAppSetting = $request->user()->appSetting;
+            
+            // We need a mapping between App Settings (DB config) and the Centralized Invoicing API URLs.
+            // The switch case below hardcodes URLs based on app name. 
+            // We should ideally store these URLs in the AppSetting model or derive them.
+            // For now, we will try to use the user's app setting NAME to switch, 
+            // effectively replacing config('app.name') with $userAppSetting->app_name.
+            
+            $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
+            
+            $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
+            if ($baseUrl === null && $appName !== 'Ar System') {
+                throw new \Exception("Unknown app name: {$appName}");
+            }
+            
+            // Calculate the total of all adjustments for this invoice to send to the API
+            $existingPositive = (float) Adjustment::where('invoice_no', $validated['invoice_no'])
+                ->where('apply_to', $validated['apply_to'])
+                ->where('type', 'Positive')
+                ->sum('amount');
+            $existingNegative = (float) Adjustment::where('invoice_no', $validated['invoice_no'])
+                ->where('apply_to', $validated['apply_to'])
+                ->where('type', 'Negative')
+                ->sum('amount');
+            
+            $newPositive = $existingPositive;
+            $newNegative = $existingNegative;
+            if (strtolower($validated['type']) === 'positive') {
+                $newPositive += $validated['amount'];
+            } else {
+                $newNegative += $validated['amount'];
+            }
+            
+            $apiAdjustmentValue = $newPositive - $newNegative;
+            
+            if ($baseUrl) {
+                $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
+                if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                    Log::error('Adjustment Sales API Failed', [
+                        'app_name' => $appName,
+                        'url' => $url,
+                        'status' => null,
+                        'response_body' => null,
+                        'response_json' => null,
+                        'payload' => [
+                            'adj_sales' => (string) $apiAdjustmentValue,
+                            'tds_no'    => $validated['invoice_no'],
+                        ],
+                        'exception' => 'Invalid URL',
+                    ]);
+                    return $adjustmentNumber;
                 }
-                
-                if ($baseUrl) {
-                    $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
-                    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                try {
+                    $response = Http::timeout(3)
+                        ->retry(2, 200)
+                        ->withHeaders([
+                            'Accept' => 'application/json',
+                        ])->post($url, [
+                            'adj_sales' => (string) $apiAdjustmentValue,
+                            'tds_no' => $validated['invoice_no'],
+                        ]);
+                    if (!$response->successful()) {
                         Log::error('Adjustment Sales API Failed', [
                             'app_name' => $appName,
                             'url' => $url,
-                            'status' => null,
-                            'response_body' => null,
-                            'response_json' => null,
+                            'status' => $response->status(),
+                            'response_body' => $response->body(),
+                            'response_json' => $response->json(),
                             'payload' => [
-                                'adj_sales' => (string) $newAdjustmentAmount,
+                                'adj_sales' => (string) $apiAdjustmentValue,
                                 'tds_no'    => $validated['invoice_no'],
                             ],
-                            'exception' => 'Invalid URL',
-                        ]);
-                        return $adjustmentNumber;
-                    }
-                    try {
-                        $response = Http::timeout(3)
-                            ->retry(2, 200)
-                            ->withHeaders([
-                                'Accept' => 'application/json',
-                            ])->post($url, [
-                                'adj_sales' => (string) $newAdjustmentAmount,
-                                'tds_no' => $validated['invoice_no'],
-                            ]);
-                        if (!$response->successful()) {
-                            Log::error('Adjustment Sales API Failed', [
-                                'app_name' => $appName,
-                                'url' => $url,
-                                'status' => $response->status(),
-                                'response_body' => $response->body(),
-                                'response_json' => $response->json(),
-                                'payload' => [
-                                    'adj_sales' => (string) $newAdjustmentAmount,
-                                    'tds_no'    => $validated['invoice_no'],
-                                ],
-                            ]);
-                        }
-                    } catch (\Throwable $e) {
-                        Log::error('Adjustment Sales API Failed', [
-                            'app_name' => $appName,
-                            'url' => $url,
-                            'status' => null,
-                            'response_body' => null,
-                            'response_json' => null,
-                            'payload' => [
-                                'adj_sales' => (string) $newAdjustmentAmount,
-                                'tds_no'    => $validated['invoice_no'],
-                            ],
-                            'exception' => $e->getMessage(),
                         ]);
                     }
+                } catch (\Throwable $e) {
+                    Log::error('Adjustment Sales API Failed', [
+                        'app_name' => $appName,
+                        'url' => $url,
+                        'status' => null,
+                        'response_body' => null,
+                        'response_json' => null,
+                        'payload' => [
+                            'adj_sales' => (string) $apiAdjustmentValue,
+                            'tds_no'    => $validated['invoice_no'],
+                        ],
+                        'exception' => $e->getMessage(),
+                    ]);
                 }
             }
             return $adjustmentNumber;
@@ -627,16 +644,12 @@ class AdjustmentControllers extends Controller
     public function syncAdjustmentSales(Request $request, $adjustment)
     {
         $invoiceNo = $request->input('invoice_no');
+        $applyTo = $request->input('apply_to');
 
         $adjustment = Adjustment::withTrashed()->find($adjustment);
         if ($adjustment) {
             $invoiceNo = $adjustment->invoice_no;
-            if ($adjustment->apply_to !== 'Sales Invoice') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only Sales Invoice adjustments can be synced.',
-                ], 422);
-            }
+            $applyTo = $adjustment->apply_to;
         }
 
         if (!$invoiceNo) {
@@ -645,15 +658,21 @@ class AdjustmentControllers extends Controller
                 'message' => 'invoice_no is required.',
             ], 422);
         }
+        if (!$applyTo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'apply_to is required.',
+            ], 422);
+        }
 
         $ledger = CustomerLedger::where('invoice_number', $invoiceNo)
-            ->where('type', 'Sales Invoice')
+            ->where('type', $applyTo === 'Beginning Balance' ? 'BG' : $applyTo)
             ->first();
 
         if (!$ledger) {
             return response()->json([
                 'success' => false,
-                'message' => 'Customer ledger not found for this Sales Invoice.',
+                'message' => 'Customer ledger not found for this invoice.',
             ], 404);
         }
 
@@ -694,6 +713,18 @@ class AdjustmentControllers extends Controller
             ], 422);
         }
 
+        // Calculate the total of all adjustments for this invoice to send to the API
+        $existingPositive = (float) Adjustment::where('invoice_no', $invoiceNo)
+            ->where('apply_to', $applyTo)
+            ->where('type', 'Positive')
+            ->sum('amount');
+        $existingNegative = (float) Adjustment::where('invoice_no', $invoiceNo)
+            ->where('apply_to', $applyTo)
+            ->where('type', 'Negative')
+            ->sum('amount');
+        
+        $apiAdjustmentValue = $existingPositive - $existingNegative;
+
         $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
         if (!filter_var($url, FILTER_VALIDATE_URL)) {
             Log::error('Adjustment Sales API Failed', [
@@ -703,7 +734,7 @@ class AdjustmentControllers extends Controller
                 'response_body' => null,
                 'response_json' => null,
                 'payload' => [
-                    'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                    'adj_sales' => (string) $apiAdjustmentValue,
                     'tds_no'    => $invoiceNo,
                 ],
                 'exception' => 'Invalid URL',
@@ -721,7 +752,7 @@ class AdjustmentControllers extends Controller
                 ->withHeaders([
                     'Accept' => 'application/json',
                 ])->post($url, [
-                    'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                    'adj_sales' => (string) $apiAdjustmentValue,
                     'tds_no' => $invoiceNo,
                 ]);
 
@@ -733,7 +764,7 @@ class AdjustmentControllers extends Controller
                     'response_body' => $response->body(),
                     'response_json' => $response->json(),
                     'payload' => [
-                        'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                        'adj_sales' => (string) $apiAdjustmentValue,
                         'tds_no'    => $invoiceNo,
                     ],
                 ]);
@@ -756,7 +787,7 @@ class AdjustmentControllers extends Controller
                 'response_body' => null,
                 'response_json' => null,
                 'payload' => [
-                    'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                    'adj_sales' => (string) $apiAdjustmentValue,
                     'tds_no'    => $invoiceNo,
                 ],
                 'exception' => $e->getMessage(),

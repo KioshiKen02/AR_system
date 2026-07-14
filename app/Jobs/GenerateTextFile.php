@@ -1907,7 +1907,7 @@ class GenerateTextFile
                     $this->fmt($overpaymentAmountValue),
                     $formattedDate,
                     $prefix . $docCode . '#' . $paymentReferenceNo,
-                    'G/L Account',
+                    '',
                     $bankCode,
                     $this->fmt($overpaymentAmountValue * -1),
                     $this->fmt($overpaymentAmountValue)
