@@ -120,10 +120,12 @@
         .signatory-table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
 
         .signatory-table td {
-            text-align: justify;
+            vertical-align: top;
+            width: 33.33%;
             padding: 10px;
             font-size: 10px;
             color: #000000;
@@ -131,6 +133,83 @@
 
         .signatory-table div {
             margin: 0;
+        }
+
+        .signatory-label {
+            margin: 0;
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        .signatory-signature-line {
+            border-bottom: 1px solid black;
+            margin-top: 22px;
+            text-align: center;
+            min-height: 20px;
+            line-height: 20px;
+            white-space: nowrap;
+            overflow: hidden;
+            padding: 0 2px;
+            font-size: 10px;
+        }
+
+        .signatory-signature-line.signatory-font-9 {
+            font-size: 9px;
+        }
+
+        .signatory-signature-line.signatory-font-8 {
+            font-size: 8px;
+        }
+
+        .signatory-signature-line.signatory-font-7 {
+            font-size: 7px;
+        }
+
+        .signatory-caption {
+            text-align: center;
+            margin-top: 6px;
+            font-size: 10px;
+        }
+
+        .signatory-field-label {
+            margin-top: 0;
+            font-size: 10px;
+        }
+
+        .signatory-field-line {
+            border-bottom: 1px solid black;
+            margin-top: 0;
+            min-height: 16px;
+            line-height: 16px;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            font-size: 10px;
+            padding-left: 6px;
+        }
+
+        .signatory-meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin-top: 16px;
+        }
+
+        .signatory-meta-table td {
+            border-top: none;
+            padding: 4px 0 0;
+            font-size: 10px;
+            vertical-align: middle;
+        }
+
+        .signatory-meta-label-cell {
+            width: 30%;
+            padding-right: 8px;
+            white-space: nowrap;
+        }
+
+        .signatory-meta-line-cell {
+            width: 70%;
         }
 
         .footer {
@@ -227,50 +306,135 @@
         </tbody>
     </table>
 
+    @php
+        $preparedByValue = trim((string) ($data['preparedBy'] ?? ''));
+        $preparedByLength = function_exists('mb_strlen') ? mb_strlen($preparedByValue) : strlen($preparedByValue);
+        $preparedByFontSize = 10;
+        if ($preparedByLength > 36) {
+            $preparedByFontSize = 7;
+        } elseif ($preparedByLength > 28) {
+            $preparedByFontSize = 8;
+        } elseif ($preparedByLength > 22) {
+            $preparedByFontSize = 9;
+        }
+
+        $checkedByValue = trim((string) ($data['checkedBy'] ?? ''));
+        $checkedByLength = function_exists('mb_strlen') ? mb_strlen($checkedByValue) : strlen($checkedByValue);
+        $checkedByFontSize = 10;
+        if ($checkedByLength > 36) {
+            $checkedByFontSize = 7;
+        } elseif ($checkedByLength > 28) {
+            $checkedByFontSize = 8;
+        } elseif ($checkedByLength > 22) {
+            $checkedByFontSize = 9;
+        }
+
+        $notedByValue = trim((string) ($data['notedBy'] ?? ''));
+        $notedByLength = function_exists('mb_strlen') ? mb_strlen($notedByValue) : strlen($notedByValue);
+        $notedByFontSize = 10;
+        if ($notedByLength > 36) {
+            $notedByFontSize = 7;
+        } elseif ($notedByLength > 28) {
+            $notedByFontSize = 8;
+        } elseif ($notedByLength > 22) {
+            $notedByFontSize = 9;
+        }
+    @endphp
+
     <table class="signatory-table">
         <tr>
             <td>
-                <div>Prepared By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;">
-                    {{ $data['preparedBy'] }}
-                </div>
-                <div style="text-align: center;">(Signature Over Printed Name)</div>
-                <div>Date:</div>
-                <div style="border-bottom: 1px solid black; text-align: center; margin-bottom: 2px;">
-                    {{ \Carbon\Carbon::now()->format('m/d/Y') }}</div>
-                <div>Time:</div>
-                <div style="border-bottom: 1px solid black; text-align: center; margin-bottom: 2px;">
-                    {{ \Carbon\Carbon::now()->format(' h:i:s A') }}</div>
-                <div>Designation:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;"></div>
+                <div class="signatory-label">Prepared By:</div>
+                <div class="signatory-signature-line signatory-font-{{ $preparedByFontSize }}">{{ $preparedByValue }}</div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <table class="signatory-meta-table">
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Date:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format('m/d/Y') }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Time:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line">{{ \Carbon\Carbon::now()->format('h:i:s A') }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Designation:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                </table>
             </td>
             <td>
-                <div>Checked By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 22px; text-align: center;">{{ $data['checkedBy'] ?? '' }}</div>
-                <div style="text-align: center;">(Signature Over Printed Name)</div>
-                <div>Date:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Time:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Designation:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;"></div>
+                <div class="signatory-label">Checked By:</div>
+                <div class="signatory-signature-line signatory-font-{{ $checkedByFontSize }}">{{ $checkedByValue }}</div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <table class="signatory-meta-table">
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Date:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Time:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Designation:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                </table>
             </td>
             <td>
-                <div>Note By:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 22px; text-align: center;">
-                    {{ $data['notedBy'] ?? '' }}
-                </div>
-                <div style="text-align: center;">(Signature Over Printed Name)</div>
-                <div>Date:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Time:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center; margin-bottom: 2px;">
-                </div>
-                <div>Designation:</div>
-                <div style="border-bottom: 1px solid black; margin-top: 10px; text-align: center;"></div>
+                <div class="signatory-label">Noted By:</div>
+                <div class="signatory-signature-line signatory-font-{{ $notedByFontSize }}">{{ $notedByValue }}</div>
+                <div class="signatory-caption">(Signature Over Printed Name)</div>
+                <table class="signatory-meta-table">
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Date:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Time:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="signatory-meta-label-cell">
+                            <div class="signatory-field-label">Designation:</div>
+                        </td>
+                        <td class="signatory-meta-line-cell">
+                            <div class="signatory-field-line"></div>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>

@@ -43,8 +43,8 @@ class SignatoryService
         ],
         [
             'keywords' => ['cortes', 'piggery'],
-            'noted' => '',
-            'reviewed' => '',
+            'noted' => 'JOESPH M. GILDORE',
+            'reviewed' => 'JOESPH M. GILDORE',
             'checked' => '',
         ],
         [
