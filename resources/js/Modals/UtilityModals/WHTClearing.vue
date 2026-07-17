@@ -157,13 +157,84 @@
                                 />
                             </div>
 
+                            <div class="flex flex-col gap-2 mb-2">
+                                <label
+                                    class="block text-sm font-medium text-[var(--color-text-secondary)]"
+                                    >Clearing Date Basis</label
+                                >
+                                <div class="w-full flex flex-col sm:flex-row gap-2">
+                                    <label
+                                        v-for="option in clearingDateBasisOptions"
+                                        :key="option.value"
+                                        class="flex-1 inline-flex items-center cursor-pointer group"
+                                    >
+                                        <input
+                                            type="radio"
+                                            v-model="clearingDateBasis"
+                                            :value="option.value"
+                                            class="hidden peer"
+                                        />
+                                        <div
+                                            class="w-full relative flex items-center justify-center p-2.5 rounded-md border border-[var(--color-border)] transition-all duration-200"
+                                            :class="{
+                                                'bg-[var(--color-icon)] border-transparent':
+                                                    clearingDateBasis ===
+                                                    option.value,
+                                            }"
+                                        >
+                                            <div
+                                                class="relative w-4 h-4 mr-2 rounded-full border-2 shrink-0 transition-colors"
+                                                :class="
+                                                    clearingDateBasis ===
+                                                    option.value
+                                                        ? 'border-[var(--color-bg-secondary)]'
+                                                        : 'border-[var(--color-bg-avatar)] group-hover:border-[var(--color-primary)]'
+                                                "
+                                            >
+                                                <div
+                                                    class="absolute inset-0 m-auto w-2 h-2 rounded-full bg-[var(--color-bg-secondary)] transition-opacity"
+                                                    :class="
+                                                        clearingDateBasis ===
+                                                        option.value
+                                                            ? 'opacity-100'
+                                                            : 'opacity-0'
+                                                    "
+                                                ></div>
+                                            </div>
+                                            <span
+                                                class="text-xs sm:text-sm font-semibold transition-colors text-center"
+                                                :class="
+                                                    clearingDateBasis ===
+                                                    option.value
+                                                        ? 'text-white'
+                                                        : 'text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)]'
+                                                "
+                                                >{{ option.label }}</span
+                                            >
+                                        </div>
+                                    </label>
+                                </div>
+                                <p
+                                    class="text-xs text-[var(--color-text-secondary)] leading-relaxed"
+                                >
+                                    Include floating WHT payments with
+                                    {{
+                                        clearingDateBasis ===
+                                        "Sales Invoice Date"
+                                            ? "invoice date"
+                                            : "receipt date"
+                                    }}
+                                    on or before the clearing date.
+                                </p>
+                            </div>
+
                             <TextInput
                                 label="Customer Code"
                                 type="text"
                                 v-model="form.customer_code"
                                 @click="onCustomerClick()"
                                 :message="form.errors.customer_code"
-                                :readonly="!form.clearing_date"
+                                :readonly="!canSelectCustomer"
                                 :default-placeholder="'Click to Select'"
                                 :modified-placeholder="'Select Clearing Date First'"
                                 selectable="yes"
@@ -175,9 +246,25 @@
                                 v-model="form.customer_name"
                                 readonly
                                 :message="form.errors.customer_name"
-                                class="col-span-2"
                             />
                         </div>
+
+                        <div
+                            v-if="paymentDetails.length > 0"
+                            class="flex flex-wrap items-center justify-between gap-2 px-2 text-sm"
+                        >
+                            <span class="text-[var(--color-text-secondary)]">
+                                {{ paymentDetails.length }}
+                                floating WHT payment{{
+                                    paymentDetails.length === 1 ? "" : "s"
+                                }}
+                            </span>
+                            <span class="font-semibold text-[var(--color-primary)]">
+                                Total WHT:
+                                {{ formatCurrency(totalWhtAmount) }}
+                            </span>
+                        </div>
+
                         <div
                             class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2"
                         >
@@ -205,12 +292,17 @@
                                                 DOCUMENT NO
                                             </th>
                                             <th
-                                                class="px-3 py-2 text-left w-[12%]"
+                                                class="px-3 py-2 text-left w-[10%]"
+                                            >
+                                                INVOICE DATE
+                                            </th>
+                                            <th
+                                                class="px-3 py-2 text-left w-[10%]"
                                             >
                                                 RECEIPT DATE
                                             </th>
                                             <th
-                                                class="px-3 py-2 text-center w-[12%]"
+                                                class="px-3 py-2 text-right w-[10%]"
                                             >
                                                 AMOUNT
                                             </th>
@@ -237,7 +329,7 @@
                                             <tbody v-if="isLoading">
                                                 <tr>
                                                     <td
-                                                        colspan="7"
+                                                        colspan="8"
                                                         class="text-center py-8"
                                                     >
                                                         <div
@@ -324,7 +416,28 @@
                                                         }}
                                                     </td>
                                                     <td
-                                                        class="px-3 py-1 font-medium w-[12%]"
+                                                        class="px-3 py-1 font-medium w-[10%]"
+                                                        :class="
+                                                            clearingDateBasis ===
+                                                            'Sales Invoice Date'
+                                                                ? 'text-[var(--color-primary)] font-semibold'
+                                                                : ''
+                                                        "
+                                                    >
+                                                        {{
+                                                            formatDate(
+                                                                payment.document_date
+                                                            )
+                                                        }}
+                                                    </td>
+                                                    <td
+                                                        class="px-3 py-1 font-medium w-[10%]"
+                                                        :class="
+                                                            clearingDateBasis ===
+                                                            'Receipt Date'
+                                                                ? 'text-[var(--color-primary)] font-semibold'
+                                                                : ''
+                                                        "
                                                     >
                                                         {{
                                                             formatDate(
@@ -333,7 +446,7 @@
                                                         }}
                                                     </td>
                                                     <td
-                                                        class="px-3 py-1 text-right font-medium"
+                                                        class="px-3 py-1 text-right font-medium w-[10%]"
                                                     >
                                                         {{
                                                             formatCurrency(
@@ -342,24 +455,13 @@
                                                         }}
                                                     </td>
                                                     <td
-                                                        class="px-3 py-1 text-center font-medium w-[15%]"
+                                                        class="px-3 py-1 text-center font-medium w-[13%]"
                                                     >
-                                                        <DropdownInput
+                                                        <select
                                                             v-model="
                                                                 payment.status
                                                             "
-                                                            :options="[
-                                                                'Floating',
-                                                                'Cleared',
-                                                                'Cancelled',
-                                                            ]"
-                                                            placeholder="Click to Select"
-                                                        />
-                                                        <!-- <select
-                                                            v-model="
-                                                                payment.status
-                                                            "
-                                                            class="block w-full rounded-lg border border-[rgb(40,70,50)] bg-[rgb(25,55,40)] px-3 py-1.5 text-sm text-white shadow-inner shadow-black/20 focus:outline-none focus:ring-2 focus:ring-green-500/70 focus:border-green-500 transition-all duration-200 hover:border-green-500/50 cursor-pointer"
+                                                            class="block w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-2 py-1.5 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70 focus:border-[var(--color-primary)] transition-all duration-200 cursor-pointer"
                                                         >
                                                             <option
                                                                 value="Floating"
@@ -376,7 +478,7 @@
                                                             >
                                                                 Cancelled
                                                             </option>
-                                                        </select> -->
+                                                        </select>
                                                     </td>
                                                     <td
                                                         class="px-3 py-1 text-center font-medium w-[25%]"
@@ -387,6 +489,7 @@
                                                             "
                                                             type="text"
                                                             placeholder="Add remarks..."
+                                                            class="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-2 py-1.5 text-xs text-[var(--color-text-primary)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70 focus:border-[var(--color-primary)]"
                                                         />
                                                     </td>
                                                 </tr>
@@ -404,7 +507,7 @@
                                                         :key="'empty-' + n"
                                                         class="h-[48px]"
                                                     >
-                                                        <td colspan="7">
+                                                        <td colspan="8">
                                                             &nbsp;
                                                         </td>
                                                     </tr>
@@ -416,11 +519,7 @@
                                                     "
                                                 >
                                                     <td
-                                                        v-if="
-                                                            form.clearing_date &&
-                                                            form.customer_code
-                                                        "
-                                                        colspan="7"
+                                                        colspan="8"
                                                         class="px-5 py-6 text-center"
                                                     >
                                                         <div
@@ -428,7 +527,7 @@
                                                         >
                                                             <svg
                                                                 xmlns="http://www.w3.org/2000/svg"
-                                                                class="h-10 w-10 mb-2"
+                                                                class="h-10 w-10 mb-2 text-[var(--color-text-secondary)]"
                                                                 fill="none"
                                                                 viewBox="0 0 24 24"
                                                                 stroke="currentColor"
@@ -443,41 +542,23 @@
                                                             <p
                                                                 class="font-medium"
                                                             >
-                                                                No data found on
-                                                                this Selected
-                                                                Customer and
-                                                                Clearing Date.
+                                                                {{
+                                                                    emptyStateMessage
+                                                                }}
                                                             </p>
-                                                        </div>
-                                                    </td>
-                                                    <td
-                                                        v-else
-                                                        colspan="7"
-                                                        class="px-5 py-6 text-center"
-                                                    >
-                                                        <div
-                                                            class="flex flex-col items-center justify-center text-[var(--color-text-primary)]"
-                                                        >
-                                                            <svg
-                                                                xmlns="http://www.w3.org/2000/svg"
-                                                                class="h-10 w-10 mb-2"
-                                                                fill="none"
-                                                                viewBox="0 0 24 24"
-                                                                stroke="currentColor"
-                                                            >
-                                                                <path
-                                                                    stroke-linecap="round"
-                                                                    stroke-linejoin="round"
-                                                                    stroke-width="1.5"
-                                                                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                />
-                                                            </svg>
                                                             <p
-                                                                class="font-medium"
+                                                                v-if="!canSelectCustomer"
+                                                                class="text-xs text-[var(--color-text-secondary)] mt-1"
                                                             >
-                                                                No data found.
-                                                                Please select
-                                                                customer.
+                                                                Step 1 of 2
+                                                            </p>
+                                                            <p
+                                                                v-else-if="
+                                                                    !form.customer_code
+                                                                "
+                                                                class="text-xs text-[var(--color-text-secondary)] mt-1"
+                                                            >
+                                                                Step 2 of 2
                                                             </p>
                                                         </div>
                                                     </td>
@@ -547,7 +628,6 @@ import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import CustomerListModal from "../TransactionModals/CustomerListModal.vue";
-import DropdownInput from "../../Pages/Components/DropdownInput.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 import PdfPreviewModal from "../PdfPreviewModal.vue";
 import { route } from "../../../../vendor/tightenco/ziggy/src/js";
@@ -569,24 +649,30 @@ const form = useForm({
     payment_details: [],
 });
 
-const { canPrint } = usePermissions();
+const clearingDateBasis = ref("Receipt Date");
+
+const clearingDateBasisOptions = [
+    { label: "Receipt Date", value: "Receipt Date" },
+    { label: "Sales Invoice Date", value: "Sales Invoice Date" },
+];
 
 const showCustomerModal = ref(false);
-
-form.transaction_date = new Date().toISOString().split("T")[0];
-
+const paymentDetails = ref([]);
 const modalLoading = ref(false);
 const isLoading = ref(false);
 
+form.transaction_date = new Date().toISOString().split("T")[0];
+
 const emit = defineEmits(["close", "closeSuccess"]);
 
-const closeModal = () => {
-    emit("close");
-};
-
 const formatDate = (dateString) => {
+    if (!dateString) return "—";
+
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "—";
+
     const options = { year: "numeric", month: "short", day: "numeric" };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    return date.toLocaleDateString(undefined, options);
 };
 
 const formatCurrency = (amount) => {
@@ -595,6 +681,34 @@ const formatCurrency = (amount) => {
         currency: "PHP",
     }).format(amount);
 };
+
+const canSelectCustomer = computed(() => Boolean(form.clearing_date));
+
+const totalWhtAmount = computed(() =>
+    paymentDetails.value.reduce(
+        (sum, payment) => sum + (Number(payment.amount) || 0),
+        0
+    )
+);
+
+const emptyStateMessage = computed(() => {
+    if (!form.clearing_date) {
+        return "Select a clearing date to continue.";
+    }
+
+    if (!form.customer_code) {
+        return "Select a customer to load floating WHT payments.";
+    }
+
+    const basisLabel =
+        clearingDateBasis.value === "Sales Invoice Date"
+            ? "sales invoice date"
+            : "receipt date";
+
+    return `No floating WHT payments found on or before ${formatDate(form.clearing_date)} by ${basisLabel}.`;
+});
+
+const { canPrint } = usePermissions();
 
 ////////////////TOAST///////////////////////////////////////////////////////////////////////////////////////////////////////
 const showToast = ref(false);
@@ -617,8 +731,17 @@ const showWarningToast = (message) => {
     }, 3000);
 };
 
+const closeModal = () => {
+    emit("close");
+};
+
 //////// CUSTOMER CODE DROPDOWN ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 function onCustomerClick() {
+    if (!canSelectCustomer.value) {
+        showWarningToast("Please select a clearing date first");
+        return;
+    }
+
     showCustomerModal.value = true;
 }
 const handleSelectedCustomer = (selectedData) => {
@@ -628,8 +751,6 @@ const handleSelectedCustomer = (selectedData) => {
 
     showCustomerModal.value = false;
 };
-///////////////// FETCH PAYMENT DETAILS ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-const paymentDetails = ref([]);
 
 const fetchPaymentDetails = async (customerCode) => {
     isLoading.value = true;
@@ -638,6 +759,7 @@ const fetchPaymentDetails = async (customerCode) => {
             params: {
                 customer_code: customerCode,
                 clearingdate: form.clearing_date,
+                date_basis: clearingDateBasis.value,
             },
         });
 
@@ -652,6 +774,7 @@ const fetchPaymentDetails = async (customerCode) => {
             payment_no: payment.payment_no,
             wht_no: payment.check_no,
             document_no: payment.document_no,
+            document_date: payment.document_date,
             receipt_date: payment.payment_receipt_date,
             type: payment.type,
             amount: payment.wht_amount,
@@ -705,7 +828,11 @@ watch(
     async (visible, oldVisible) => {
         if (visible && !oldVisible) {
             modalLoading.value = true;
+            form.reset();
+            form.transaction_date = new Date().toISOString().split("T")[0];
             form.wht_clearing_no = "********";
+            clearingDateBasis.value = "Receipt Date";
+            paymentDetails.value = [];
             modalLoading.value = false;
         }
     },
@@ -716,9 +843,18 @@ watch(
     () => form.clearing_date,
     async (newVal, oldVal) => {
         if (newVal !== oldVal) {
-            if (form.customer_code) {
-                fetchPaymentDetails(form.customer_code);
-            }
+            form.customer_code = null;
+            form.customer_name = null;
+            paymentDetails.value = [];
+        }
+    }
+);
+
+watch(
+    () => clearingDateBasis.value,
+    async (newVal, oldVal) => {
+        if (newVal !== oldVal && form.customer_code && form.clearing_date) {
+            fetchPaymentDetails(form.customer_code);
         }
     }
 );

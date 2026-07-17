@@ -726,14 +726,17 @@ class CustomerLedgerController extends Controller
         $validated = $request->validate([
             'customer_code' => 'required',
             'clearingdate' => 'required',
+            'date_basis' => 'nullable|in:Sales Invoice Date,Receipt Date',
         ]);
 
         $customerCode = $validated['customer_code'];
         $clearingDate = $validated['clearingdate'];
+        $dateBasis = $validated['date_basis'] ?? 'Receipt Date';
+        $dateColumn = $dateBasis === 'Sales Invoice Date' ? 'document_date' : 'payment_receipt_date';
 
         $payments = DB::table('payment_details')
             ->where('customer_code', $customerCode)
-            ->where('payment_receipt_date', '<=', $clearingDate) // Only get wht payments
+            ->whereDate($dateColumn, '<=', $clearingDate)
             ->where(function ($query) {
                 $query->where('wht_status', 'Floating')
                     ->orWhereNull('wht_status');
@@ -747,13 +750,14 @@ class CustomerLedgerController extends Controller
                 'check_no',
                 'document_no',
                 'type',
+                'document_date',
                 'payment_receipt_date',
                 'wht_amount',
                 'wht_status',
                 DB::raw("COALESCE(wht_status, 'Floating') as status"),
                 'remarks',
             ])
-            ->orderBy('payment_receipt_date', 'asc') // Add ordering
+            ->orderBy($dateColumn, 'asc')
             ->get();
 
         return response()->json($payments);

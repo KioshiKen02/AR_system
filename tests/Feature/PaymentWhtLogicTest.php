@@ -520,6 +520,70 @@ class PaymentWhtLogicTest extends TestCase
         $this->assertSame(10.0, (float) $json[0]['wht_amount']);
     }
 
+    public function test_get_floating_wht_respects_clearing_date_basis(): void
+    {
+        Event::fake();
+
+        $user = User::create([
+            'name' => 'Tester',
+            'username' => 'tester_' . uniqid(),
+            'password' => 'password',
+            'role' => 'Admin',
+            'status' => 'Active',
+        ]);
+
+        CustomerLedger::create([
+            'invoice_number' => 'INV-BASIS',
+            'date' => '2026-01-01',
+            'type' => 'Sales Invoice',
+            'customer_code' => 'CUST-1',
+            'customer_name' => 'Customer One',
+            'currency' => 'Php',
+            'amount' => 1000.00,
+            'adjusted_amount' => 0.00,
+            'amount_paid' => 0.00,
+            'wht_amount' => 0.00,
+            'running_balance' => 1000.00,
+        ]);
+
+        PaymentDetails::create([
+            'payment_no' => 'PAY-BASIS-1',
+            'customer_code' => 'CUST-1',
+            'document_no' => 'INV-BASIS',
+            'type' => 'Sales Invoice',
+            'document_date' => '2026-01-15',
+            'payment_receipt_date' => '2026-02-15',
+            'payment_date' => '2026-02-15',
+            'amount' => 1000.00,
+            'amount_paid' => 990.00,
+            'balance' => 0.00,
+            'wht_amount' => 10.00,
+            'wht_status' => 'Floating',
+            'status' => 'Paid',
+        ]);
+
+        $baseQuery = [
+            'customer_code' => 'CUST-1',
+            'clearingdate' => '2026-01-31',
+        ];
+
+        $salesInvoiceResponse = $this->withoutMiddleware()->actingAs($user)->get(
+            route('getFloatingWht', ['tenant' => 'arsystem']) . '?' . http_build_query(array_merge($baseQuery, [
+                'date_basis' => 'Sales Invoice Date',
+            ]))
+        );
+        $salesInvoiceResponse->assertOk();
+        $this->assertCount(1, $salesInvoiceResponse->json());
+
+        $receiptDateResponse = $this->withoutMiddleware()->actingAs($user)->get(
+            route('getFloatingWht', ['tenant' => 'arsystem']) . '?' . http_build_query(array_merge($baseQuery, [
+                'date_basis' => 'Receipt Date',
+            ]))
+        );
+        $receiptDateResponse->assertOk();
+        $this->assertCount(0, $receiptDateResponse->json());
+    }
+
     public function test_wht_clearing_updates_payment_and_payment_details_amounts(): void
     {
         Event::fake();
