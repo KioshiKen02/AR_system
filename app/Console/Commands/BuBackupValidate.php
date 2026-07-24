@@ -384,12 +384,12 @@ class BuBackupValidate extends Command
     {
         $exe = PHP_OS_FAMILY === 'Windows' ? 'mysql.exe' : 'mysql';
 
-        $override = (string) env('BU_BACKUP_MYSQL_PATH', '');
+        $override = (string) env('BU_BACKUP_MYSQL_PATH');
         if ($override !== '') {
             return rtrim($override, '\\/') . DIRECTORY_SEPARATOR . $exe;
         }
 
-        $dumpPath = (string) env('DB_DUMP_PATH', '');
+        $dumpPath = (string) env('DB_DUMP_PATH');
         if ($dumpPath !== '') {
             return rtrim($dumpPath, '\\/') . DIRECTORY_SEPARATOR . $exe;
         }

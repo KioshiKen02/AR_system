@@ -259,14 +259,15 @@ class WHTClearedController extends Controller
                 // Update the original payment status
                 $pdQuery = PaymentDetails::where(function($query) use ($payment) {
                         $query->where('status', 'Floating')
-                              ->orWhere('wht_status', 'Floating');
+                              ->orWhere('wht_status', 'Floating')
+                              ->orWhereNull('wht_status');
                     })
                     ->where('payment_no', $payment['payment_no'])
                     ->where ('type', $payment['type'])
                     ->where('document_no', $payment['document_no']);
 
                 $pd = $pdQuery->lockForUpdate()->first();
-                $wasFloatingWht = $pd && $pd->wht_status === 'Floating';
+                $wasFloatingWht = $pd && in_array($pd->wht_status, [null, 'Floating'], true);
 
                 if ($pd) {
                     $updateData = [];
@@ -279,7 +280,7 @@ class WHTClearedController extends Controller
                     if ($pd->status === 'Floating') {
                         $updateData['status'] = $payment['status'];
                     }
-                    if ($pd->wht_status === 'Floating') {
+                    if (in_array($pd->wht_status, [null, 'Floating'], true)) {
                         $updateData['wht_status'] = $payment['status'];
                     }
                     

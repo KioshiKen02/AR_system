@@ -1,12 +1,12 @@
 <template>
     <Transition name="modal">
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60">
+        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 backdrop-blur-sm bg-black/60">
             <ToastAlertWarning :show="showToast" :message="toastMessage" />
             <!-- Modal Container -->
             <div
-                class="w-full max-w-4xl overflow-hidden rounded-2xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
+                class="flex max-h-[calc(100vh-4rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
                 <!-- Content -->
-                <div class="relative p-6">
+                <div class="relative flex min-h-0 flex-1 flex-col p-4 sm:p-5">
                     <!-- Close X Icon -->
                     <button type="button" @click="closeModal"
                         class="absolute top-4 right-4 text-[var(--color-text-primary)] hover:text-red-500 transition group"
@@ -46,7 +46,7 @@
                     </div>
                     <!-- TABLE -->
                     <div
-                        class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
+                        class="flex min-h-0 flex-1 rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
                         <div class="sticky top-0 z-10 pr-2">
                             <table class="w-full text-[var(--color-text-primary)]">
                                 <thead class="border-b border-[var(--color-border)]/50">
@@ -67,9 +67,9 @@
                                 </thead>
                             </table>
                         </div>
-                        <div class="relative overflow-hidden">
+                        <div class="relative min-h-0 flex-1 overflow-hidden">
                             <div
-                                class="max-h-72 overflow-y-auto relative scrollbar-thin scrollbar-thumb-[var(--color-scrollbar-track)] scrollbar-track-[var(--color-primary)]/20 scrollbar-stable [scrollbar-gutter:stable] scrollbar-thumb-rounded-full">
+                                class="relative h-full max-h-full min-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--color-scrollbar-track)] scrollbar-track-[var(--color-primary)]/20 scrollbar-stable [scrollbar-gutter:stable] scrollbar-thumb-rounded-full sm:min-h-[240px]">
                                 <table class="w-full text-[var(--color-text-primary)] text-sm">
                                     <!-- Loading State -->
                                     <tbody v-if="isLoading">
@@ -96,8 +96,7 @@
 
                                     <!-- Data Rows -->
                                     <tbody v-else class="divide-y divide-[var(--color-border)]/50 rounded-xl">
-                                        <tr v-for="(
-invoice, index
+                                        <tr v-for="(invoice, index
                                             ) in filteredData" :key="index" @click="submitSelected(invoice)"
                                             class="rounded-xl hover:bg-[var(--color-primary)]/20 transition-colors duration-150 group cursor-pointer">
                                             <td class="px-5 py-2 font-medium w-[25%]">

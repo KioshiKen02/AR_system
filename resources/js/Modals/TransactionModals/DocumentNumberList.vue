@@ -22,9 +22,9 @@
             <ToastAlertWarning :show="showToast" :message="toastMessage" />
             <!-- Modal Container -->
             <div
-                class="w-full max-w-[95vw] overflow-hidden rounded-2xl text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
+                class="flex max-h-[calc(100vh-4rem)] w-full max-w-[95vw] flex-col overflow-hidden rounded-2xl text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
                 <!-- Content -->
-                <div class="p-6">
+                <div class="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
                     <!-- Header -->
                     <div class="mb-3 text-center">
                         <h2 class="text-2xl font-bold tracking-wide">
@@ -162,8 +162,8 @@
 
                     <!-- TABLE -->
                     <div v-if="payment_mode === 'Oldest to Newest'"
-                        class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
-                        <div class="h-82 w-full flex flex-col justify-center items-center gap-2">
+                        class="flex min-h-[180px] flex-1 rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
+                        <div class="w-full flex flex-col justify-center items-center gap-2">
                             <span><svg-icon type="mdi" :path="mdiCalendarClock" class="w-20 h-20" /></span>
                             <span v-if="filteredData.length !== 0" class="font-extrabold text-2xl">OLDEST TO NEWEST
                                 SELECTED</span>
@@ -171,7 +171,7 @@
                         </div>
                     </div>
                     <div v-if="payment_mode === 'Manual Select'"
-                        class="w-full rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm">
+                        class="flex min-h-0 flex-1 rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm">
                         <!-- <div
                             class="grid grid-cols-2 gap-3 border-b border-[var(--color-border)]/60 bg-[var(--color-bg-secondary)]/50 p-3 text-xs text-[var(--color-text-secondary)]">
                             <div>
@@ -191,9 +191,9 @@
                                 Current balance after floating credit deduction.
                             </div>
                         </div> -->
-                        <div class="relative overflow-x-auto">
+                        <div class="relative min-h-0 flex-1 overflow-x-auto">
                             <div
-                                class="h-[min(65vh,720px)] min-h-[420px] overflow-y-auto relative scrollbar-thin scrollbar-thumb-[var(--color-scrollbar-track)] scrollbar-track-[var(--color-primary)]/20 scrollbar-stable [scrollbar-gutter:stable] scrollbar-thumb-rounded-full">
+                                class="relative h-full max-h-full min-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--color-scrollbar-track)] scrollbar-track-[var(--color-primary)]/20 scrollbar-stable [scrollbar-gutter:stable] scrollbar-thumb-rounded-full sm:min-h-[240px]">
                                 <table class="w-full min-w-[1340px] table-fixed text-[var(--color-text-primary)] text-sm">
                                     <thead class="sticky top-0 z-10 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)]/50">
                                         <tr>

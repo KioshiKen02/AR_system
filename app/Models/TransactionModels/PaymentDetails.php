@@ -26,6 +26,8 @@ class PaymentDetails extends Model
         'amount_paid',
         'wht_amount',
         'wht_status',
+        'wht_clearing_date',
+        'wht_exported_at',
         'due_date',
         'clearing_date',
         'status',

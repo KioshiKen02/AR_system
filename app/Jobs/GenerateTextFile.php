@@ -13,6 +13,7 @@ use App\Models\MasterfileModels\User;
 use App\Models\TransactionModels\Adjustment;
 use App\Models\TransactionModels\Invoice;
 use App\Models\TransactionModels\Payment;
+use App\Models\TransactionModels\PaymentDetails;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -541,9 +542,10 @@ class GenerateTextFile
                 ->keyBy(fn ($customer) => trim((string) $customer->nav_code));
             $accCodes = AccCode::all()->keyBy('gl_account_navcode');
             $locCodeByCustomer = $this->getLocCodeByCustomer($customers);
+            $hasWhtExportTracking = Schema::connection('tenant')->hasColumn('payment_details', 'wht_exported_at');
 
-            $paymentAccountCode = $this->getPaymentAccCode('5E');
-            $paymentAccountCodeDescription = $this->getPaymentAccCodeDescription('5E');
+            $whtAccountCode = $this->getWhtReceivableAccountCode();
+            $whtAccountDescription = $this->getWhtReceivableAccountDescription();
 
             $totalRows = (clone $query)->count();
             $processedRows = 0;
@@ -562,8 +564,9 @@ class GenerateTextFile
                 $customersByNavCode,
                 $accCodes,
                 $locCodeByCustomer,
-                $paymentAccountCode,
-                $paymentAccountCodeDescription,
+                $whtAccountCode,
+                $whtAccountDescription,
+                $hasWhtExportTracking,
                 $processedRows,
                 $totalRows,
                 &$lastProgress
@@ -577,13 +580,15 @@ class GenerateTextFile
                     $customersByNavCode,
                     $accCodes,
                     $locCodeByCustomer,
-                    $paymentAccountCode,
-                    $paymentAccountCodeDescription,
+                    $whtAccountCode,
+                    $whtAccountDescription,
+                    $hasWhtExportTracking,
                     &$processedRows,
                     $totalRows,
                     &$lastProgress
                 ) {
                     $idsToMark = [];
+                    $detailIdsToMarkWhtExported = [];
                     $lines = [];
                     foreach ($payments as $payment) {
                         $bankCode = $cashInBanks->get($payment->cash_in_bank)?->bank_code ?? '';
@@ -622,17 +627,22 @@ class GenerateTextFile
                             $detailStatus = trim((string) ($detail->status ?? ''));
                             $detailWhtStatus = trim((string) ($detail->wht_status ?? ''));
                             $detailPaymentType = trim((string) ($detail->payment_type ?? ''));
+                            $whtAmountValue = (float) ($detail->wht_amount ?? 0);
                             $hasFloatingCheck = strcasecmp($detailPaymentType, 'Check') === 0
                                 && strcasecmp($detailStatus, 'Floating') === 0;
-                            $hasFloatingWht = (float) ($detail->wht_amount ?? 0) > 0
+                            $hasFloatingWht = $whtAmountValue > 0
                                 && (
                                     strcasecmp($detailWhtStatus, 'Floating') === 0
                                     || ($detailWhtStatus === '' && strcasecmp($detailStatus, 'Floating') === 0)
                                 );
 
-                            if ($hasFloatingCheck || $hasFloatingWht) {
+                            if ($hasFloatingCheck) {
                                 continue;
                             }
+
+                            $shouldGenerateInlineWhtLine = $whtAmountValue > 0
+                                && !$hasFloatingWht
+                                && (!$hasWhtExportTracking || empty($detail->wht_exported_at));
 
                             $detailCustomerCode = trim((string) ($detail->customer_code ?? ''));
                             $lineCustomer = $paymentCustomer;
@@ -678,7 +688,8 @@ class GenerateTextFile
                                     $lineCustomerCusPosting,
                                     $paymentReferenceNo,
                                     $docCode,
-                                    $lineCustomerLocCode
+                                    $lineCustomerLocCode,
+                                    $shouldGenerateInlineWhtLine
                                 );
                             } elseif ($payment->payment_type === '5B - Journal Voucher') {
                                 $lines[] = $this->generateJournalVoucherLine(
@@ -695,7 +706,8 @@ class GenerateTextFile
                                     $accCodeName,
                                     $paymentReferenceNo,
                                     $docCode,
-                                    $lineCustomerLocCode
+                                    $lineCustomerLocCode,
+                                    $shouldGenerateInlineWhtLine
                                 );
                             } elseif ($payment->payment_type === '5C - Online Deposit') {
                                 $lines[] = $this->generateOnlineDepositLine(
@@ -712,7 +724,8 @@ class GenerateTextFile
                                     $accCodeName,
                                     $paymentReferenceNo,
                                     $docCode,
-                                    $lineCustomerLocCode
+                                    $lineCustomerLocCode,
+                                    $shouldGenerateInlineWhtLine
                                 );
                             } elseif ($payment->payment_type === '5D - Check') {
                                 $lines[] = $this->generateCheckDepositLine(
@@ -729,34 +742,16 @@ class GenerateTextFile
                                     $accCodeName,
                                     $paymentReferenceNo,
                                     $docCode,
-                                    $lineCustomerLocCode
+                                    $lineCustomerLocCode,
+                                    $shouldGenerateInlineWhtLine
                                 );
                             }
 
                             $hasExportedDetail = true;
 
-                            // $shouldGenerateWhtLine = (float) ($detail->wht_amount ?? 0) > 0
-                            //     && ($detail->wht_status ?? null) !== 'Floating'
-                            //     && (($detail->wht_status ?? null) !== null || ($detail->status ?? null) !== 'Floating');
-
-                            // if ($shouldGenerateWhtLine) {
-                            //     $lines[] = $this->generateWHTLine(
-                            //         $auto_increment,
-                            //         $detail,
-                            //         $paymentAccountCode,
-                            //         $paymentAccountCodeDescription,
-                            //         $bankCode,
-                            //         $bankName,
-                            //         $lineCustomerExportCode,
-                            //         $lineCustomerCusPosting,
-                            //         $lineCustomerExportCode,
-                            //         $customerName,
-                            //         $accCode,
-                            //         $accCodeName,
-                            //         $docCode,
-                            //         $lineCustomerLocCode
-                            //     );
-                            // }
+                            if ($shouldGenerateInlineWhtLine && $hasWhtExportTracking && !empty($detail->id)) {
+                                $detailIdsToMarkWhtExported[] = $detail->id;
+                            }
                             $processedRows++;
                         }
 
@@ -776,9 +771,39 @@ class GenerateTextFile
                             ->whereIn('id', $idsToMark)
                             ->update(['exported' => true]);
                     }
+                    if ($hasWhtExportTracking && !empty($detailIdsToMarkWhtExported)) {
+                        DB::table('payment_details')
+                            ->whereIn('id', array_values(array_unique($detailIdsToMarkWhtExported)))
+                            ->update(['wht_exported_at' => now()]);
+                    }
 
                     fwrite($stream, implode("", $lines));
                 });
+
+                if ($hasWhtExportTracking) {
+                    // Late-cleared WHT is exported in a separate pass. This is not a
+                    // legacy 5E payment-type flow; it reuses the current WHT GL setup
+                    // for payment details that were exported earlier without their WHT.
+                    $standaloneWhtExport = $this->buildStandaloneWhtExportLines(
+                        $auto_increment,
+                        $cashInBanks,
+                        $customers,
+                        $customersByNavCode,
+                        $locCodeByCustomer,
+                        $whtAccountCode,
+                        $whtAccountDescription
+                    );
+
+                    if ($standaloneWhtExport['lines'] !== '') {
+                        fwrite($stream, $standaloneWhtExport['lines']);
+                    }
+
+                    if (!empty($standaloneWhtExport['detail_ids'])) {
+                        DB::table('payment_details')
+                            ->whereIn('id', $standaloneWhtExport['detail_ids'])
+                            ->update(['wht_exported_at' => now()]);
+                    }
+                }
 
                 $this->updateProgress(98, 'Generating Text File...');
 
@@ -1151,7 +1176,7 @@ class GenerateTextFile
         return $this->formatLines($headerLine, $detailLine);
     }
 
-    protected function generateCashPaymentLine(&$auto_increment, $bankCode, $detail, $bankName, $customerNavCode, $customerCusPosting, string $paymentReferenceNo, string $docCode, $locCode = null)
+    protected function generateCashPaymentLine(&$auto_increment, $bankCode, $detail, $bankName, $customerNavCode, $customerCusPosting, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
@@ -1170,7 +1195,10 @@ class GenerateTextFile
 
         $cashAmount = $this->fmt($cashAmountValue);
         $cashAmountNegative = $this->fmt($cashAmountValue * -1);
-        $customerGrossAmountValue = max($grossAmountValue - $overpaymentAmountValue, 0);
+        $customerGrossAmountValue = max(
+            $grossAmountValue - $overpaymentAmountValue - ($includeWhtLine ? 0 : $whtAmountValue),
+            0
+        );
         $grossAmount = $this->fmt($customerGrossAmountValue);
         $grossAmountNegative = $this->fmt($customerGrossAmountValue * -1);
         
@@ -1244,17 +1272,19 @@ class GenerateTextFile
             $grossAmount
         ];
         $whtLineString = '';
-        if (!empty($detail->wht_amount) && $detail->wht_amount > 0) {
+        if ($includeWhtLine && !empty($detail->wht_amount) && $detail->wht_amount > 0) {
+            // Cleared WHT is emitted inline on the first payment export; uncleared WHT
+            // is deferred to the standalone late-cleared export pass.
             $whtLine = [
                 'CASH RECEI',
                 $prefix1 . 'COLL',
                 ($auto_increment += 10000),
                 'G/L Account',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $formattedDate,
                 'Payment',
                 $prefix . 'PY' . $detail->payment_no,
-                'Withholding Tax Receivable Customer',
+                $this->getWhtReceivableAccountDescription(),
                 'PHP',
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount),
@@ -1262,7 +1292,7 @@ class GenerateTextFile
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount),
                 '1',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $customerCusPosting,
                 $companyCode,
                 $deptCode,
@@ -1275,7 +1305,7 @@ class GenerateTextFile
                 $formattedDate,
                 $prefix . $docCode . '#' . $paymentReferenceNo,
                 'Customer',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount * -1)
             ];
@@ -1328,7 +1358,7 @@ class GenerateTextFile
             . $overpaymentLineString;
     }
 
-    protected function generateJournalVoucherLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
+    protected function generateJournalVoucherLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
@@ -1403,17 +1433,19 @@ class GenerateTextFile
         ];
 
         $whtLineString = '';
-        if (!empty($detail->wht_amount) && $detail->wht_amount > 0) {
+        if ($includeWhtLine && !empty($detail->wht_amount) && $detail->wht_amount > 0) {
+            // Cleared WHT is emitted inline on the first payment export; uncleared WHT
+            // is deferred to the standalone late-cleared export pass.
             $whtLine = [
                 'CASH RECEI',
                 $prefix1 . 'COLL',
                 ($auto_increment += 10000),
                 'G/L Account',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $formattedDate,
                 'Payment',
                 $prefix . 'PY' . $detail->payment_no,
-                'Withholding Tax Receivable Customer',
+                $this->getWhtReceivableAccountDescription(),
                 'PHP',
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount),
@@ -1421,7 +1453,7 @@ class GenerateTextFile
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount),
                 '1',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $customerCusPosting,
                 $companyCode,
                 $deptCode,
@@ -1434,14 +1466,19 @@ class GenerateTextFile
                 $formattedDate,
                 $prefix . $docCode . '#' . $paymentReferenceNo,
                 'Customer',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount * -1)
             ];
             $whtLineString = implode(',', $whtLine) . "\r\n";
         }
 
-        $detailAmountValue = max($grossAmountValue - $overpaymentAmountValue, 0);
+        $detailAmountValue = max(
+            $grossAmountValue
+                - $overpaymentAmountValue
+                - (!$includeWhtLine && $accountType === 'Bank Account' ? $whtAmountValue : 0),
+            0
+        );
         $detailAmount = $this->fmt($detailAmountValue);
         $detailAmountNegative = $this->fmt($detailAmountValue * -1);
         $detailLine = [
@@ -1525,7 +1562,7 @@ class GenerateTextFile
             . $overpaymentLineString;
     }
 
-    protected function generateOnlineDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
+    protected function generateOnlineDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
@@ -1565,7 +1602,12 @@ class GenerateTextFile
 
         $headerAmount = $this->fmt($headerAmountValue);
         $headerAmountNegative = $this->fmt($headerAmountValue * -1);
-        $detailAmountValue = max($grossAmountValue - $overpaymentAmountValue, 0);
+        $detailAmountValue = max(
+            $grossAmountValue
+                - $overpaymentAmountValue
+                - (!$includeWhtLine && $accountType === 'Bank Account' ? $whtAmountValue : 0),
+            0
+        );
         $amount = $this->fmt($detailAmountValue);
         $amountNegative = $this->fmt($detailAmountValue * -1);
 
@@ -1640,17 +1682,19 @@ class GenerateTextFile
         ];
 
         $whtLineString = '';
-        if (!empty($detail->wht_amount) && $detail->wht_amount > 0) {
+        if ($includeWhtLine && !empty($detail->wht_amount) && $detail->wht_amount > 0) {
+            // Cleared WHT is emitted inline on the first payment export; uncleared WHT
+            // is deferred to the standalone late-cleared export pass.
             $whtLine = [
                 'CASH RECEI',
                 $prefix1 . 'COLL',
                 ($auto_increment += 10000),
                 'G/L Account',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $formattedDate,
                 $transfer,
                 $prefix . 'PY' . $detail->payment_no,
-                'Withholding Tax Receivable Customer',
+                $this->getWhtReceivableAccountDescription(),
                 'PHP',
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount),
@@ -1658,7 +1702,7 @@ class GenerateTextFile
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount),
                 '1',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $customerCusPosting,
                 $companyCode,
                 $deptCode,
@@ -1671,7 +1715,7 @@ class GenerateTextFile
                 $formattedDate,
                 $prefix . $docCode . '#' . $paymentReferenceNo,
                 'Customer',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount * -1)
             ];
@@ -1724,7 +1768,7 @@ class GenerateTextFile
             . $overpaymentLineString;
     }
 
-    protected function generateCheckDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null)
+    protected function generateCheckDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
         
@@ -1761,7 +1805,12 @@ class GenerateTextFile
 
         $headerAmount = $this->fmt($headerAmountValue);
         $headerAmountNegative = $this->fmt($headerAmountValue * -1);
-        $detailAmountValue = max($grossAmountValue - $overpaymentAmountValue, 0);
+        $detailAmountValue = max(
+            $grossAmountValue
+                - $overpaymentAmountValue
+                - (!$includeWhtLine && $accountType === 'Bank Account' ? $whtAmountValue : 0),
+            0
+        );
         $amount = $this->fmt($detailAmountValue);
         $amountNegative = $this->fmt($detailAmountValue * -1);
 
@@ -1836,17 +1885,19 @@ class GenerateTextFile
         ];
 
         $whtLineString = '';
-        if (!empty($detail->wht_amount) && $detail->wht_amount > 0) {
+        if ($includeWhtLine && !empty($detail->wht_amount) && $detail->wht_amount > 0) {
+            // Cleared WHT is emitted inline on the first payment export; uncleared WHT
+            // is deferred to the standalone late-cleared export pass.
             $whtLine = [
                 'CASH RECEI',
                 $prefix1 . 'COLL',
                 ($auto_increment += 10000),
                 'G/L Account',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $formattedDate,
                 'Payment',
                 $prefix . 'PY' . $detail->payment_no,
-                'Withholding Tax Receivable Customer',
+                $this->getWhtReceivableAccountDescription(),
                 'PHP',
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount),
@@ -1854,7 +1905,7 @@ class GenerateTextFile
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount),
                 '1',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $customerCusPosting,
                 $companyCode,
                 $deptCode,
@@ -1867,7 +1918,7 @@ class GenerateTextFile
                 $formattedDate,
                 $prefix . $docCode . '#' . $paymentReferenceNo,
                 'Customer',
-                '10.07.01.01',
+                $this->getWhtReceivableAccountCode(),
                 $this->fmt($detail->wht_amount),
                 $this->fmt($detail->wht_amount * -1)
             ];
@@ -1915,9 +1966,13 @@ class GenerateTextFile
                 : '');
     }
 
-    protected function generateWHTLine(&$auto_increment, $detail, $paymentAccountCode, $paymentAccountCodeDescription, $bankCode, $bankName, $customerNavCode, $customerCusPosting, $customerCode, $customerName, $accCode, $accCodeName, string $docCode, $locCode = null)
+    // Formats a standalone WHT journal pair for cleared WHT. This is intentionally
+    // payment-type agnostic and is used for deferred WHT export after the base payment
+    // lines were already generated.
+    protected function generateWHTLine(&$auto_increment, $detail, string $whtAccountCode, string $whtAccountDescription, $bankCode, $bankName, $customerNavCode, $customerCusPosting, $customerCode, $customerName, $accCode, $accCodeName, string $docCode, $locCode = null, ?float $amountOverride = null, $dateOverride = null)
     {
-        $formattedDate = $this->formatDate($detail->payment_receipt_date);
+        $formattedDate = $this->formatDate($dateOverride ?? $detail->payment_receipt_date);
+        $amountValue = $amountOverride ?? (float) ($detail->amount_paid ?? 0);
         
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $prefix1 = $this->tenantConfig->getPrefix1();
@@ -1929,17 +1984,17 @@ class GenerateTextFile
             $prefix1 . 'COLL',
             ($auto_increment += 10000),
             'G/L Account',
-            $paymentAccountCode,
+            $whtAccountCode,
             $formattedDate,
             'Payment',
             $prefix . 'PY' . $detail->payment_no,
-            $paymentAccountCodeDescription,
+            $whtAccountDescription,
             'PHP',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue),
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue),
             '1',
             '',
             '',
@@ -1949,14 +2004,14 @@ class GenerateTextFile
             '',
             '',
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue * -1),
             $formattedDate,
             $prefix . $docCode . '#' . $detail->document_no,
             '',
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1)
+            $this->fmt($amountValue),
+            $this->fmt($amountValue * -1)
         ];
 
         $detailLine = [
@@ -1970,11 +2025,11 @@ class GenerateTextFile
             $prefix . 'PY' . $detail->payment_no,
             $this->sanitizeCustomerName($customerName),
             'PHP',
-            $this->fmt($detail->amount_paid * -1),
+            $this->fmt($amountValue * -1),
             '',
-            $this->fmt($detail->amount_paid),
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid * -1),
+            $this->fmt($amountValue),
+            $this->fmt($amountValue * -1),
+            $this->fmt($amountValue * -1),
             '1',
             $customerNavCode,
             $customerCusPosting,
@@ -1984,23 +2039,147 @@ class GenerateTextFile
             'Invoice',
             $prefix . $docCode . $detail->document_no,
             $formattedDate,
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid),
+            $this->fmt($amountValue * -1),
+            $this->fmt($amountValue),
             $formattedDate,
             $prefix . $docCode . '#' . $detail->document_no,
             'Customer',
             $customerNavCode,
-            $this->fmt($detail->amount_paid * -1),
-            $this->fmt($detail->amount_paid)
+            $this->fmt($amountValue * -1),
+            $this->fmt($amountValue)
         ];
 
         return $this->formatLines($headerLine, $detailLine);
+    }
+
+    protected function buildStandaloneWhtExportLines(
+        &$auto_increment,
+        $cashInBanks,
+        $customers,
+        $customersByNavCode,
+        array $locCodeByCustomer,
+        string $whtAccountCode,
+        string $whtAccountDescription
+    ): array {
+        if (trim($whtAccountCode) === '') {
+            Log::warning('Skipping standalone WHT export because the WHT receivable account code is not configured.', [
+                'app_name' => $this->appName,
+            ]);
+
+            return [
+                'lines' => '',
+                'detail_ids' => [],
+            ];
+        }
+
+        $detailIds = [];
+        $lines = [];
+
+        // Only pick WHT that was cleared after the parent payment was already exported.
+        // This keeps the base payment export idempotent while allowing the WHT piece to
+        // be exported later using its clearing date.
+        $query = PaymentDetails::query()
+            ->select([
+                'payment_details.*',
+                'payment.cash_in_bank',
+                'payment.customer_code as payment_customer_code',
+                'payment.name as payment_customer_name',
+            ])
+            ->join('payment', 'payment.payment_no', '=', 'payment_details.payment_no')
+            ->where('payment.exported', true)
+            ->where('payment_details.wht_amount', '>', 0)
+            ->where('payment_details.wht_status', 'Cleared')
+            ->whereNotNull('payment_details.wht_clearing_date')
+            ->whereNull('payment_details.wht_exported_at')
+            ->whereBetween('payment_details.wht_clearing_date', [
+                $this->validatedData['start_date'],
+                $this->validatedData['end_date'],
+            ])
+            ->orderBy('payment_details.wht_clearing_date')
+            ->orderBy('payment_details.id');
+
+        $query->chunkById(500, function ($details) use (
+            &$auto_increment,
+            &$detailIds,
+            &$lines,
+            $cashInBanks,
+            $customers,
+            $customersByNavCode,
+            $locCodeByCustomer,
+            $whtAccountCode,
+            $whtAccountDescription
+        ) {
+            foreach ($details as $detail) {
+                $customerCode = trim((string) ($detail->customer_code ?: $detail->payment_customer_code));
+                if ($customerCode === '') {
+                    continue;
+                }
+
+                $normalizedCustomerCode = Str::lower(str_replace(['-', ' '], '', $customerCode));
+                $normalizedCustomerName = Str::lower(str_replace(['-', ' '], '', (string) ($detail->customer_name ?: $detail->payment_customer_name ?: '')));
+                if (
+                    in_array($customerCode, $this->getWalkInCustomerCodes(), true)
+                    || str_contains($normalizedCustomerCode, 'walkin')
+                    || str_contains($normalizedCustomerName, 'walkin')
+                ) {
+                    continue;
+                }
+
+                $customer = $customers->get($customerCode) ?? $customersByNavCode->get($customerCode);
+                $customerCusCode = trim((string) ($customer?->cus_code ?? $customerCode));
+                $customerNavCode = trim((string) ($customer?->nav_code ?? $customerCusCode));
+                $customerCusPosting = $customer?->cus_posting ?? '';
+                $customerName = $detail->customer_name ?: $detail->payment_customer_name ?: '';
+                $locCode = $locCodeByCustomer[$customerCusCode] ?? null;
+                $bankName = $detail->cash_in_bank ?? '';
+                $bankCode = $cashInBanks->get($bankName)?->bank_code ?? '';
+                $docCode = $this->getPaymentDocumentCodeFromPaymentType($detail->type ?? '');
+
+                $lines[] = $this->generateWHTLine(
+                    $auto_increment,
+                    $detail,
+                    $whtAccountCode,
+                    $whtAccountDescription,
+                    $bankCode,
+                    $bankName,
+                    $customerNavCode,
+                    $customerCusPosting,
+                    $customerCusCode,
+                    $customerName,
+                    '',
+                    '',
+                    $docCode,
+                    $locCode,
+                    (float) $detail->wht_amount,
+                    $detail->wht_clearing_date
+                );
+
+                if (!empty($detail->id)) {
+                    $detailIds[] = $detail->id;
+                }
+            }
+        }, 'payment_details.id', 'id');
+
+        return [
+            'lines' => implode('', $lines),
+            'detail_ids' => array_values(array_unique($detailIds)),
+        ];
     }
 
 
     protected function formatLines(array $header, array $detail): string
     {
         return implode(',', $header) . "\r\n" . implode(',', $detail) . "\r\n";
+    }
+
+    protected function getWhtReceivableAccountCode(): string
+    {
+        return '10.07.01.01';
+    }
+
+    protected function getWhtReceivableAccountDescription(): string
+    {
+        return 'Withholding Tax Receivable Customer';
     }
 
     protected function fmt($value): string
@@ -2170,244 +2349,4 @@ class GenerateTextFile
         }
     }
 
-    protected function getPaymentAccCode($paymentTypeCode)
-    {
-        $paymentAccCode = null;
-
-        //DYNAMIC API LINK
-        $user = User::find($this->userId);
-        $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
-        switch ($appName) {
-            case 'Bilar Breeder Local':
-                $baseUrl = 'http://172.16.43.148/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=13';
-                break;
-            case 'Bilar Breeder':
-                $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=13';
-                break;
-            case 'Gp Jagna':
-                $baseUrl = 'http://172.16.112.51:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=50';
-                break;
-            case 'Ice Plant':
-                $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=25';
-                break;
-            case 'Peanut Kisses':
-                $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=26';
-                break;
-            case 'Cortes Poultry':
-                $baseUrl = 'http://172.16.192.68:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=12';
-                break;
-            case 'Cortes Piggery':
-                $baseUrl = 'http://172.16.192.68:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=11';
-                break;
-            case 'Canhayupon Breeder':
-                $baseUrl = 'http://172.16.220.223:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=15';
-                break;
-            case 'Bilar Hatchery':
-                $baseUrl = 'http://172.16.219.200:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=14';
-                break;
-            case 'Lapsaon Breeder':
-                $baseUrl = 'http://172.16.220.222:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=16';
-                break;
-            case 'Rizal Breeder':
-                $baseUrl = 'http://172.16.217.11:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=43';
-                break;
-            // ubay server 
-            case 'Feedmill':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=19';
-                break;
-            case 'Growout':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=20';
-                break;
-            case 'Cortes Fertilizer':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=42';
-                break;
-            case 'Ubay Fertilizer':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=22';
-                break;
-            case 'Piggery Untaga':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=23';
-                break;
-            case 'Demo Farm':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=21';
-                break;
-            case 'Dressing Plant':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=17';
-                break;
-            case 'Farmers Market':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=41';
-                break;
-            case 'Meat Processing':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=46';
-                break;
-            case 'Rendering':
-                $baseUrl = 'http:// 172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=18';
-                break;
-            default:
-                throw new \Exception("Unknown app name: {$appName}");
-        }
-        $url = $baseUrl;
-
-        $apiUrl = $url;
-
-        try {
-            $response = file_get_contents($apiUrl);
-
-            if ($response !== false) {
-                $data = json_decode($response, true);
-
-                if (isset($data['payment_type_setup'])) {
-                    foreach ($data['payment_type_setup'] as $paymentType) {
-                        if ($paymentType['payment_type_code'] === $paymentTypeCode) {
-                            $paymentAccCode = $paymentType['account_code'];
-                            break;
-                        }
-                    }
-
-                    if ($paymentAccCode === null) {
-                        // Log::info('error', 'Payment type 5E not found in API response');
-                        Log::info('Payment type not found in API response', [
-                            'payment_type_code' => $paymentTypeCode,
-                            'app' => config('app.name'),
-                        ]);
-                    }
-                } else {
-                    // Log::info('error', 'Invalid API response structure');
-                    Log::info('Invalid API response structure', [
-                        'response' => $data ?? null,
-                    ]);
-                }
-            } else {
-                // Log::info('error', 'Failed to fetch data from API');
-                Log::error('Failed to fetch data from API', [
-                    'url' => $apiUrl,
-                ]);
-            }
-        } catch (Exception $e) {
-            // Log::info('error', 'API request failed: ' . $e->getMessage());
-            Log::error('API request failed', [
-                'exception' => $e->getMessage(),
-            ]);
-        }
-        return $paymentAccCode;
-    }
-
-    protected function getPaymentAccCodeDescription($paymentTypeCode)
-    {
-        $paymentAccCodeDescription = null;
-
-        //DYNAMIC API LINK
-        $user = User::find($this->userId);
-        $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
-        switch ($appName) {
-            case 'Bilar Breeder Local':
-                $baseUrl = 'http://172.16.43.148/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=13';
-                break;
-            case 'Bilar Breeder':
-                $baseUrl = 'http://172.16.220.1:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=13';
-                break;
-            case 'Gp Jagna':
-                $baseUrl = 'http://172.16.112.51:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=50';
-                break;
-            case 'Ice Plant':
-                $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=25';
-                break;
-            case 'Peanut Kisses':
-                $baseUrl = 'http://172.16.184.49:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=26';
-                break;
-            case 'Cortes Poultry':
-                $baseUrl = 'http://172.16.192.68:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=12';
-                break;
-            case 'Cortes Piggery':
-                $baseUrl = 'http://172.16.192.68:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=11';
-                break;
-            case 'Canhayupon Breeder':
-                $baseUrl = 'http://172.16.220.223:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=15';
-                break;
-            case 'Bilar Hatchery':
-                $baseUrl = 'http://172.16.219.200:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=14';
-                break;
-            case 'Lapsaon Breeder':
-                $baseUrl = 'http://172.16.220.222:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=16';
-                break;
-            case 'Rizal Breeder':
-                $baseUrl = 'http://172.16.217.11:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=43';
-                break;
-            // ubay server 
-            case 'Feedmill':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=19';
-                break;
-            case 'Growout':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=20';
-                break;
-            case 'Cortes Fertilizer':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=42';
-                break;
-            case 'Ubay Fertilizer':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=22';
-                break;
-            case 'Piggery Untaga':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=23';
-                break;
-            case 'Demo Farm':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=21';
-                break;
-            case 'Dressing Plant':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=17';
-                break;
-            case 'Farmers Market':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=41';
-                break;
-            case 'Meat Processing':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=46';
-                break;
-            case 'Rendering':
-                $baseUrl = 'http://172.16.105.2:81/centralized-invoicing/masterfileController/paymentTypeSetupController/fetchPaymentType?noSession=true&bu=18';
-                break;
-            default:
-                throw new \Exception("Unknown app name: {$appName}");
-        }
-        $url = $baseUrl;
-
-        $apiUrl = $url;
-
-        try {
-            $response = file_get_contents($apiUrl);
-
-            if ($response !== false) {
-                $data = json_decode($response, true);
-
-                if (isset($data['payment_type_setup'])) {
-                    foreach ($data['payment_type_setup'] as $paymentType) {
-                        if ($paymentType['payment_type_code'] === $paymentTypeCode) {
-                            $paymentAccCodeDescription = $paymentType['account_description'];
-                            break;
-                        }
-                    }
-
-                    if ($paymentAccCodeDescription === null) {
-                        // Log::info('error', 'Payment type 5E not found in API response');
-                        Log::info('Payment type not found in API response', [
-                            'payment_type_code' => $paymentTypeCode,
-                        ]);
-                    }
-                } else {
-                    // Log::info('error', 'Invalid API response structure');
-                    Log::error('Invalid API response structure', [
-                        'response' => $data ?? null,
-                    ]);
-                }
-            } else {
-                // Log::info('error', 'Failed to fetch data from API');
-                Log::error('Failed to fetch data from API', [
-                    'url' => $apiUrl,
-                ]);
-            }
-        } catch (Exception $e) {
-            // Log::info('error', 'API request failed: ' . $e->getMessage());
-            Log::error('API request failed', [
-                'exception' => $e->getMessage(),
-            ]);
-        }
-        return $paymentAccCodeDescription;
-    }
 }

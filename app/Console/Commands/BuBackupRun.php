@@ -494,12 +494,12 @@ class BuBackupRun extends Command
 
     private function resolveMysqlClientPath(): string
     {
-        $override = (string) env('BU_BACKUP_MYSQL_PATH', '');
+        $override = (string) env('BU_BACKUP_MYSQL_PATH');
         if ($override !== '') {
             return trim($override);
         }
 
-        $dumpPath = (string) env('DB_DUMP_PATH', '');
+        $dumpPath = (string) env('DB_DUMP_PATH');
         if ($dumpPath !== '') {
             return trim($dumpPath);
         }

@@ -29,7 +29,7 @@
                 @close="closeAnnouncementModal"
                 @dismiss="dismissAnnouncement(selectedAnnouncement)"
             />
-            <div id="app" class="flex h-screen" v-cloak>
+            <div id="app" class="flex h-screen transition-all duration-200" :style="layoutShellStyle" v-cloak>
                     <!-- Sidebar -->
                     <aside
                         class="bg-[var(--color-bg-secondary)] border-r border-[var(--color-border)] backdrop-blur-sm flex flex-col z-30 relative shadow-[6px_0_12px_-2px_rgba(0,0,0,0.3)] transition-all duration-300 ease-in-out h-full"
@@ -492,6 +492,7 @@ const page = usePage();
 
 const showAnnouncementModal = ref(false);
 const selectedAnnouncement = ref(null);
+const layoutScale = ref(1);
 const dismissedAnnouncementIds = ref(
     Array.isArray(page.props.dismissedAnnouncementIds)
         ? page.props.dismissedAnnouncementIds
@@ -512,6 +513,43 @@ const getDismissKey = (announcementId) => {
     if (!announcementId) return null;
     return `announcement_dismissed:${page.props.tenant}:${announcementId}`;
 };
+
+const updateLayoutScale = () => {
+    if (typeof window === "undefined") return;
+
+    if (window.innerWidth <= 1024) {
+        layoutScale.value = 0.7;
+        return;
+    }
+
+    if (window.innerWidth <= 1280) {
+        layoutScale.value = 0.8;
+        return;
+    }
+
+    if (window.innerWidth <= 1440) {
+        layoutScale.value = 0.9;
+        return;
+    }
+    if (window.innerWidth <= 1600) {
+        layoutScale.value = 1;
+        return;
+    }
+    
+    
+
+    layoutScale.value = 1;
+};
+
+const layoutShellStyle = computed(() => {
+    if (layoutScale.value === 1) {
+        return {};
+    }
+
+    return {
+        zoom: String(layoutScale.value),
+    };
+});
 
 const mergeDismissedFromLocalStorage = () => {
     if (typeof window === "undefined") return;
@@ -695,9 +733,12 @@ let timeInterval;
 onMounted(() => {
     updateDateTime();
     timeInterval = setInterval(updateDateTime, 1000);
+    updateLayoutScale();
+    window.addEventListener("resize", updateLayoutScale);
 });
 onBeforeUnmount(() => {
     clearInterval(timeInterval);
+    window.removeEventListener("resize", updateLayoutScale);
 });
 
 // --- Reactively update indicator
