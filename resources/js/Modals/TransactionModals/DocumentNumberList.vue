@@ -162,7 +162,7 @@
 
                     <!-- TABLE -->
                     <div v-if="payment_mode === 'Oldest to Newest'"
-                        class="flex min-h-[180px] flex-1 rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
+                        class="flex min-h-[140px] flex-1 rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
                         <div class="w-full flex flex-col justify-center items-center gap-2">
                             <span><svg-icon type="mdi" :path="mdiCalendarClock" class="w-20 h-20" /></span>
                             <span v-if="filteredData.length !== 0" class="font-extrabold text-2xl">OLDEST TO NEWEST

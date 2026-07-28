@@ -46,7 +46,7 @@
                     </div>
                     <!-- TABLE -->
                     <div
-                        class="flex min-h-0 flex-1 rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
+                        class="flex min-h-0 flex-1 flex-col rounded-xl overflow-hidden border border-[var(--color-border)] backdrop-blur-sm pl-2">
                         <div class="sticky top-0 z-10 pr-2">
                             <table class="w-full text-[var(--color-text-primary)]">
                                 <thead class="border-b border-[var(--color-border)]/50">
