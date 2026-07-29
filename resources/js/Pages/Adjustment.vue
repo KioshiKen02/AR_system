@@ -281,22 +281,26 @@
             <table class="w-full text-sm text-[var(--color-text-primary)] rounded-xl overflow-hidden mb-2">
                 <thead class="sticky top-0 z-10">
                     <tr>
-                        <th class="px-3 py-3 w-[12%] text-left font-semibold tracking-wider">
+                        <th class="px-3 py-3 w-[11%] text-left font-semibold tracking-wider">
                             ADJUSTMENT NO
+                        </th>
+                        <th class="px-3 py-3 w-[12%] text-left font-semibold tracking-wider">
+                            DOCUMENT NO
                         </th>
                         <th class="px-3 py-3 w-[10%] text-left font-semibold tracking-wider">
                             RECEIPT DATE
                         </th>
-                        <th class="px-3 py-3 w-[30%] text-left font-semibold tracking-wider">
+                        <th class="px-3 py-3 w-[24%] text-left font-semibold tracking-wider">
                             CUSTOMER NAME
                         </th>
-                        <th class="px-3 py-3 w-[13%] text-center font-semibold tracking-wider">
+                        <th class="px-3 py-3 w-[11%] text-center font-semibold tracking-wider">
                             TYPE
                         </th>
-                        <th class="px-3 py-3 w-[13%] text-center font-semibold tracking-wider">
+                        <th class="px-3 py-3 w-[12%] text-center font-semibold tracking-wider">
                             APPLY TO
                         </th>
-                        <th class="px-3 py-3 w-[12%] text-center font-semibold tracking-wider">
+                        
+                        <th class="px-3 py-3 w-[10%] text-center font-semibold tracking-wider">
                             AMOUNT
                         </th>
                         <th class="px-3 py-3 w-[10%] text-center font-semibold tracking-wider">
@@ -307,7 +311,7 @@
                 <!-- Loading State -->
                 <tbody v-if="isLoading">
                     <tr>
-                        <td colspan="7" class="text-center py-8">
+                        <td colspan="8" class="text-center py-8">
                             <div class="flex justify-center items-center">
                                 <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
                                     fill="var(--color-icon)">
@@ -328,6 +332,9 @@
                         class="hover:bg-[var(--color-primary)]/20 transition-colors duration-150 group h-10">
                         <td class="px-3 py-2 font-medium">
                             {{ adjustment.adjustment_no }}
+                        </td>
+                        <td class="px-3 py-2 font-medium">
+                            {{ adjustment.invoice_no || "-" }}
                         </td>
                         <td class="px-3 py-2">
                             {{ formatDate(adjustment.receipt_date) }}
@@ -383,6 +390,7 @@
                                 {{ adjustment.apply_to }}
                             </span>
                         </td>
+                        
                         <td class="px-3 py-2 text-right">
                             <span class="font-medium">
                                 {{ formatCurrency(adjustment.amount) }}
@@ -409,7 +417,7 @@
                     </tr>
                     <!-- Empty State -->
                     <tr v-if="!isLoading && adjustments.data.length === 0">
-                        <td colspan="7" class="px-5 py-6 text-center">
+                        <td colspan="8" class="px-5 py-6 text-center">
                             <div class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2" fill="none"
                                     viewBox="0 0 24 24" stroke="currentColor">
@@ -498,6 +506,7 @@ const syncAdjustmentSales = async (adjustment) => {
             }),
             {
                 invoice_no: adjustment.invoice_no,
+                apply_to: adjustment.apply_to,
             },
             {
                 headers: {

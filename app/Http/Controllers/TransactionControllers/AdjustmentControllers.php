@@ -288,7 +288,8 @@ class AdjustmentControllers extends Controller
         if ($request->search) {
             $query->where(function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%')
-                    ->orWhere('adjustment_no', 'like', '%' . $request->search . '%');
+                    ->orWhere('adjustment_no', 'like', '%' . $request->search . '%')
+                    ->orWhere('invoice_no', 'like', '%' . $request->search . '%');
             });
         }
 
@@ -646,10 +647,10 @@ class AdjustmentControllers extends Controller
         $invoiceNo = $request->input('invoice_no');
         $applyTo = $request->input('apply_to');
 
-        $adjustment = Adjustment::withTrashed()->find($adjustment);
-        if ($adjustment) {
-            $invoiceNo = $adjustment->invoice_no;
-            $applyTo = $adjustment->apply_to;
+        $adjustmentRecord = Adjustment::on('tenant')->withTrashed()->find($adjustment);
+        if ($adjustmentRecord) {
+            $invoiceNo = $adjustmentRecord->invoice_no ?: $invoiceNo;
+            $applyTo = $adjustmentRecord->apply_to ?: $applyTo;
         }
 
         if (!$invoiceNo) {
@@ -665,8 +666,13 @@ class AdjustmentControllers extends Controller
             ], 422);
         }
 
-        $ledger = CustomerLedger::where('invoice_number', $invoiceNo)
-            ->where('type', $applyTo === 'Beginning Balance' ? 'BG' : $applyTo)
+        $ledgerTypes = match ($applyTo) {
+            'Beginning Balance' => ['BG', 'Beginning Balance'],
+            default => [$applyTo],
+        };
+
+        $ledger = CustomerLedger::on('tenant')->where('invoice_number', $invoiceNo)
+            ->whereIn('type', $ledgerTypes)
             ->first();
 
         if (!$ledger) {
@@ -714,11 +720,11 @@ class AdjustmentControllers extends Controller
         }
 
         // Calculate the total of all adjustments for this invoice to send to the API
-        $existingPositive = (float) Adjustment::where('invoice_no', $invoiceNo)
+        $existingPositive = (float) Adjustment::on('tenant')->where('invoice_no', $invoiceNo)
             ->where('apply_to', $applyTo)
             ->where('type', 'Positive')
             ->sum('amount');
-        $existingNegative = (float) Adjustment::where('invoice_no', $invoiceNo)
+        $existingNegative = (float) Adjustment::on('tenant')->where('invoice_no', $invoiceNo)
             ->where('apply_to', $applyTo)
             ->where('type', 'Negative')
             ->sum('amount');
