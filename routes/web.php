@@ -227,6 +227,8 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         //Payment Page
         Route::get('/payment', [PaymentController::class, 'index'])->middleware('check.permission:0203-PAYT,view')->name('payment');
         Route::post('/addPayment', [PaymentController::class, 'addPayment'])->name('addPayment');
+        Route::get('/payment-tax-candidates', [PaymentController::class, 'getTaxCandidates'])->name('payment.taxCandidates');
+        Route::post('/payment-add-tax', [PaymentController::class, 'addTax'])->name('payment.addTax');
         Route::put('/editPayment/{id}', [PaymentController::class, 'editPayment'])->name('editPayment');
         Route::delete('/deletePayment/{id}', [PaymentController::class, 'destroy'])->name('deletePayment');
         Route::get('/getlatestpaymentnoauth', [PaymentController::class, 'latestPaymentNO'])->name('getlatestpaymentno');

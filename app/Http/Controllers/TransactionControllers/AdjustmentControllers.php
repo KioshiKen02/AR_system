@@ -404,6 +404,7 @@ class AdjustmentControllers extends Controller
 
         $adjNo = DB::transaction(function () use ($validated, $request, $cl_type, $adjustmentNumberService) {
             $adjustmentNumber = $adjustmentNumberService->generate();
+            $isShrinkageReason = in_array($validated['adjustment_reason'], ['Sales: Shrinkage', 'Shrinkage'], true);
 
             if (Adjustment::where('adjustment_no', $adjustmentNumber)->exists()) {
                 throw ValidationException::withMessages([
@@ -416,6 +417,12 @@ class AdjustmentControllers extends Controller
                 $ledger = CustomerLedger::where('invoice_number', $validated['invoice_no']) 
                     ->where('type', $formattedType) 
                     ->firstOrFail();
+
+                if ($isShrinkageReason && (float) ($ledger->shrinkage ?? 0) <= 0) {
+                    throw ValidationException::withMessages([
+                        'adjustment_reason' => 'Shrinkage adjustment reason can only be used when the selected document has a shrinkage amount.',
+                    ]);
+                }
 
                 $beginningBalance = BeginningBalance::where('beginningbalance_no', $validated['invoice_no'])->first();
 
@@ -485,6 +492,12 @@ class AdjustmentControllers extends Controller
             }
 
             $ledger = CustomerLedger::where('invoice_number', $validated['invoice_no'])->where('type', $cl_type)->firstOrFail();
+
+            if ($isShrinkageReason && (float) ($ledger->shrinkage ?? 0) <= 0) {
+                throw ValidationException::withMessages([
+                    'adjustment_reason' => 'Shrinkage adjustment reason can only be used when the selected document has a shrinkage amount.',
+                ]);
+            }
 
             $floatingPaid = PaymentDetails::where('document_no', $ledger->invoice_number)
                 ->where('type', $ledger->type)

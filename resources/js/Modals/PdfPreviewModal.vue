@@ -3487,25 +3487,46 @@ const printPdf = async () => {
     if (!pdfUrl.value) return;
 
     const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
+    Object.assign(iframe.style, {
+        position: "fixed",
+        right: "0",
+        bottom: "0",
+        width: "1px",
+        height: "1px",
+        border: "0",
+        opacity: "0",
+        pointerEvents: "none",
+    });
     document.body.appendChild(iframe);
 
     try {
-        iframe.src = pdfUrl.value;
-
-        await new Promise((resolve) => {
-            iframe.onload = resolve;
+        await new Promise((resolve, reject) => {
+            iframe.onload = () => resolve();
+            iframe.onerror = () =>
+                reject(new Error("Failed to load printable PDF."));
+            iframe.src = pdfUrl.value;
         });
 
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
         let dialogClosed = false;
-        const dialogCheckInterval = 500; // ms
         let printAttempted = false;
 
         const printPromise = new Promise((resolve) => {
+            let fallbackTimeout = null;
+
+            const cleanupListeners = () => {
+                window.removeEventListener("afterprint", handleAfterPrint);
+                window.removeEventListener("focus", handleFocus);
+                if (fallbackTimeout) {
+                    clearTimeout(fallbackTimeout);
+                }
+            };
+
             const handleAfterPrint = () => {
                 if (printAttempted) {
                     dialogClosed = true;
-                    window.removeEventListener("afterprint", handleAfterPrint);
+                    cleanupListeners();
                     resolve();
                 }
             };
@@ -3513,22 +3534,28 @@ const printPdf = async () => {
             const handleFocus = () => {
                 if (printAttempted && !dialogClosed) {
                     dialogClosed = true;
-                    window.removeEventListener("focus", handleFocus);
+                    cleanupListeners();
                     resolve();
                 }
             };
 
-            const fallbackTimeout = setTimeout(() => {
+            fallbackTimeout = setTimeout(() => {
                 if (!dialogClosed) {
                     dialogClosed = true;
-                    window.removeEventListener("afterprint", handleAfterPrint);
-                    window.removeEventListener("focus", handleFocus);
+                    cleanupListeners();
                     resolve();
                 }
             }, 10000);
 
             window.addEventListener("afterprint", handleAfterPrint);
             window.addEventListener("focus", handleFocus);
+
+            if (!iframe.contentWindow || typeof iframe.contentWindow.print !== "function") {
+                dialogClosed = true;
+                cleanupListeners();
+                resolve();
+                return;
+            }
 
             const originalPrint = iframe.contentWindow.print;
             iframe.contentWindow.print = function () {
@@ -3537,12 +3564,9 @@ const printPdf = async () => {
             };
 
             setTimeout(() => {
+                iframe.contentWindow?.focus();
                 iframe.contentWindow?.print();
             }, 100);
-
-            Promise.resolve().then(() => {
-                clearTimeout(fallbackTimeout);
-            });
         });
 
         await printPromise;

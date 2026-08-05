@@ -546,6 +546,7 @@ class InvoiceController extends Controller
                     'type' => $ledger->type,
                     'amount' => $ledger->amount,
                     'amount_paid' => $paid,
+                    'shrinkage' => (float) ($ledger->shrinkage ?? 0),
                     'running_balance' => $syncedRunningBalance,
                 ];
             })->filter(fn ($row) => ($row['running_balance'] ?? 0) > 0)->values();

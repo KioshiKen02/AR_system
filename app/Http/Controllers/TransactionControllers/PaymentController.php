@@ -12,11 +12,14 @@ use App\Models\ReportModels\CustomerLedger;
 use App\Models\TransactionModels\Invoice;
 use App\Models\TransactionModels\Payment;
 use App\Models\TransactionModels\PaymentDetails;
+use App\Models\UtilityModels\WHTCleared;
+use App\Models\UtilityModels\WHTClearedItems;
 use App\Models\AppSetting;
 use App\Services\CustomerService;
 use App\Services\InvoiceNumberService;
 use App\Services\InvoiceService;
 use App\Services\PaymentNumberService;
+use App\Services\WHTClearedNumberService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -133,6 +136,13 @@ class PaymentController extends Controller
             });
         }
 
+        if ($request->customer_filter) {
+            $query->where(function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->customer_filter . '%')
+                    ->orWhere('customer_code', 'like', '%' . $request->customer_filter . '%');
+            });
+        }
+
 
         // Date sorting
         if ($request->date_start) {
@@ -185,6 +195,7 @@ class PaymentController extends Controller
             'searchTerm' => $request->search,
             'filters' => [
                 'code_sort' => $request->code_sort,
+                'customer_filter' => $request->customer_filter,
                 'type_filters' => $request->type_filters ?
                     (is_array($request->type_filters) ?
                         $request->type_filters :
@@ -643,6 +654,162 @@ class PaymentController extends Controller
         return (bool) ($setting?->allow_overpayment ?? true);
     }
 
+    private function getEffectivePaidAmountForLedger(PaymentDetails $detail, bool $hasPaymentDetailsWhtColumns): float
+    {
+        if (!in_array($detail->status, ['Paid', 'Cleared'], true)) {
+            return 0.0;
+        }
+
+        $effectivePaid = (float) ($detail->amount_paid ?? 0);
+
+        if ((float) ($detail->wht_amount ?? 0) > 0) {
+            $effectivePaid = max(0, $effectivePaid - (float) ($detail->wht_amount ?? 0));
+        }
+
+        return $effectivePaid;
+    }
+
+    private function calculateLedgerDebit(CustomerLedger $ledger): float
+    {
+        $baseAmount = (float) ($ledger->adjusted_amount ?? $ledger->amount ?? 0);
+        $overage = (float) ($ledger->overage ?? 0);
+        $shrinkage = (float) ($ledger->shrinkage ?? 0);
+        $returnAmount = (float) ($ledger->return ?? 0);
+
+        return $baseAmount + $overage - $shrinkage - $returnAmount;
+    }
+
+    private function syncPaymentDetailOverpayment(string $customerCode, string $documentNo, string $type, float $debit): void
+    {
+        if (!Schema::connection('tenant')->hasColumn('payment_details', 'overpayment_amount')) {
+            return;
+        }
+
+        $rows = PaymentDetails::where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $type)
+            ->orderBy('payment_date')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $runningCredited = 0.0;
+
+        foreach ($rows as $row) {
+            if ($row->status === 'Cancelled') {
+                $row->update(['overpayment_amount' => 0]);
+                continue;
+            }
+
+            $previousOverflow = max(0, $runningCredited - $debit);
+            $runningCredited += in_array($row->status, ['Floating', 'Paid', 'Cleared'], true)
+                ? (float) ($row->amount_paid ?? 0)
+                : 0.0;
+            $currentOverflow = max(0, $runningCredited - $debit);
+
+            $row->update([
+                'overpayment_amount' => max(0, $currentOverflow - $previousOverflow),
+            ]);
+        }
+    }
+
+    private function syncLedgerForPayment(string $customerCode, string $documentNo, string $type): void
+    {
+        $hasLedgerWhtAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount');
+        $hasLedgerOverpaymentAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount');
+        $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+            && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
+
+        $ledger = CustomerLedger::where('customer_code', $customerCode)
+            ->where('invoice_number', $documentNo)
+            ->where('type', $type)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$ledger) {
+            return;
+        }
+
+        $rows = PaymentDetails::where('customer_code', $customerCode)
+            ->where('document_no', $documentNo)
+            ->where('type', $type)
+            ->where('status', '!=', 'Cancelled')
+            ->lockForUpdate()
+            ->get();
+
+        $totalCollectiblePaid = (float) $rows
+            ->filter(fn($row) => in_array($row->status, ['Floating', 'Paid', 'Cleared'], true))
+            ->sum('amount_paid');
+
+        $totalPaid = 0.0;
+        $totalWhtApplied = 0.0;
+
+        foreach ($rows as $row) {
+            $totalPaid += $this->getEffectivePaidAmountForLedger($row, $hasPaymentDetailsWhtColumns);
+
+            if (
+                $hasLedgerWhtAmount
+                && Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
+                && (float) ($row->wht_amount ?? 0) > 0
+                && (
+                    !$hasPaymentDetailsWhtColumns
+                    || $row->wht_status === null
+                    || $row->wht_status === 'Cleared'
+                )
+            ) {
+                $totalWhtApplied += (float) ($row->wht_amount ?? 0);
+            }
+        }
+
+        $ledgerDebit = $this->calculateLedgerDebit($ledger);
+        $totalCredited = $totalPaid + $totalWhtApplied;
+        $ledgerUpdateData = [
+            'running_balance' => max(0, $ledgerDebit - $totalCredited),
+            'amount_paid' => $totalPaid,
+        ];
+
+        if ($hasLedgerWhtAmount) {
+            $ledgerUpdateData['wht_amount'] = $totalWhtApplied;
+        }
+        if ($hasLedgerOverpaymentAmount) {
+            $ledgerUpdateData['overpayment_amount'] = max(0, $totalCollectiblePaid - $ledgerDebit);
+        }
+
+        $ledger->update($ledgerUpdateData);
+        $this->syncPaymentDetailOverpayment($customerCode, $documentNo, $type, $ledgerDebit);
+    }
+
+    private function refreshPaymentHeaderTotals(string $paymentNo): void
+    {
+        $payment = Payment::where('payment_no', $paymentNo)->lockForUpdate()->first();
+
+        if (!$payment) {
+            return;
+        }
+
+        $details = PaymentDetails::where('payment_no', $paymentNo)
+            ->where('status', '!=', 'Cancelled')
+            ->get();
+
+        $grossPaid = round((float) $details->sum('amount_paid'), 2);
+        $totalWht = round((float) $details->sum('wht_amount'), 2);
+        $netPaid = round($grossPaid - $totalWht, 2);
+
+        $updateData = [
+            'amount_paid' => $grossPaid,
+        ];
+
+        if (Schema::connection('tenant')->hasColumn('payment', 'wht_amount')) {
+            $updateData['wht_amount'] = $totalWht;
+        }
+
+        if (Schema::connection('tenant')->hasColumn('payment', 'total_amount_less_wht')) {
+            $updateData['total_amount_less_wht'] = $netPaid;
+        }
+
+        $payment->update($updateData);
+    }
+
     private function ensureOverpaymentAllowed(float $overpaymentAmount): void
     {
         if ($overpaymentAmount <= 0) {
@@ -656,6 +823,180 @@ class PaymentController extends Controller
         throw ValidationException::withMessages([
             'amount_paid' => 'Overpayment is not allowed for this tenant.',
         ]);
+    }
+
+    public function getTaxCandidates(Request $request)
+    {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string'],
+        ]);
+
+        $query = PaymentDetails::query()
+            ->where('status', '!=', 'Cancelled')
+            ->where('balance', '>', 0)
+            ->where('amount_paid', '>', 0);
+
+        if (Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')) {
+            $query->where(function ($builder) {
+                $builder->whereNull('wht_amount')
+                    ->orWhere('wht_amount', '<=', 0);
+            });
+        }
+
+        if (!empty($validated['search'])) {
+            $search = $validated['search'];
+            $query->where(function ($builder) use ($search) {
+                $builder->where('payment_no', 'like', '%' . $search . '%')
+                    ->orWhere('customer_name', 'like', '%' . $search . '%')
+                    ->orWhere('customer_code', 'like', '%' . $search . '%')
+                    ->orWhere('document_no', 'like', '%' . $search . '%')
+                    ->orWhere('type', 'like', '%' . $search . '%');
+            });
+        }
+
+        $candidates = $query
+            ->orderByDesc('payment_date')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get([
+                'id',
+                'payment_no',
+                'document_no',
+                'document_date',
+                'payment_receipt_date',
+                'payment_date',
+                'payment_type',
+                'type',
+                'customer_code',
+                'customer_name',
+                'amount',
+                'amount_paid',
+                'balance',
+                'wht_amount',
+                'wht_status',
+                'remarks',
+            ]);
+
+        return response()->json($candidates);
+    }
+
+    public function addTax(Request $request, WHTClearedNumberService $wHTClearedNumberService)
+    {
+        $validated = $request->validate([
+            'payment_detail_id' => ['required', 'integer'],
+            'wht_amount' => ['required', 'numeric', 'gt:0'],
+            'wht_status' => ['required', 'in:Floating,Cleared'],
+            'bir_2307_received' => ['nullable', 'boolean'],
+            'wht_date' => ['nullable', 'date'],
+            'clearing_date' => ['nullable', 'date'],
+            'remarks' => ['nullable', 'string'],
+        ]);
+
+        if ($validated['wht_status'] === 'Cleared' && empty($validated['clearing_date']) && empty($validated['wht_date'])) {
+            throw ValidationException::withMessages([
+                'clearing_date' => 'Clearing Date is required when WHT status is Cleared.',
+            ]);
+        }
+
+        DB::transaction(function () use ($validated, $request, $wHTClearedNumberService) {
+            $detail = PaymentDetails::whereKey($validated['payment_detail_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($detail->status === 'Cancelled') {
+                throw ValidationException::withMessages([
+                    'payment_detail_id' => 'Cancelled payments cannot be updated.',
+                ]);
+            }
+
+            if ((float) ($detail->balance ?? 0) <= 0) {
+                throw ValidationException::withMessages([
+                    'payment_detail_id' => 'Selected payment detail no longer has an available balance for WHT.',
+                ]);
+            }
+
+            if ((float) ($detail->wht_amount ?? 0) > 0) {
+                throw ValidationException::withMessages([
+                    'payment_detail_id' => 'Selected payment detail already has WHT applied.',
+                ]);
+            }
+
+            $whtAmount = round((float) $validated['wht_amount'], 2);
+            $availableBalance = round((float) ($detail->balance ?? 0), 2);
+
+            if ($whtAmount > ($availableBalance + 0.009)) {
+                throw ValidationException::withMessages([
+                    'wht_amount' => 'WHT amount cannot be greater than the payment detail balance.',
+                ]);
+            }
+
+            $remarks = trim((string) ($validated['remarks'] ?? ''));
+            $existingRemarks = trim((string) ($detail->remarks ?? ''));
+            $mergedRemarks = trim(implode(' | ', array_filter([$existingRemarks, $remarks])));
+
+            $updateData = [
+                'amount_paid' => round((float) ($detail->amount_paid ?? 0) + $whtAmount, 2),
+                'balance' => max(0, round($availableBalance - $whtAmount, 2)),
+                'wht_amount' => $whtAmount,
+                'wht_status' => $validated['wht_status'],
+                'remarks' => $mergedRemarks !== '' ? $mergedRemarks : null,
+            ];
+
+            if (Schema::connection('tenant')->hasColumn('payment_details', 'wht_clearing_date')) {
+                $updateData['wht_clearing_date'] = $validated['wht_status'] === 'Cleared'
+                    ? ($validated['clearing_date'] ?? $validated['wht_date'])
+                    : null;
+            }
+
+            $detail->update($updateData);
+
+            $this->refreshPaymentHeaderTotals($detail->payment_no);
+
+            if ($validated['wht_status'] === 'Cleared') {
+                $whtClearingNo = $wHTClearedNumberService->generate();
+
+                if (WHTCleared::where('wht_clearing_no', $whtClearingNo)->exists()) {
+                    throw ValidationException::withMessages([
+                        'wht_amount' => 'Error generating WHT clearing number. Please try again.',
+                    ]);
+                }
+
+                $transactionDate = $validated['wht_date'] ?? $validated['clearing_date'];
+                $clearingDate = $validated['clearing_date'] ?? $validated['wht_date'];
+
+                WHTCleared::create([
+                    'wht_clearing_no' => $whtClearingNo,
+                    'transaction_date' => $transactionDate,
+                    'clearing_date' => $clearingDate,
+                    'customer_code' => $detail->customer_code,
+                    'customer_name' => $detail->customer_name,
+                    'created_by' => $request->user()->name,
+                ]);
+
+                WHTClearedItems::create([
+                    'wht_clearing_no' => $whtClearingNo,
+                    'payment_no' => $detail->payment_no,
+                    'type' => $detail->type,
+                    'document_no' => $detail->document_no,
+                    'receipt_date' => $detail->payment_receipt_date ?? $detail->payment_date,
+                    'amount' => $whtAmount,
+                    'status' => 'Cleared',
+                    'remarks' => $remarks !== '' ? $remarks : null,
+                ]);
+
+                $this->syncLedgerForPayment(
+                    $detail->customer_code,
+                    $detail->document_no,
+                    $detail->type
+                );
+            }
+        });
+
+        event(new NewCreated('payment'));
+        event(new NewCreated('customerledger'));
+        event(new NewCreated('wht_clearing'));
+
+        return redirect()->back();
     }
 
     //THERE IS UPDATE IN CUSTOMER LEDGER

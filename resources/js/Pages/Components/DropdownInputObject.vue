@@ -36,7 +36,10 @@
             class="absolute z-50 mt-1 w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-md shadow-lg max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full"
             :class="dropUp ? 'bottom-full mb-1' : 'mt-1'" :style="menuMaxHeightStyle">
             <li v-for="option in options" :key="option.value" @click="select(option)"
-                class="px-4 py-2 hover:bg-[var(--color-primary)]/10 cursor-pointer text-sm border-b border-[var(--color-border)]/30 last:border-b-0 flex justify-between items-center">
+                class="px-4 py-2 text-sm border-b border-[var(--color-border)]/30 last:border-b-0 flex justify-between items-center"
+                :class="option.disabled
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'hover:bg-[var(--color-primary)]/10 cursor-pointer'">
                 <span>{{ option.label }}</span>
                 <svg v-if="option.value === modelValue" xmlns="http://www.w3.org/2000/svg"
                     class="w-4 h-4 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -81,6 +84,7 @@ const toggle = () => {
 };
 
 const select = (option) => {
+    if (option?.disabled) return;
     emit("update:modelValue", option.value);
     open.value = false;
 };

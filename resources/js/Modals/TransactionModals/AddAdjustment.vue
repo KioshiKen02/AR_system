@@ -99,7 +99,7 @@
                             selectable="yes" />
                         <TextInput label="Balance" v-model="bal" type="text" readonly :message="form.errors.balance" />
                         <DropdownInputObject label="Adjustment Reason" v-model="form.adjustment_reason"
-                            :options="adjustmentreasonOptions" :message="form.errors.adjustment_reason"
+                            :options="normalizedAdjustmentReasonOptions" :message="form.errors.adjustment_reason"
                             :disabled="!form.invoice_no" placeholder="Click to Select"
                             disabledPlaceholder="Select Document No First" />
                         <TextInput label="Particular" v-model="form.particulars" type="text"
@@ -190,6 +190,7 @@ const adjustmentreasonOptions = ref([]);
 const modalLoading = ref(false);
 const showDocumentNumberListModal = ref(false);
 const showCustomerModal = ref(false);
+const selectedInvoiceShrinkage = ref(0);
 
 form.transaction_date = new Date().toISOString().split("T")[0];
 
@@ -272,7 +273,23 @@ const handleSelectedInvoices = (selectedData) => {
     bal.value = formatCurrency(totalAmount);
     form.balance = totalAmount;
     ledgerType.value = selectedData.type;
+    selectedInvoiceShrinkage.value = Number(selectedData.shrinkage ?? 0);
 };
+
+const normalizedAdjustmentReasonOptions = computed(() => {
+    const hasShrinkage = Number(selectedInvoiceShrinkage.value) > 0;
+
+    return adjustmentreasonOptions.value.map((option) => {
+        const label = String(option?.label ?? "");
+        const isShrinkageReason =
+            label === "Sales: Shrinkage" || label === "Shrinkage";
+
+        return {
+            ...option,
+            disabled: isShrinkageReason && !hasShrinkage,
+        };
+    });
+});
 
 //#region /////// PREVIEW PDF/////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Preview PDF
@@ -342,6 +359,7 @@ watch(
             form.adjustment_reason = "";
             form.particulars = "";
             form.amount = "";
+            selectedInvoiceShrinkage.value = 0;
 
             if (form.apply_to === "Sales Invoice") {
                 try {
@@ -423,6 +441,7 @@ watch(
             form.adjustment_reason = "";
             form.particulars = "";
             form.amount = "";
+            selectedInvoiceShrinkage.value = 0;
         }
     }
 );

@@ -248,6 +248,7 @@ watch(
                         type: invoice.type,
                         amount_paid: invoice.amount_paid,
                         amount: invoice.running_balance,
+                        shrinkage: invoice.shrinkage ?? 0,
                     }));
 
                 filteredData.value = documents.value;
@@ -296,6 +297,7 @@ const submitSelected = (document) => {
             totalAmount: document.amount,
             date: document.date,
             type: document.type,
+            shrinkage: document.shrinkage ?? 0,
         });
         closeModal();
     }

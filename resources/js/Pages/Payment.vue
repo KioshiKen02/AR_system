@@ -3,16 +3,28 @@
 
         <Head :title="` | ${$page.component}`" />
         <div class="flex justify-between pb-3 pt-1">
-            <button :disabled="!canInsert('0203-PAYT')" @click="openModal()"
-                class="px-4 py-2 rounded-md font-medium transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden bg-[var(--color-primary)] text-white hover:bg-transparent hover:text-[var(--color-primary)] hover:ring-1 hover:ring-[var(--color-primary)] disabled:opacity-70 disabled:cursor-not-allowed group">
-                <div class="relative flex items-center justify-center gap-1">
-                    <span class="transition-transform duration-300 group-hover:rotate-180">
-                        <svg-icon type="mdi" :path="mdiPlus" class="w-5 h-5" />
-                    </span>
+            <div class="flex items-center gap-2">
+                <button :disabled="!canInsert('0203-PAYT')" @click="openModal()"
+                    class="px-4 py-2 rounded-md font-medium transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden bg-[var(--color-primary)] text-white hover:bg-transparent hover:text-[var(--color-primary)] hover:ring-1 hover:ring-[var(--color-primary)] disabled:opacity-70 disabled:cursor-not-allowed group">
+                    <div class="relative flex items-center justify-center gap-1">
+                        <span class="transition-transform duration-300 group-hover:rotate-180">
+                            <svg-icon type="mdi" :path="mdiPlus" class="w-5 h-5" />
+                        </span>
 
-                    Add New
-                </div>
-            </button>
+                        Add New
+                    </div>
+                </button>
+                <button :disabled="!canInsert('0203-PAYT')" @click="openTaxModal()"
+                    class="px-4 py-2 rounded-md font-medium transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden bg-amber-600 text-white hover:bg-transparent hover:text-amber-600 hover:ring-1 hover:ring-amber-600 disabled:opacity-70 disabled:cursor-not-allowed group">
+                    <div class="relative flex items-center justify-center gap-1">
+                        <span class="transition-transform duration-300 group-hover:rotate-180">
+                            <svg-icon type="mdi" :path="mdiReceiptTextPlus" class="w-5 h-5" />
+                        </span>
+
+                        Add Tax
+                    </div>
+                </button>
+            </div>
             <div class="flex items-center gap-2 w-1/3">
                 <div class="relative w-full">
                     <input type="search" id="Search" v-model="search" placeholder=" " class="peer" ref="searchInput"
@@ -118,6 +130,20 @@
                                                     format="MM/DD/YYYY" validation="no" />
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 class="text-sm font-medium mb-2">
+                                        Customer
+                                    </h3>
+                                    <div class="relative w-full">
+                                        <input
+                                            type="text"
+                                            v-model="customerFilter"
+                                            placeholder="Customer name or code"
+                                            class="form-input"
+                                        />
                                     </div>
                                 </div>
 
@@ -317,6 +343,12 @@
             <ViewPayment v-if="showViewModal" :show="showViewModal" :selected="selectedRow"
                 @closeSuccess="closeSuccessViewModal" @close="closeViewModal" />
         </Transition>
+        <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
+            leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+            <AddPaymentTax v-if="showTaxModal" :show="showTaxModal" @close="closeTaxModal"
+                @closeSuccess="closeSuccessTaxModal" />
+        </Transition>
 
         <ToastAlert :show="showToast" :message="toastMessage" />
 
@@ -503,8 +535,9 @@ import { debounce } from "lodash";
 import ToastAlert from "./Components/ToastAlert.vue";
 import ConfirmationDialog from "./Components/ConfirmationDialog.vue";
 import AddPayment from "../Modals/TransactionModals/AddPayment.vue";
+import AddPaymentTax from "../Modals/TransactionModals/AddPaymentTax.vue";
 import ViewPayment from "../Modals/TransactionModals/ViewPayment.vue";
-import { mdiClose, mdiEye, mdiMagnify, mdiPlus } from "@mdi/js";
+import { mdiClose, mdiEye, mdiMagnify, mdiPlus, mdiReceiptTextPlus } from "@mdi/js";
 import { FunnelIcon } from "@heroicons/vue/24/solid";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import DatePicker from "./Components/DatePicker.vue";
@@ -524,6 +557,7 @@ const { canInsert } = usePermissions();
 
 const showModal = ref(false);
 const showViewModal = ref(false);
+const showTaxModal = ref(false);
 const selectedRow = ref(null);
 const showToast = ref(false);
 const toastMessage = ref("");
@@ -550,6 +584,23 @@ const closeModal = () => {
 const closeSuccessModal = () => {
     showModal.value = false;
     showSuccessToast("Payment Has Been Added Successfully");
+};
+
+async function openTaxModal() {
+    showTaxModal.value = true;
+}
+const closeTaxModal = () => {
+    showTaxModal.value = false;
+};
+const closeSuccessTaxModal = () => {
+    showTaxModal.value = false;
+    router.reload({
+        only: ["payments"],
+        preserveScroll: true,
+        onSuccess: () => {
+            showSuccessToast("Payment tax has been applied successfully");
+        },
+    });
 };
 
 const openViewModal = (selected) => {
@@ -681,6 +732,7 @@ const performSearch = debounce((q) => {
     const filters = {
         search: q,
         code_sort: codeSort.value,
+        customer_filter: customerFilter.value || undefined,
         type_filters:
             typeFilters.value.length > 0 ? typeFilters.value : undefined,
         type_filtersPaymentType:
@@ -707,6 +759,7 @@ watch(search, (q) => {
 // Filter functionality (new)
 const showFilters = ref(false);
 const codeSort = ref(props.filters?.code_sort || null);
+const customerFilter = ref(props.filters?.customer_filter || "");
 const typeFilters = ref([
     ...new Set(
         (props.filters?.type_filters || []).map((type) =>
@@ -732,6 +785,7 @@ const setCodeSort = (sort) => {
 
 const resetFilters = () => {
     codeSort.value = null;
+    customerFilter.value = "";
     typeFilters.value = [];
     typeFiltersPaymentType.value = [];
     dateRange.value = { start: null, end: null };
@@ -748,6 +802,7 @@ const applyFilters = () => {
     const filters = {
         search: search.value,
         code_sort: codeSort.value,
+        customer_filter: customerFilter.value || undefined,
         type_filters:
             typeFilters.value.length > 0 ? typeFilters.value : undefined,
         type_filtersPaymentType:
@@ -773,6 +828,7 @@ const applyFilters = () => {
 const activeFiltersCount = computed(() => {
     let count = 0;
     if (codeSort.value) count++;
+    if (customerFilter.value.trim()) count++;
     if (typeFilters.value.length > 0) count++;
     if (typeFiltersPaymentType.value.length > 0) count++;
     if (dateRange.value.start || dateRange.value.end) count++;
