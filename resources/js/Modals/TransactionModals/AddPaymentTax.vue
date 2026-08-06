@@ -3,6 +3,7 @@
         v-if="show"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60"
     >
+        <ToastAlertWarning :show="showToast" :message="toastMessage" />
         <transition
             @before-enter="beforeEnter"
             @enter="enter"
@@ -282,6 +283,7 @@ import axios from "axios";
 import { computed, ref, watch } from "vue";
 import { useForm, usePage } from "@inertiajs/vue3";
 import TextInput from "../../Pages/Components/TextInput.vue";
+import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import { route } from "../../../../vendor/tightenco/ziggy/src/js";
 import { mdiClose, mdiPlus, mdiRefresh } from "@mdi/js";
 import { debounce } from "lodash";
@@ -300,6 +302,9 @@ const search = ref("");
 const typeFilter = ref("");
 const candidates = ref([]);
 const selectedCandidate = ref(null);
+const showToast = ref(false);
+const toastMessage = ref("");
+let toastTimeout = null;
 
 const form = useForm({
     payment_detail_id: null,
@@ -332,6 +337,24 @@ const formatCurrency = (amount) =>
         style: "currency",
         currency: "PHP",
     }).format(toNumber(amount));
+
+const showWarningToast = (message) => {
+    toastMessage.value = message;
+    showToast.value = false;
+
+    if (toastTimeout) {
+        clearTimeout(toastTimeout);
+    }
+
+    setTimeout(() => {
+        showToast.value = true;
+    }, 0);
+
+    toastTimeout = setTimeout(() => {
+        showToast.value = false;
+        toastTimeout = null;
+    }, 3000);
+};
 
 const typeOptions = computed(() => {
     return [...new Set(candidates.value.map((item) => item.type).filter(Boolean))].sort();
@@ -459,8 +482,33 @@ const closeModal = () => {
     emit("close");
 };
 
+const validateWhtAmount = (showToastMessage = false) => {
+    const enteredAmount = toNumber(form.wht_amount);
+    const availableBalance = toNumber(selectedCandidate.value?.balance);
+
+    if (enteredAmount > 0 && availableBalance > 0 && enteredAmount > availableBalance) {
+        form.errors.wht_amount = "WHT amount cannot be greater than the available balance.";
+
+        if (showToastMessage) {
+            showWarningToast("WHT amount exceeds the available balance.");
+        }
+
+        return false;
+    }
+
+    if (form.errors.wht_amount === "WHT amount cannot be greater than the available balance.") {
+        form.errors.wht_amount = "";
+    }
+
+    return true;
+};
+
 const submit = () => {
     if (!selectedCandidate.value) {
+        return;
+    }
+
+    if (!validateWhtAmount(true)) {
         return;
     }
 
@@ -487,6 +535,25 @@ watch(filteredCandidates, (items) => {
         }
     }
 });
+
+watch(
+    () => form.wht_amount,
+    (newValue, oldValue) => {
+        const availableBalance = toNumber(selectedCandidate.value?.balance);
+        const newAmount = toNumber(newValue);
+        const oldAmount = toNumber(oldValue);
+
+        validateWhtAmount(false);
+
+        if (
+            availableBalance > 0 &&
+            newAmount > availableBalance &&
+            oldAmount <= availableBalance
+        ) {
+            showWarningToast("WHT amount exceeds the available balance.");
+        }
+    }
+);
 
 watch(
     () => form.bir_2307_received,

@@ -402,7 +402,7 @@
                                     class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100">
                                     <svg-icon type="mdi" :path="mdiEye" class="w-4 h-4 text-[var(--color-primary)]" />
                                 </button>
-                                <button type="button" v-if="isAdmin && adjustment.apply_to === 'Sales Invoice'"
+                                <button type="button" v-if="isAdmin"
                                     :disabled="syncingAdjustmentId === adjustment.id"
                                     @click="syncAdjustmentSales(adjustment)"
                                     class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100 disabled:opacity-70 disabled:cursor-not-allowed">

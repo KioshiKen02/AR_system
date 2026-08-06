@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -53,7 +54,7 @@ class UserController extends Controller
         $fields['created_by'] =  $request->user()->name;
 
         // Determine BU based on app name (keep existing logic for reference/consistency)
-        $user = auth()->user();
+        $user = Auth::user();
         $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
         switch ($appName) {
             case 'Bilar Breeder Local':
@@ -178,7 +179,7 @@ class UserController extends Controller
             '0109-SAMNT' => ['can_view', 'can_insert', 'can_update', 'can_delete'],
             '0201-CIT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
             '0202-ADT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
-            '0203-PAYT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
+            '0203-PAYT' => ['can_view', 'can_insert', 'can_update', 'can_delete', 'can_print', 'can_reprint'],
             '0204-BGBLT' => ['can_view', 'can_insert'],
             '0301-GNRPRT' => ['can_view'],
             '0302-CUSLED' => ['can_view'],
@@ -248,14 +249,14 @@ class UserController extends Controller
         // Final safety check: if targetId is the tenant name, we have a problem.
         // Assuming user IDs are numeric.
         if (!is_numeric($targetId)) {
-             \Log::warning("UpdateUser: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+             Log::warning("UpdateUser: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
              // Try to find the second route parameter by position?
              // $request->route()->parameters() returns array.
              $params = array_values($request->route()->parameters());
              if (count($params) >= 2) {
                   // 0 is tenant, 1 is user
                   $targetId = $params[1];
-                  \Log::info("UpdateUser: Resolved ID from positional parameters: {$targetId}");
+                  Log::info("UpdateUser: Resolved ID from positional parameters: {$targetId}");
              }
         }
 
@@ -332,7 +333,7 @@ class UserController extends Controller
                 '0109-SAMNT' => ['can_view', 'can_insert', 'can_update', 'can_delete'],
                 '0201-CIT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
                 '0202-ADT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
-                '0203-PAYT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
+                '0203-PAYT' => ['can_view', 'can_insert', 'can_update', 'can_delete', 'can_print', 'can_reprint'],
                 '0204-BGBLT' => ['can_view', 'can_insert'],
                 '0301-GNRPRT' => ['can_view'],
                 '0302-CUSLED' => ['can_view'],
@@ -394,7 +395,7 @@ class UserController extends Controller
         }
 
         if (!is_numeric($targetId)) {
-             \Log::warning("User Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+             Log::warning("User Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
         }
 
         $user = User::findOrFail($targetId);
@@ -413,7 +414,7 @@ class UserController extends Controller
         }
 
         if (!is_numeric($targetId)) {
-             \Log::warning("AssignPermissions: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+             Log::warning("AssignPermissions: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
              // Fallback
              $params = array_values($request->route()->parameters());
              if (count($params) >= 2) {

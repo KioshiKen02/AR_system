@@ -14,8 +14,8 @@
                         Add New
                     </div>
                 </button>
-                <button :disabled="!canInsert('0203-PAYT')" @click="openTaxModal()"
-                    class="px-4 py-2 rounded-md font-medium transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden bg-amber-600 text-white hover:bg-transparent hover:text-amber-600 hover:ring-1 hover:ring-amber-600 disabled:opacity-70 disabled:cursor-not-allowed group">
+                <button v-if="canUpdate('0203-PAYT')" @click="openTaxModal()"
+                    class="px-4 py-2 rounded-md font-medium transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden bg-amber-600 text-white hover:bg-transparent hover:text-amber-600 hover:ring-1 hover:ring-amber-600 group">
                     <div class="relative flex items-center justify-center gap-1">
                         <span class="transition-transform duration-300 group-hover:rotate-180">
                             <svg-icon type="mdi" :path="mdiReceiptTextPlus" class="w-5 h-5" />
@@ -553,7 +553,7 @@ const props = defineProps({
 
 const page = usePage();
 
-const { canInsert } = usePermissions();
+const { canInsert, canUpdate, canDelete, canPrint, canReprint } = usePermissions();
 
 const showModal = ref(false);
 const showViewModal = ref(false);

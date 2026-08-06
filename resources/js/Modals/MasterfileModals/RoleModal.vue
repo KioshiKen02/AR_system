@@ -334,7 +334,7 @@ const roles = ref([
     {
         id: "0203-PAYT",
         description: "Payment Transaction",
-        enabledActions: ["can_view", "can_insert", "can_print", "can_reprint"],
+        enabledActions: ["can_view", "can_insert", "can_update", "can_delete", "can_print", "can_reprint"],
     },
     {
         id: "0204-BGBLT",
