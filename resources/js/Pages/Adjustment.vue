@@ -260,7 +260,7 @@
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
             enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
             leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
-            <AddAdjustment v-if="showModal" :show="showModal" @close="closeModal" @closeSuccess="closeSuccessModal" />
+            <AddAdjustment v-if="showModal" :key="addAdjustmentKey" :show="showModal" @close="closeModal" @closeSuccess="closeSuccessModal" />
         </Transition>
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
             enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
@@ -471,6 +471,7 @@ const { canInsert } = usePermissions();
 const isAdmin = computed(() => page.props.auth?.user?.role === "Admin");
 
 const showModal = ref(false);
+const addAdjustmentKey = ref(0);
 const showViewModal = ref(false);
 const selectedRow = ref(null);
 const showToast = ref(false);
@@ -557,8 +558,8 @@ const closeModal = () => {
     showModal.value = false;
 };
 const closeSuccessModal = () => {
-    showModal.value = false;
     showSuccessToast("Adjustment Has Been Added Successfully");
+    addAdjustmentKey.value++;
 };
 
 const openViewModal = (selected) => {
@@ -583,7 +584,6 @@ function openManagerModal() {
 
 function onManagerSuccess() {
     showManagerModal.value = false;
-    openModal();
     openModal();
 }
 
