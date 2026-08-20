@@ -16,9 +16,32 @@ use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
+    private const BU_ASSIGN_MAP = [
+        'Bilar Breeder Local' => 13,
+        'Bilar Breeder'       => 13,
+        'Gp Jagna'            => 50,
+        'Ice Plant'           => 25,
+        'Peanut Kisses'       => 26,
+        'Cortes Poultry'      => 12,
+        'Cortes Piggery'      => 11,
+        'Canhayupon Breeder'  => 15,
+        'Bilar Hatchery'      => 14,
+        'Lapsaon Breeder'     => 16,
+        'Rizal Breeder'       => 43,
+        'Feedmill'            => 19,
+        'Growout'             => 20,
+        'Cortes Fertilizer'   => 42,
+        'Ubay Fertilizer'     => 22,
+        'Piggery Untaga'      => 23,
+        'Demo Farm'           => 21,
+        'Dressing Plant'      => 17,
+        'Farmers Market'      => 41,
+        'Meat Processing'     => 46,
+        'Rendering'           => 18,
+    ];
     public function index(Request $request)
     {
-       
+
         $users = User::when($request->search, function ($query) use ($request) {
             $query
                 ->where('name', 'like', '%' . $request->search . '%')
@@ -35,7 +58,7 @@ class UserController extends Controller
             'permissions' => $permissions,
             'searchTerm' => $request->search,
             'broadcastChannel' => 'users',
-           
+
         ]);
     }
 
@@ -55,82 +78,87 @@ class UserController extends Controller
 
         // Determine BU based on app name (keep existing logic for reference/consistency)
         $user = Auth::user();
+
         $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
-        switch ($appName) {
-            case 'Bilar Breeder Local':
-                $fields['bu_assign'] = 13;
-                break;
-            case 'Bilar Breeder':
-                $fields['bu_assign'] = 13;
-                break;
-            case  'Gp Jagna':
-                $fields['bu_assign'] = 50;
-                break;
-            case 'Ice Plant':
-                $fields['bu_assign'] = 25;
-                break;
-            case  'Peanut Kisses':
-                $fields['bu_assign'] = 26;
-                break;
-            case 'Cortes Poultry':
-                $fields['bu_assign'] = 12;
-                break;
-            case  'Cortes Piggery':
-                $fields['bu_assign'] = 11;
-                break;
-            case 'Canhayupon Breeder':
-                $fields['bu_assign'] = 15;
-                break;
-            case 'Bilar Hatchery':
-                $fields['bu_assign'] = 14;
-                break;
-            case 'Lapsaon Breeder':
-                $fields['bu_assign'] = 16;
-                break;
-            case 'Rizal Breeder':
-                $fields['bu_assign'] = 43;
-                break;
-            // ubay server 
-            case 'Feedmill':
-                $fields['bu_assign'] = 19;
-                break;
-            case 'Growout':
-                $fields['bu_assign'] = 20;
-                break;
-            case 'Cortes Fertilizer':
-                $fields['bu_assign'] = 42;
-                break;
-            case 'Ubay Fertilizer':
-                $fields['bu_assign'] = 22;
-                break;
-            case 'Piggery Untaga':
-                $fields['bu_assign'] = 23;
-                break;
-            case 'Demo Farm':
-                $fields['bu_assign'] = 21;
-                break;
-            case 'Dressing Plant':
-                $fields['bu_assign'] = 17;
-                break;
-            case 'Farmers Market':
-                $fields['bu_assign'] = 41;
-                break;
-            case 'Meat Processing':
-                $fields['bu_assign'] = 46;
-                break;
-            case 'Rendering':
-                $fields['bu_assign'] = 18;
-                break;
+        if (isset(self::BU_ASSIGN_MAP[$appName])) {
+            $fields['bu_assign'] = self::BU_ASSIGN_MAP[$appName];
         }
+        // switch ($appName) {
+        //     case 'Bilar Breeder Local':
+        //         $fields['bu_assign'] = 13;
+        //         break;
+        //     case 'Bilar Breeder':
+        //         $fields['bu_assign'] = 13;
+        //         break;
+        //     case  'Gp Jagna':
+        //         $fields['bu_assign'] = 50;
+        //         break;
+        //     case 'Ice Plant':
+        //         $fields['bu_assign'] = 25;
+        //         break;
+        //     case  'Peanut Kisses':
+        //         $fields['bu_assign'] = 26;
+        //         break;
+        //     case 'Cortes Poultry':
+        //         $fields['bu_assign'] = 12;
+        //         break;
+        //     case  'Cortes Piggery':
+        //         $fields['bu_assign'] = 11;
+        //         break;
+        //     case 'Canhayupon Breeder':
+        //         $fields['bu_assign'] = 15;
+        //         break;
+        //     case 'Bilar Hatchery':
+        //         $fields['bu_assign'] = 14;
+        //         break;
+        //     case 'Lapsaon Breeder':
+        //         $fields['bu_assign'] = 16;
+        //         break;
+        //     case 'Rizal Breeder':
+        //         $fields['bu_assign'] = 43;
+        //         break;
+        //     // ubay server 
+        //     case 'Feedmill':
+        //         $fields['bu_assign'] = 19;
+        //         break;
+        //     case 'Growout':
+        //         $fields['bu_assign'] = 20;
+        //         break;
+        //     case 'Cortes Fertilizer':
+        //         $fields['bu_assign'] = 42;
+        //         break;
+        //     case 'Ubay Fertilizer':
+        //         $fields['bu_assign'] = 22;
+        //         break;
+        //     case 'Piggery Untaga':
+        //         $fields['bu_assign'] = 23;
+        //         break;
+        //     case 'Demo Farm':
+        //         $fields['bu_assign'] = 21;
+        //         break;
+        //     case 'Dressing Plant':
+        //         $fields['bu_assign'] = 17;
+        //         break;
+        //     case 'Farmers Market':
+        //         $fields['bu_assign'] = 41;
+        //         break;
+        //     case 'Meat Processing':
+        //         $fields['bu_assign'] = 46;
+        //         break;
+        //     case 'Rendering':
+        //         $fields['bu_assign'] = 18;
+        //         break;
+        // }
+
 
         // CREATE USER ONLY IN TENANT DATABASE
         // Since User model defaults to 'mysql' (main DB), we must explicitly set connection to tenant.
-        
+
         $user = new User();
         // Force the connection to be the current default (tenant) connection
         // Note: config('database.default') holds the current tenant connection name if configured correctly by middleware
         //$user->setConnection(config('database.default'));
-        
+
         // Fill and save
         $user->fill($fields);
         $user->save();
@@ -234,30 +262,30 @@ class UserController extends Controller
         // Fix for route parameter mapping in tenant-prefixed routes
         // Route is /{tenant}/updateUser/{user}
         // Implicit binding or positional argument mapping injects {tenant} ("feedmill") into $id
-        
+
         // Explicitly get the 'user' parameter (or 'id' if named that way in route)
         $targetId = $request->route('user') ?? $request->route('id') ?? $request->route('userId');
-        
+
         // If route param is not found by name, fallback to $id BUT check if it looks valid
         if (!$targetId) {
-             // If $id is "feedmill", that's wrong.
-             // Usually the route is defined as Route::put('/updateUser/{user}', ...)
-             // If we can't find it, we might be in trouble, but let's try $id.
-             $targetId = $id;
+            // If $id is "feedmill", that's wrong.
+            // Usually the route is defined as Route::put('/updateUser/{user}', ...)
+            // If we can't find it, we might be in trouble, but let's try $id.
+            $targetId = $id;
         }
 
         // Final safety check: if targetId is the tenant name, we have a problem.
         // Assuming user IDs are numeric.
         if (!is_numeric($targetId)) {
-             Log::warning("UpdateUser: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
-             // Try to find the second route parameter by position?
-             // $request->route()->parameters() returns array.
-             $params = array_values($request->route()->parameters());
-             if (count($params) >= 2) {
-                  // 0 is tenant, 1 is user
-                  $targetId = $params[1];
-                  Log::info("UpdateUser: Resolved ID from positional parameters: {$targetId}");
-             }
+            Log::warning("UpdateUser: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+            // Try to find the second route parameter by position?
+            // $request->route()->parameters() returns array.
+            $params = array_values($request->route()->parameters());
+            if (count($params) >= 2) {
+                // 0 is tenant, 1 is user
+                $targetId = $params[1];
+                Log::info("UpdateUser: Resolved ID from positional parameters: {$targetId}");
+            }
         }
 
         $validatedData = $request->validate([
@@ -391,11 +419,11 @@ class UserController extends Controller
         // Fix for route parameter mapping in tenant-prefixed routes
         $targetId = $request->route('id');
         if (!$targetId) {
-             $targetId = $id;
+            $targetId = $id;
         }
 
         if (!is_numeric($targetId)) {
-             Log::warning("User Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+            Log::warning("User Delete: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
         }
 
         $user = User::findOrFail($targetId);
@@ -408,20 +436,20 @@ class UserController extends Controller
     {
         // Fix for route parameter mapping in tenant-prefixed routes
         $targetId = $request->route('user') ?? $request->route('id') ?? $request->route('userId');
-        
+
         if (!$targetId) {
-             $targetId = $id;
+            $targetId = $id;
         }
 
         if (!is_numeric($targetId)) {
-             Log::warning("AssignPermissions: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
-             // Fallback
-             $params = array_values($request->route()->parameters());
-             if (count($params) >= 2) {
-                  $targetId = $params[1];
-             }
+            Log::warning("AssignPermissions: ID is non-numeric '{$targetId}'. Likely tenant prefix mismatch.");
+            // Fallback
+            $params = array_values($request->route()->parameters());
+            if (count($params) >= 2) {
+                $targetId = $params[1];
+            }
         }
-        
+
         // Find the user
         $user = User::findOrFail($targetId);
 
@@ -456,23 +484,23 @@ class UserController extends Controller
     public function serveImageUserAdd(Request $request)
     {
         $name = $request->query('name');
-        
+
         // Debugging: Log that the route was hit
         Log::info("serveImageUserAdd called for name: " . $name);
 
         if (!$name) {
-             abort(404, 'Name required');
+            abort(404, 'Name required');
         }
 
         try {
             $decodedName = urldecode($name);
             Log::info("Decoded name: " . $decodedName);
-            
+
             $apiUrl = "http://172.16.161.34/api/farms/filter/employee/name?q=" . urlencode($decodedName);
             Log::info("Fetching employee data from: " . $apiUrl);
-            
+
             $apiResponse = Http::get($apiUrl)->json();
-            
+
             // Log the API response structure
             Log::info("API Response: " . json_encode($apiResponse));
 
@@ -483,8 +511,8 @@ class UserController extends Controller
             } elseif (isset($apiResponse['employee']) && !empty($apiResponse['employee'])) {
                 $employeeData = $apiResponse['employee'][0];
             } elseif (isset($apiResponse[0]) && is_array($apiResponse[0])) {
-                 // Maybe it returns an array directly?
-                 $employeeData = $apiResponse[0];
+                // Maybe it returns an array directly?
+                $employeeData = $apiResponse[0];
             }
 
             if ($employeeData && !empty($employeeData['employee_photo'])) {
@@ -492,10 +520,10 @@ class UserController extends Controller
                 // The API returns "..\/images\/users\/..." or "/images/users/..."
                 // We want to remove the leading "../" or "/"
                 $photoPath = $employeeData['employee_photo'];
-                
+
                 // Remove leading "../"
                 $photoPath = preg_replace('/^(\.\.\/)+/', '', $photoPath);
-                
+
                 // Remove leading slash if present
                 $photoPath = ltrim($photoPath, '/\\');
 
@@ -521,26 +549,26 @@ class UserController extends Controller
                     if (!$contentType || $contentType === 'application/octet-stream') {
                         $contentType = 'image/jpeg';
                     }
-                    
+
                     return response($response->body(), 200)
                         ->header('Content-Type', $contentType);
                 } else {
-                
-                     Log::warning("Failed to fetch image from: " . $imageUrl . " Status: " . $response->status());
-                     
-                     // TRY WITHOUT PORT 8080 as a fallback
-                     $imageUrlNoPort = "http://172.16.161.34/hrms/" . $photoPath;
-                     
-                     Log::info("Retrying fetch from: " . $imageUrlNoPort);
-                     
-                     $responseNoPort = Http::withoutVerifying()->timeout(5)->get($imageUrlNoPort);
-                     
-                     if ($responseNoPort->successful()) {
-                         return response($responseNoPort->body(), 200)
+
+                    Log::warning("Failed to fetch image from: " . $imageUrl . " Status: " . $response->status());
+
+                    // TRY WITHOUT PORT 8080 as a fallback
+                    $imageUrlNoPort = "http://172.16.161.34/hrms/" . $photoPath;
+
+                    Log::info("Retrying fetch from: " . $imageUrlNoPort);
+
+                    $responseNoPort = Http::withoutVerifying()->timeout(5)->get($imageUrlNoPort);
+
+                    if ($responseNoPort->successful()) {
+                        return response($responseNoPort->body(), 200)
                             ->header('Content-Type', $responseNoPort->header('Content-Type'));
-                     } else {
+                    } else {
                         Log::warning("Failed retry from: " . $imageUrlNoPort . " Status: " . $responseNoPort->status());
-                     }
+                    }
                 }
             } else {
                 Log::warning("No employee data or photo found for: " . $decodedName);

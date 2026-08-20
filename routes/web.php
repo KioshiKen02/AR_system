@@ -43,41 +43,59 @@ use Inertia\Inertia;
 use App\Http\Middleware\EnsureUserIsAdmin;
 
 use App\Http\Controllers\MasterfileControllers\UserMasterfileController;
+use Illuminate\Support\Facades\Storage;
 
-    //DYNAMIC API LINK
-    // We should check the App Setting based on the *authenticated user* if available.
-    // However, this code runs BEFORE middleware, so Auth::user() might not be available yet 
-    // unless we are inside a route group.
-    // BUT, the $baseUrl variable is used to define the Route::prefix().
-    // Route prefixes must be static or defined at boot time.
-    
-    // THE PROBLEM: 
-    // We are trying to define a SINGLE route group with a DYNAMIC prefix based on the logged-in user.
-    // This is not how Laravel routing works. Routes are registered before the request is processed.
-    // If we want to support multiple prefixes (e.g., /feedmill, /arsystem), we need to register ALL of them 
-    // or use a wildcard prefix like '/{tenant}'.
-    
-    // CURRENT ARCHITECTURE LIMITATION:
-    // The current code relies on `config('app.name')` to set a SINGLE static prefix for the entire application instance.
-    // If the user is redirected to `/feedmill/dashboard` but the route is registered as `/arsystem/dashboard` (because app.name is Ar System),
-    // then `/feedmill/dashboard` will be 404.
-    
-    // SOLUTION:
-    // We need to define the routes to accept ANY valid tenant prefix.
-    // Instead of `$baseUrl = '...'`, we can define a list of valid prefixes or use a wildcard.
-    // Given the extensive switch case, we have a known list of valid prefixes.
-    
-    // Let's change the prefix to be a wildcard parameter, e.g., '{tenant}'.
-    // AND restrict it to the valid values to avoid conflicts.
-    
-    $validTenants = [
-        'bilarbreeder', 'gpjagna', 'iceplant', 'peanutkisses', 'cortespoultry', 'cortespiggery',
-        'canhayuponbreeder', 'bilarhatchery', 'lapsaonbreeder', 'rizalbreeder', 'feedmill',
-        'growout', 'mficortesfertilizer', 'mfiubayfertilizer', 'piggeryuntaga', 'demofarm',
-        'dressingplant', 'farmersmarket', 'meatprocessing', 'rendering', 'arsystem'
-    ];
-    
-    $baseUrl = '{tenant}';
+//DYNAMIC API LINK
+// We should check the App Setting based on the *authenticated user* if available.
+// However, this code runs BEFORE middleware, so Auth::user() might not be available yet 
+// unless we are inside a route group.
+// BUT, the $baseUrl variable is used to define the Route::prefix().
+// Route prefixes must be static or defined at boot time.
+
+// THE PROBLEM: 
+// We are trying to define a SINGLE route group with a DYNAMIC prefix based on the logged-in user.
+// This is not how Laravel routing works. Routes are registered before the request is processed.
+// If we want to support multiple prefixes (e.g., /feedmill, /arsystem), we need to register ALL of them 
+// or use a wildcard prefix like '/{tenant}'.
+
+// CURRENT ARCHITECTURE LIMITATION:
+// The current code relies on `config('app.name')` to set a SINGLE static prefix for the entire application instance.
+// If the user is redirected to `/feedmill/dashboard` but the route is registered as `/arsystem/dashboard` (because app.name is Ar System),
+// then `/feedmill/dashboard` will be 404.
+
+// SOLUTION:
+// We need to define the routes to accept ANY valid tenant prefix.
+// Instead of `$baseUrl = '...'`, we can define a list of valid prefixes or use a wildcard.
+// Given the extensive switch case, we have a known list of valid prefixes.
+
+// Let's change the prefix to be a wildcard parameter, e.g., '{tenant}'.
+// AND restrict it to the valid values to avoid conflicts.
+
+$validTenants = [
+    'bilarbreeder',
+    'gpjagna',
+    'iceplant',
+    'peanutkisses',
+    'cortespoultry',
+    'cortespiggery',
+    'canhayuponbreeder',
+    'bilarhatchery',
+    'lapsaonbreeder',
+    'rizalbreeder',
+    'feedmill',
+    'growout',
+    'mficortesfertilizer',
+    'mfiubayfertilizer',
+    'piggeryuntaga',
+    'demofarm',
+    'dressingplant',
+    'farmersmarket',
+    'meatprocessing',
+    'rendering',
+    'arsystem'
+];
+
+$baseUrl = '{tenant}';
 
 Route::get('/', function () {
     return redirect()->route('landing', ['tenant' => 'arsystem']); // Default redirect
@@ -422,6 +440,21 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
     Route::get('fetch-bu-list', [ProfileController::class, 'fetchBuList'])->name('fetchBuList');
     // get selected user bu assign for update 
     Route::get('get-selected-user-bu-assigned', [ProfileController::class, 'getUserBuAssign'])->name('getUserBuAssign');
+});
+
+
+Route::middleware('auth')->prefix('qz')->group(function () {
+    Route::get('/cert', function () {
+        return response(Storage::get('qz/digital-certificate.txt'))
+            ->header('Content-Type', 'text/plain');
+    });
+    Route::post('/sign', function (Illuminate\Http\Request $request) {
+        $privateKey = Storage::get('qz/private-key.pem');
+        $toSign = $request->input('request');
+
+        openssl_sign($toSign, $signature, $privateKey, OPENSSL_ALGO_SHA1);
+        return response(base64_encode($signature));
+    });
 });
 
 

@@ -1,19 +1,26 @@
 <template>
-
     <Head :title="` | About Us`" />
     <div class="min-h-screen pb-16 px-4 sm:px-6 lg:px-8">
         <!-- Header -->
-        <div class="max-w-7xl mx-auto mb-16 flex flex-col items-center justify-between">
-            <img :src="'/storage/images/mflogo.png'" alt="Logo"
-                class="w-40 h-40 object-contain transition-all duration-300" />
+        <div
+            class="max-w-7xl mx-auto mb-16 flex flex-col items-center justify-between"
+        >
+            <img
+                :src="'/storage/images/mflogo.png'"
+                alt="Logo"
+                class="w-40 h-40 object-contain transition-all duration-300"
+            />
             <div class="flex-1 text-center">
                 <div class="relative inline-block">
                     <h1
-                        class="text-5xl font-bold sm:text-6xl lg:text-7xl bg-clip-text text-transparent bg-gradient-to-b from-[var(--color-primary)] to-[var(--color-primary-hover)]">
+                        class="text-5xl font-bold sm:text-6xl lg:text-7xl bg-clip-text text-transparent bg-gradient-to-b from-[var(--color-primary)] to-[var(--color-primary-hover)]"
+                    >
                         Meet Our Farms Team
                     </h1>
                 </div>
-                <p class="mt-2 max-w-2xl mx-auto text-xl text-[var(--color-text-secondary)]/80 font-medium">
+                <p
+                    class="mt-2 max-w-2xl mx-auto text-xl text-[var(--color-text-secondary)]/80 font-medium"
+                >
                     The talented people behind our success in developing this
                     application
                 </p>
@@ -25,17 +32,26 @@
             <div class="space-y-10">
                 <div class="text-center">
                     <span
-                        class="inline-block px-4 py-1 text-sm font-semibold text-[var(--color-primary-hover)] bg-[var(--color-primary)]/20 rounded-full mb-2">
+                        class="inline-block px-4 py-1 text-sm font-semibold text-[var(--color-primary-hover)] bg-[var(--color-primary)]/20 rounded-full mb-2"
+                    >
                         MANAGEMENT
                     </span>
-                    <h2 class="text-3xl font-bold text-[var(--color-text-secondary)]/80">
+                    <h2
+                        class="text-3xl font-bold text-[var(--color-text-secondary)]/80"
+                    >
                         Leadership Team
-                        <span class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"></span>
+                        <span
+                            class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"
+                        ></span>
                     </h2>
                 </div>
                 <div class="flex justify-center">
                     <div class="grid grid-cols-1 gap-10 max-w-[420px]">
-                        <TeamCard v-for="member in Director" :key="member.id" :member="member" />
+                        <TeamCard
+                            v-for="member in Director"
+                            :key="member.id"
+                            :member="member"
+                        />
                     </div>
                 </div>
             </div>
@@ -44,7 +60,11 @@
             <div class="space-y-10">
                 <div class="flex justify-center">
                     <div class="grid grid-cols-1 gap-10 max-w-[420px]">
-                        <TeamCard v-for="member in JrSupervisor" :key="member.id" :member="member" />
+                        <TeamCard
+                            v-for="member in JrSupervisor"
+                            :key="member.id"
+                            :member="member"
+                        />
                     </div>
                 </div>
             </div>
@@ -53,16 +73,27 @@
             <div class="space-y-10">
                 <div class="text-center">
                     <span
-                        class="inline-block px-4 py-1 text-sm font-semibold text-[var(--color-primary-hover)] bg-[var(--color-primary)]/20 rounded-full mb-2">
+                        class="inline-block px-4 py-1 text-sm font-semibold text-[var(--color-primary-hover)] bg-[var(--color-primary)]/20 rounded-full mb-2"
+                    >
                         DEPARTMENT LEADERS
                     </span>
-                    <h2 class="text-3xl font-bold text-[var(--color-text-secondary)]/80">
+                    <h2
+                        class="text-3xl font-bold text-[var(--color-text-secondary)]/80"
+                    >
                         Section Heads
-                        <span class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"></span>
+                        <span
+                            class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"
+                        ></span>
                     </h2>
                 </div>
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 justify-items-center">
-                    <TeamCard v-for="member in SectionHeads" :key="member.id" :member="member" />
+                <div
+                    class="grid grid-cols-1 gap-10 sm:grid-cols-2 justify-items-center"
+                >
+                    <TeamCard
+                        v-for="member in SectionHeads"
+                        :key="member.id"
+                        :member="member"
+                    />
                 </div>
             </div>
 
@@ -70,62 +101,117 @@
             <div class="space-y-10">
                 <div class="text-center">
                     <span
-                        class="inline-block px-4 py-1 text-sm font-semibold text-[var(--color-primary-hover)] bg-[var(--color-primary)]/20 rounded-full mb-2">
+                        class="inline-block px-4 py-1 text-sm font-semibold text-[var(--color-primary-hover)] bg-[var(--color-primary)]/20 rounded-full mb-2"
+                    >
                         DEVELOPMENT TEAM
                     </span>
-                    <h2 class="text-3xl font-bold text-[var(--color-text-secondary)]/80">
+                    <h2
+                        class="text-3xl font-bold text-[var(--color-text-secondary)]/80"
+                    >
                         Team Leader
-                        <span class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"></span>
+                        <span
+                            class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"
+                        ></span>
                     </h2>
                 </div>
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
-                    <TeamCard v-for="member in teamLeader" :key="member.id" :member="member" class="col-start-2" />
+                <div
+                    class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center"
+                >
+                    <TeamCard
+                        v-for="member in teamLeader"
+                        :key="member.id"
+                        :member="member"
+                        class="col-start-2"
+                    />
                 </div>
             </div>
             <div class="space-y-10">
                 <div class="text-center">
-                    <h2 class="text-3xl font-bold text-[var(--color-text-secondary)]/80">
+                    <h2
+                        class="text-3xl font-bold text-[var(--color-text-secondary)]/80"
+                    >
                         Programmers
-                        <span class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"></span>
+                        <span
+                            class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"
+                        ></span>
                     </h2>
                 </div>
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
-                    <TeamCard v-for="member in teamMembers" :key="member.id" :member="member" />
+                <div
+                    class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center"
+                >
+                    <TeamCard
+                        v-for="member in teamMembers"
+                        :key="member.id"
+                        :member="member"
+                    />
                 </div>
             </div>
             <div class="space-y-10">
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
-                    <TeamCard v-for="member in teamMembersTwo" :key="member.id" :member="member" class="col-start-2" />
+                <div
+                    class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center"
+                >
+                    <TeamCard
+                        v-for="member in teamMembersTwo"
+                        :key="member.id"
+                        :member="member"
+                        class="col-start-2"
+                    />
                 </div>
             </div>
 
             <div class="space-y-10">
                 <div class="text-center">
-                    <h2 class="text-3xl font-bold text-[var(--color-text-secondary)]/80">
+                    <h2
+                        class="text-3xl font-bold text-[var(--color-text-secondary)]/80"
+                    >
                         System Analysts
-                        <span class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"></span>
+                        <span
+                            class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"
+                        ></span>
                     </h2>
                 </div>
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
-                    <TeamCard v-for="member in teamMembersAnalyst" :key="member.id" :member="member" />
+                <div
+                    class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center"
+                >
+                    <TeamCard
+                        v-for="member in teamMembersAnalyst"
+                        :key="member.id"
+                        :member="member"
+                    />
                 </div>
             </div>
 
             <div class="space-y-10">
                 <div class="text-center">
-                    <h2 class="text-3xl font-bold text-[var(--color-text-secondary)]/80">
+                    <h2
+                        class="text-3xl font-bold text-[var(--color-text-secondary)]/80"
+                    >
                         Contributors
-                        <span class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"></span>
+                        <span
+                            class="block w-16 h-1 mx-auto mt-3 bg-[var(--color-border)] rounded-full"
+                        ></span>
                     </h2>
                 </div>
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 justify-items-center">
-                    <TeamCard v-for="member in activeContributors" :key="member.id" :member="member" />
+                <div
+                    class="grid grid-cols-1 gap-10 sm:grid-cols-2 justify-items-center"
+                >
+                    <TeamCard
+                        v-for="member in activeContributors"
+                        :key="member.id"
+                        :member="member"
+                    />
                 </div>
             </div>
 
             <div class="space-y-10">
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
-                    <TeamCard v-for="member in contributors" :key="member.id" :member="member" />
+                <div
+                    class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 justify-items-center"
+                >
+                    <TeamCard
+                        v-for="member in contributors"
+                        :key="member.id"
+                        :member="member"
+                    />
                 </div>
             </div>
         </div>
@@ -156,7 +242,7 @@ const contributors = [
     },
     {
         id: 3,
-        name: "John Virgil Bulac",
+        name: "John Vergil Bulac",
         position: "Programmer",
         bio: "",
         image: "/storage/aboutus/Bulac, John Vergil.jpg",
