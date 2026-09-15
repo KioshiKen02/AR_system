@@ -1379,12 +1379,14 @@ class GenerateTextFile
             $code =  $accCode;
             $codeDetails = $accCodeName ?: $bankName;
             $accountType = 'G/L Account';
+            $headerCustPosting = $customerCusPosting;
         } elseif ($custCode !== '') {
             $code = $custCode;
             $codeDetails = trim((string) $custCodeHolderName) !== '' ? $custCodeHolderName : $bankName;
             $headerCustPosting = Customer::where('cus_code', $custCode)->value('cus_posting') ?? '';
         } else {
             $accountType = 'Bank Account';
+            $headerCustPosting = $customerCusPosting;
         }
 
         $grossAmountValue = (float) ($detail->amount_paid ?? 0);
@@ -1585,6 +1587,7 @@ class GenerateTextFile
             $codeDetails = $accCodeName ?: $bankName;
             $accountType = 'G/L Account';
             $transfer = '';
+            $headerCustPosting = $customerCusPosting;
         } elseif ($custCode !== '') {
             $code = $custCode;
             $codeDetails = trim((string) $custCodeHolderName) !== '' ? $custCodeHolderName : $bankName;
@@ -1592,6 +1595,7 @@ class GenerateTextFile
             $headerCustPosting = Customer::where('cus_code', $custCode)->value('cus_posting') ?? '';
         } else {
             $accountType = 'Bank Account';
+            $headerCustPosting = $customerCusPosting;
         }
 
         $grossAmountValue = (float) ($detail->amount_paid ?? 0);
@@ -1790,12 +1794,14 @@ class GenerateTextFile
             $code = $accCode;
             $codeDetails = $accCodeName ?: $bankName;
             $accountType = 'G/L Account';
+            $headerCustPosting = $customerCusPosting;
         } elseif ($custCode !== '') {
             $code = $custCode;
             $codeDetails = trim((string) $custCodeHolderName) !== '' ? $custCodeHolderName : $bankName;
             $headerCustPosting = Customer::where('cus_code', $custCode)->value('cus_posting') ?? '';
         } else {
             $accountType = 'Bank Account';
+            $headerCustPosting = $customerCusPosting;
         }
 
         $grossAmountValue = (float) ($detail->amount_paid ?? 0);
