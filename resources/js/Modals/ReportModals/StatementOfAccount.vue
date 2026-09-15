@@ -3,7 +3,9 @@
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
             enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
             leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
-            <ConfirmationDialog :show="showDialog" message="Do you want to print the Report?" @close="handleConfirm" />
+            <ConfirmationDialog :show="showDialog"
+                :message="form.file_type === 'Excel' ? 'Do you want to download the Report?' : 'Do you want to print the Report?'"
+                @close="handleConfirm" />
         </Transition>
 
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
@@ -46,9 +48,13 @@
                                 <label class="inline-flex items-center cursor-pointer group">
                                     <input type="radio" v-model="form.file_type" value="PDF" class="hidden peer" />
                                     <div class="relative flex items-center justify-center p-2">
-                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40" :class="{ 'opacity-100': form.file_type === 'PDF' }"></div>
-                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]" :class="{ 'border-[var(--color-border)]': form.file_type === 'PDF' }">
-                                            <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity" :class="{ 'opacity-100': form.file_type === 'PDF', 'opacity-0': form.file_type !== 'PDF' }"></div>
+                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
+                                            :class="{ 'opacity-100': form.file_type === 'PDF' }"></div>
+                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
+                                            :class="{ 'border-[var(--color-border)]': form.file_type === 'PDF' }">
+                                            <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                                :class="{ 'opacity-100': form.file_type === 'PDF', 'opacity-0': form.file_type !== 'PDF' }">
+                                            </div>
                                         </div>
                                         <span class="text-sm font-medium z-10">PDF</span>
                                     </div>
@@ -56,9 +62,13 @@
                                 <label class="inline-flex items-center cursor-pointer group">
                                     <input type="radio" v-model="form.file_type" value="Excel" class="hidden peer" />
                                     <div class="relative flex items-center justify-center p-2">
-                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40" :class="{ 'opacity-100': form.file_type === 'Excel' }"></div>
-                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]" :class="{ 'border-[var(--color-border)]': form.file_type === 'Excel' }">
-                                            <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity" :class="{ 'opacity-100': form.file_type === 'Excel', 'opacity-0': form.file_type !== 'Excel' }"></div>
+                                        <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
+                                            :class="{ 'opacity-100': form.file_type === 'Excel' }"></div>
+                                        <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
+                                            :class="{ 'border-[var(--color-border)]': form.file_type === 'Excel' }">
+                                            <div class="absolute inset-0 m-auto w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
+                                                :class="{ 'opacity-100': form.file_type === 'Excel', 'opacity-0': form.file_type !== 'Excel' }">
+                                            </div>
                                         </div>
                                         <span class="text-sm font-medium z-10">Excel</span>
                                     </div>
@@ -141,16 +151,16 @@
                         <div class="grid grid-cols-3 gap-2">
                             <TextInput label="Customer Code" type="text" v-model="form.customer_code"
                                 @click="onCustomerClick()" :message="form.errors.customer_code" :readonly="form.customer_type === 'All Customer'
-                                    " :default-placeholder="'Click to Select'" :modified-placeholder="'By Customer Only'"
-                                selectable="yes" :validation="form.customer_type === 'All Customer'
-                                        ? 'no'
-                                        : 'yes'
+                                    " :default-placeholder="'Click to Select'"
+                                :modified-placeholder="'By Customer Only'" selectable="yes" :validation="form.customer_type === 'All Customer'
+                                    ? 'no'
+                                    : 'yes'
                                     " />
                             <div class="space-y-1 col-span-2">
                                 <TextInput label="Customer Name" type="text" v-model="form.customer_name" readonly
                                     :message="form.errors.customer_name" :validation="form.customer_type === 'All Customer'
-                                            ? 'no'
-                                            : 'yes'
+                                        ? 'no'
+                                        : 'yes'
                                         " />
                             </div>
                         </div>
@@ -256,20 +266,19 @@
                                             }"></div>
                                         <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
                                             :class="{
-                                                'border-[var(--color-border)]': 
+                                                'border-[var(--color-border)]':
                                                     form.type ===
                                                     'Merchandise Charge Invoice',
                                             }">
                                             <div class="absolute inset-0 m-auto 
-w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
-                                                :class="{
-                                                    'opacity-100':
-                                                        form.type ===
-                                                        'Merchandise Charge Invoice',
-                                                    'opacity-0':
-                                                        form.type !==
-                                                        'Merchandise Charge Invoice',
-                                                }"></div>
+w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity" :class="{
+    'opacity-100':
+        form.type ===
+        'Merchandise Charge Invoice',
+    'opacity-0':
+        form.type !==
+        'Merchandise Charge Invoice',
+}"></div>
                                         </div>
                                         <span class="text-sm font-medium z-10">Merchandise Charge Invoice</span>
                                     </div>
@@ -287,20 +296,19 @@ w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
                                             }"></div>
                                         <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
                                             :class="{
-                                                'border-[var(--color-border)]': 
+                                                'border-[var(--color-border)]':
                                                     form.type ===
                                                     'Merchandise Transfer Out',
                                             }">
                                             <div class="absolute inset-0 m-auto 
-w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
-                                                :class="{
-                                                    'opacity-100':
-                                                        form.type ===
-                                                        'Merchandise Transfer Out',
-                                                    'opacity-0':
-                                                        form.type !==
-                                                        'Merchandise Transfer Out',
-                                                }"></div>
+w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity" :class="{
+    'opacity-100':
+        form.type ===
+        'Merchandise Transfer Out',
+    'opacity-0':
+        form.type !==
+        'Merchandise Transfer Out',
+}"></div>
                                         </div>
                                         <span class="text-sm font-medium z-10">Merchandise Transfer Out</span>
                                     </div>
@@ -318,20 +326,19 @@ w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
                                             }"></div>
                                         <div class="relative w-5 h-5 mr-2 rounded-full border-2 border-[var(--color-bg-avatar)] transition-colors z-10 group-hover:border-[var(--color-border)]"
                                             :class="{
-                                                'border-[var(--color-border)]': 
+                                                'border-[var(--color-border)]':
                                                     form.type ===
                                                     'Sales Charge Invoice',
                                             }">
                                             <div class="absolute inset-0 m-auto 
-w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
-                                                :class="{
-                                                    'opacity-100':
-                                                        form.type ===
-                                                        'Sales Charge Invoice',
-                                                    'opacity-0':
-                                                        form.type !==
-                                                        'Sales Charge Invoice',
-                                                }"></div>
+w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity" :class="{
+    'opacity-100':
+        form.type ===
+        'Sales Charge Invoice',
+    'opacity-0':
+        form.type !==
+        'Sales Charge Invoice',
+}"></div>
                                         </div>
                                         <span class="text-sm font-medium z-10">Sales Charge Invoice</span>
                                     </div>
@@ -438,136 +445,136 @@ w-2.5 h-2.5 rounded-full bg-[var(--color-border)] transition-opacity"
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
-import { route } from "../../../../vendor/tightenco/ziggy/src/js";
-import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm, usePage } from "@inertiajs/vue3";
-import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
-import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
-import PdfPreviewModal from "../PdfPreviewModal.vue";
-import CustomerListModal from "../TransactionModals/CustomerListModal.vue";
-import DatePicker from "../../Pages/Components/DatePicker.vue";
-import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
+    import { ref, watch } from "vue";
+    import { route } from "../../../../vendor/tightenco/ziggy/src/js";
+    import TextInput from "../../Pages/Components/TextInput.vue";
+    import { useForm, usePage } from "@inertiajs/vue3";
+    import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
+    import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
+    import PdfPreviewModal from "../PdfPreviewModal.vue";
+    import CustomerListModal from "../TransactionModals/CustomerListModal.vue";
+    import DatePicker from "../../Pages/Components/DatePicker.vue";
+    import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 
-const props = defineProps({
-    show: Boolean,
-    type: String,
-});
-
-const page = usePage();
-
-const form = useForm({
-    customer_type: "All Customer",
-    customer_code: null,
-    customer_name: null,
-    start_date: null,
-    end_date: null,
-    type: "Sales Invoice",
-    statement_date: null,
-    processtype: null,
-    soatype: null,
-    file_type: "PDF",
-});
-
-const emit = defineEmits(["close", "closeSuccess"]);
-
-const closeModal = () => {
-    emit("close");
-};
-
-//////// CUSTOMER CODE DROPDOWN ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-const showCustomerModal = ref(false);
-function onCustomerClick() {
-    showCustomerModal.value = true;
-}
-const handleSelectedCustomer = (selectedData) => {
-    form.customer_code = selectedData.cus_code;
-    form.customer_name = selectedData.cus_name;
-    form.price_group = selectedData.price_group;
-
-    showCustomerModal.value = false;
-};
-
-///////////// WATCH //////////////////////////////////////////////////////////////////////////////////////////////////////////
-watch(
-    () => form.customer_type,
-    async (newVal, oldVal) => {
-        if (newVal !== oldVal) {
-            form.customer_code = "";
-            form.customer_name = "";
-        }
-    }
-);
-
-//////////////////////////////////////// SHOW TOAST /////////////////////////////////////////////////////////////////////////////////////////
-const showToast = ref(false);
-const toastMessage = ref("");
-let toastTimeout = null; // to keep track of the timeout
-
-const showWarningToast = (message) => {
-    toastMessage.value = message;
-    showToast.value = false; // Hide first to trigger reactivity if the same toast shows again
-    if (toastTimeout) clearTimeout(toastTimeout); // Clear any previous timeout
-
-    // Trigger reactivity again on next tick
-    setTimeout(() => {
-        showToast.value = true;
-    }, 0);
-
-    toastTimeout = setTimeout(() => {
-        showToast.value = false;
-        toastTimeout = null;
-    }, 3000);
-};
-
-////////////  //////////////////////////////////////////////////////////////////////////////////////////////////////////
-const showPdfModal = ref(false);
-const pdfFormData = ref(null);
-const apiRoute = ref(null);
-const previewInvoice = async () => {
-    try {
-        form.processtype = "axios";
-
-        apiRoute.value = "statementOfAccount";
-        pdfFormData.value = form;
-        showPdfModal.value = true;
-    } catch (error) {
-        console.error("Error previewing pdc:", error);
-    }
-};
-
-const pdfPrintSuccess = () => {
-    showPdfModal.value = false;
-    emit("close");
-};
-
-const showDialog = ref(false);
-const handleConfirm = async (confirmed) => {
-    showDialog.value = false;
-    if (confirmed) {
-        previewInvoice();
-    }
-};
-/////////// SUBMIT ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-const submit = () => {
-    form.soatype = props.type === "SOA" ? "SOA" : "DFC";
-    Object.keys(form.errors).forEach((key) => {
-        form.errors[key] = "";
+    const props = defineProps({
+        show: Boolean,
+        type: String,
     });
-    form.post(route("statementOfAccount", { tenant: page.props.tenant }), {
-        onSuccess: () => {
-            showDialog.value = true;
-        },
-        onError: (error) => {
-            // handleFormErrors(errors);
-            // console.log(error);
-            if (Object.keys(error).length === 1) {
-                const firstError = Object.values(error)[0];
-                showWarningToast(firstError);
-            } else if (Object.keys(error).length !== 1) {
-                showWarningToast("Please Fill Up Necessary Fields");
+
+    const page = usePage();
+
+    const form = useForm({
+        customer_type: "All Customer",
+        customer_code: null,
+        customer_name: null,
+        start_date: null,
+        end_date: null,
+        type: "Sales Invoice",
+        statement_date: null,
+        processtype: null,
+        soatype: null,
+        file_type: "PDF",
+    });
+
+    const emit = defineEmits(["close", "closeSuccess"]);
+
+    const closeModal = () => {
+        emit("close");
+    };
+
+    //////// CUSTOMER CODE DROPDOWN ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    const showCustomerModal = ref(false);
+    function onCustomerClick() {
+        showCustomerModal.value = true;
+    }
+    const handleSelectedCustomer = (selectedData) => {
+        form.customer_code = selectedData.cus_code;
+        form.customer_name = selectedData.cus_name;
+        form.price_group = selectedData.price_group;
+
+        showCustomerModal.value = false;
+    };
+
+    ///////////// WATCH //////////////////////////////////////////////////////////////////////////////////////////////////////////
+    watch(
+        () => form.customer_type,
+        async (newVal, oldVal) => {
+            if (newVal !== oldVal) {
+                form.customer_code = "";
+                form.customer_name = "";
             }
-        },
-    });
-};
+        }
+    );
+
+    //////////////////////////////////////// SHOW TOAST /////////////////////////////////////////////////////////////////////////////////////////
+    const showToast = ref(false);
+    const toastMessage = ref("");
+    let toastTimeout = null; // to keep track of the timeout
+
+    const showWarningToast = (message) => {
+        toastMessage.value = message;
+        showToast.value = false; // Hide first to trigger reactivity if the same toast shows again
+        if (toastTimeout) clearTimeout(toastTimeout); // Clear any previous timeout
+
+        // Trigger reactivity again on next tick
+        setTimeout(() => {
+            showToast.value = true;
+        }, 0);
+
+        toastTimeout = setTimeout(() => {
+            showToast.value = false;
+            toastTimeout = null;
+        }, 3000);
+    };
+
+    ////////////  //////////////////////////////////////////////////////////////////////////////////////////////////////////
+    const showPdfModal = ref(false);
+    const pdfFormData = ref(null);
+    const apiRoute = ref(null);
+    const previewInvoice = async () => {
+        try {
+            form.processtype = "axios";
+
+            apiRoute.value = "statementOfAccount";
+            pdfFormData.value = form;
+            showPdfModal.value = true;
+        } catch (error) {
+            console.error("Error previewing pdc:", error);
+        }
+    };
+
+    const pdfPrintSuccess = () => {
+        showPdfModal.value = false;
+        emit("close");
+    };
+
+    const showDialog = ref(false);
+    const handleConfirm = async (confirmed) => {
+        showDialog.value = false;
+        if (confirmed) {
+            previewInvoice();
+        }
+    };
+    /////////// SUBMIT ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    const submit = () => {
+        form.soatype = props.type === "SOA" ? "SOA" : "DFC";
+        Object.keys(form.errors).forEach((key) => {
+            form.errors[key] = "";
+        });
+        form.post(route("statementOfAccount", { tenant: page.props.tenant }), {
+            onSuccess: () => {
+                showDialog.value = true;
+            },
+            onError: (error) => {
+                // handleFormErrors(errors);
+                // console.log(error);
+                if (Object.keys(error).length === 1) {
+                    const firstError = Object.values(error)[0];
+                    showWarningToast(firstError);
+                } else if (Object.keys(error).length !== 1) {
+                    showWarningToast("Please Fill Up Necessary Fields");
+                }
+            },
+        });
+    };
 </script>

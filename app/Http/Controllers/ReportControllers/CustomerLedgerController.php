@@ -136,7 +136,7 @@ class CustomerLedgerController extends Controller
 
         $computeNetDebit = function ($record) use ($val) {
             if ($record->type === 'Payment') {
-                return $val($record->amount);
+                return $val($record->adjusted_amount ?? $record->amount);
             }
 
             $amount = $val($record->amount);
@@ -149,7 +149,7 @@ class CustomerLedgerController extends Controller
 
         $computeCredit = function ($record, $netDebit, $paidAmounts, $floatingAmounts) use ($val) {
             if ($record->type === 'Payment') {
-                return 0.0;
+                return $val($record->amount_paid);
             }
 
             $paidRow = $paidAmounts
@@ -269,7 +269,7 @@ class CustomerLedgerController extends Controller
 
         $invoiceNo = $validated['invoice_no'];
         $type = $validated['type'];
-        
+
         $transactions = [];
         $runningBalance = 0;
         $posAdjSum = 0;
@@ -290,7 +290,7 @@ class CustomerLedgerController extends Controller
                     'transaction_no' => $beginningBalance->beginningbalance_no,
                     'description' => 'Beginning Balance',
                     'type' => 'Initial',
-                    'debit' => $amount ,
+                    'debit' => $amount,
                     'credit' => 0,
                     'credit_floating' => 0,
                     'wht_floating' => 0,
@@ -299,18 +299,18 @@ class CustomerLedgerController extends Controller
                 ];
             }
         } else {
-             // Logic for Sales Invoice or other types can be added here if needed in future
-             // For now focusing on Beginning Balance as requested
-             $ledger = CustomerLedger::where('invoice_number', $invoiceNo)->where('type', $type)->first();
-             if($ledger) {
-                 // Calculate initial debit amount similar to index method
-                 $amount = ($ledger->amount ?? 0) 
-                         - ($ledger->shrinkage ?? 0) 
-                         + ($ledger->overage ?? 0) 
-                         - ($ledger->return ?? 0);
-                 
-                 $runningBalance = $amount;
-                 $transactions[] = [
+            // Logic for Sales Invoice or other types can be added here if needed in future
+            // For now focusing on Beginning Balance as requested
+            $ledger = CustomerLedger::where('invoice_number', $invoiceNo)->where('type', $type)->first();
+            if ($ledger) {
+                // Calculate initial debit amount similar to index method
+                $amount = ($ledger->amount ?? 0)
+                    - ($ledger->shrinkage ?? 0)
+                    + ($ledger->overage ?? 0)
+                    - ($ledger->return ?? 0);
+
+                $runningBalance = $amount;
+                $transactions[] = [
                     'date' => $ledger->date,
                     'transaction_no' => $ledger->invoice_number,
                     'description' => $ledger->type,
@@ -321,8 +321,8 @@ class CustomerLedgerController extends Controller
                     'wht_floating' => 0,
                     'floating' => 0,
                     'balance' => $runningBalance,
-                 ];
-             }
+                ];
+            }
         }
 
         // 2. Get Adjustments
@@ -333,7 +333,7 @@ class CustomerLedgerController extends Controller
             $applyTo = 'Other Income';
         }
 
-            $adjustments = Adjustment::where('invoice_no', $invoiceNo)
+        $adjustments = Adjustment::where('invoice_no', $invoiceNo)
             ->where('apply_to', $applyTo)
             ->orderBy('receipt_date', 'asc')
             ->orderBy('created_at', 'asc')
@@ -425,7 +425,7 @@ class CustomerLedgerController extends Controller
                 'balance' => $runningBalance,
             ];
         }
-        
+
         // Fetch the matching ledger row for contextual fields (overage/shrinkage/return/wht)
         $ledgerRowQuery = CustomerLedger::where('invoice_number', $invoiceNo);
         if (in_array($type, ['BG', 'Beginning Balance'], true)) {
@@ -437,7 +437,7 @@ class CustomerLedgerController extends Controller
         $whtAmt = \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount')
             ? ($ledgerRow?->wht_amount ?? 0.00)
             : 0.00;
-        
+
         // Sort transactions by date if needed, but they are usually added in chronological order of processing logic
         // If strict date sorting is needed, we can collect all and sort.
 

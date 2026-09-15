@@ -49,13 +49,13 @@ class GenerateTextFile
         $codes = Customer::query()
             ->whereRaw($this->normalizedSql('cus_name') . " LIKE ?", ['%walkin%'])
             ->pluck('cus_code')
-            ->filter(fn ($code) => trim((string) $code) !== '')
+            ->filter(fn($code) => trim((string) $code) !== '')
             ->values()
             ->all();
 
         $codes[] = 'TAG-00972';
 
-        $this->walkInCustomerCodes = array_values(array_unique(array_filter($codes, fn ($code) => trim((string) $code) !== '')));
+        $this->walkInCustomerCodes = array_values(array_unique(array_filter($codes, fn($code) => trim((string) $code) !== '')));
 
         return $this->walkInCustomerCodes;
     }
@@ -78,7 +78,7 @@ class GenerateTextFile
         // Initialize TenantConfigService
         $user = User::find($this->userId);
         $appName = $user && $user->appSetting ? $user->appSetting->app_name : config('app.name');
-        
+
         // If appSettingId is provided, override the appName
         if ($this->appSettingId) {
             $appSetting = \App\Models\AppSetting::find($this->appSettingId);
@@ -154,7 +154,7 @@ class GenerateTextFile
             $accCodes = AccCode::all()->keyBy('gl_account_navcode');
             $bankNames = Payment::all()->keyBy('document_no');
             $banks = CashInBank::all()->keyBy('bank_name');
-            $itemsList = Item::all()->keyBy(fn ($item) => $this->normalizeItemNameKey($item->name));
+            $itemsList = Item::all()->keyBy(fn($item) => $this->normalizeItemNameKey($item->name));
             $locCodeByCustomer = $this->getLocCodeByCustomer($customers);
 
             $auto_increment_cash = 0;
@@ -371,7 +371,7 @@ class GenerateTextFile
                 ->where('exported', false)
                 ->orderBy('receipt_date');
 
-             /* Commented out to prevent local file creation - direct network save only */
+            /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
 
             $baseName = $this->tenantConfig->getTextFileBaseName($this->validatedData['export_type']);
@@ -526,7 +526,7 @@ class GenerateTextFile
             $this->excludeWalkInFromQuery($query);
 
 
-             /* Commented out to prevent local file creation - direct network save only */
+            /* Commented out to prevent local file creation - direct network save only */
             Storage::disk('local')->makeDirectory('exports');
 
             $baseName = $this->tenantConfig->getTextFileBaseName($this->validatedData['export_type']);
@@ -538,8 +538,8 @@ class GenerateTextFile
             $cashInBanks = CashInBank::all()->keyBy('bank_name');
             $customers = Customer::all()->keyBy('cus_code');
             $customersByNavCode = $customers
-                ->filter(fn ($customer) => trim((string) ($customer->nav_code ?? '')) !== '')
-                ->keyBy(fn ($customer) => trim((string) $customer->nav_code));
+                ->filter(fn($customer) => trim((string) ($customer->nav_code ?? '')) !== '')
+                ->keyBy(fn($customer) => trim((string) $customer->nav_code));
             $accCodes = AccCode::all()->keyBy('gl_account_navcode');
             $locCodeByCustomer = $this->getLocCodeByCustomer($customers);
             $hasWhtExportTracking = Schema::connection('tenant')->hasColumn('payment_details', 'wht_exported_at');
@@ -594,7 +594,7 @@ class GenerateTextFile
                         $bankCode = $cashInBanks->get($payment->cash_in_bank)?->bank_code ?? '';
                         $bankName = $cashInBanks->get($payment->cash_in_bank)?->bank_name ?? '';
 
-                        $paymentCustomerCode = trim((string) ($payment->customer_code ?? ''));
+                        $paymentCustomerCode = trim((string) ($payment->cust_code ?? $payment->customer_code));
                         if ($paymentCustomerCode === '') {
                             $paymentCustomerCode = trim((string) ($payment->paymentDetails->first()?->customer_code ?? ''));
                         }
@@ -849,12 +849,12 @@ class GenerateTextFile
         $formattedDate = $this->formatDate($invoice->receipt_date);
         $amountValue = (float) $invoice->total_amount + (float) ($invoice->added_vat ?? 0);
         $docCode = $this->getOtherIncomeDocumentCode($invoice);
-        
+
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
         $journalCode = $this->tenantConfig->getJournalCode();
-        
+
         $headerLine = [
             'SALES',
             'OCASHSALES',
@@ -999,7 +999,7 @@ class GenerateTextFile
     protected function generateCreditAdjustmentLine($adjustment, &$auto_increment, $adjustmentAccCode, $customerCusPosting, $locCode = null)
     {
         $formattedDate = $this->formatDate($adjustment->receipt_date);
-        
+
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
@@ -1089,7 +1089,7 @@ class GenerateTextFile
     protected function generateDebitAdjustmentLine($adjustment, &$auto_increment, $adjustmentAccCode, $customerCusPosting, $locCode = null)
     {
         $formattedDate = $this->formatDate($adjustment->receipt_date);
-        
+
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
@@ -1179,12 +1179,12 @@ class GenerateTextFile
     protected function generateCashPaymentLine(&$auto_increment, $bankCode, $detail, $bankName, $customerNavCode, $customerCusPosting, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
-        
+
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
-        
+
         $grossAmountValue = (float) ($detail->amount_paid ?? 0);
         $whtAmountValue = (float) ($detail->wht_amount ?? 0);
         $overpaymentAmountValue = (float) ($detail->overpayment_amount ?? 0);
@@ -1201,7 +1201,7 @@ class GenerateTextFile
         );
         $grossAmount = $this->fmt($customerGrossAmountValue);
         $grossAmountNegative = $this->fmt($customerGrossAmountValue * -1);
-        
+
         $headerLine = [
             'CASH RECEI',
             $prefix1 . 'COLL',
@@ -1361,7 +1361,7 @@ class GenerateTextFile
     protected function generateJournalVoucherLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
-        
+
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
@@ -1382,6 +1382,7 @@ class GenerateTextFile
         } elseif ($custCode !== '') {
             $code = $custCode;
             $codeDetails = trim((string) $custCodeHolderName) !== '' ? $custCodeHolderName : $bankName;
+            $headerCustPosting = Customer::where('cus_code', $custCode)->value('cus_posting') ?? '';
         } else {
             $accountType = 'Bank Account';
         }
@@ -1396,7 +1397,7 @@ class GenerateTextFile
 
         $headerAmount = $this->fmt($headerAmountValue);
         $headerAmountNegative = $this->fmt($headerAmountValue * -1);
-        
+
         $headerLine = [
             'CASH RECEI',
             $prefix1 . 'COLL',
@@ -1415,7 +1416,7 @@ class GenerateTextFile
             $headerAmount,
             '1',
             $code,
-            $customerCusPosting,
+            $headerCustPosting,
             $companyCode,
             $deptCode,
             'CASHRECJNL',
@@ -1565,7 +1566,7 @@ class GenerateTextFile
     protected function generateOnlineDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
-        
+
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
@@ -1588,6 +1589,7 @@ class GenerateTextFile
             $code = $custCode;
             $codeDetails = trim((string) $custCodeHolderName) !== '' ? $custCodeHolderName : $bankName;
             $transfer = '';
+            $headerCustPosting = Customer::where('cus_code', $custCode)->value('cus_posting') ?? '';
         } else {
             $accountType = 'Bank Account';
         }
@@ -1629,7 +1631,7 @@ class GenerateTextFile
             $headerAmount,
             '1',
             $code,
-            $customerCusPosting,
+            $headerCustPosting,
             $companyCode,
             $deptCode,
             'CASHRECJNL',
@@ -1771,7 +1773,7 @@ class GenerateTextFile
     protected function generateCheckDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
-        
+
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
@@ -1791,6 +1793,7 @@ class GenerateTextFile
         } elseif ($custCode !== '') {
             $code = $custCode;
             $codeDetails = trim((string) $custCodeHolderName) !== '' ? $custCodeHolderName : $bankName;
+            $headerCustPosting = Customer::where('cus_code', $custCode)->value('cus_posting') ?? '';
         } else {
             $accountType = 'Bank Account';
         }
@@ -1832,7 +1835,7 @@ class GenerateTextFile
             $headerAmount,
             '1',
             $code,
-            $customerCusPosting,
+            $headerCustPosting,
             $companyCode,
             $deptCode,
             'CASHRECJNL',
@@ -1973,12 +1976,12 @@ class GenerateTextFile
     {
         $formattedDate = $this->formatDate($dateOverride ?? $detail->payment_receipt_date);
         $amountValue = $amountOverride ?? (float) ($detail->amount_paid ?? 0);
-        
+
         $prefix = $this->tenantConfig->getPrefix($locCode);
         $prefix1 = $this->tenantConfig->getPrefix1();
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
-        
+
         $headerLine = [
             'CASH RECEI',
             $prefix1 . 'COLL',
@@ -2348,5 +2351,4 @@ class GenerateTextFile
             return $dateString; // fallback to original format if parsing fails
         }
     }
-
 }
