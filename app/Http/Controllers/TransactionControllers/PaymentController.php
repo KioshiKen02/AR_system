@@ -478,7 +478,7 @@ class PaymentController extends Controller
                 $pyNo = DB::transaction(function () use ($validated, $request, $cl_type, $invoiceNumberService, $paymentNumberService) {
                     $pynum = $this->processPayment($validated, $request, 'Paid', $cl_type, $paymentNumberService);
                     if (!empty($validated['cust_code'] ?? null)) {
-                        $this->createArRecords($validated, $request, $invoiceNumberService);
+                        $this->createArRecords($validated, $request, $invoiceNumberService, $pynum);
                     }
                     return $pynum;
                 });
@@ -489,7 +489,7 @@ class PaymentController extends Controller
                     $pyNo = DB::transaction(function () use ($validated, $request, $cl_type, $invoiceNumberService, $paymentNumberService) {
                         $pynum = $this->processPayment($validated, $request, 'Paid', $cl_type, $paymentNumberService);
                         if (!empty($validated['cust_code'] ?? null)) {
-                            $this->createArRecords($validated, $request, $invoiceNumberService);
+                            $this->createArRecords($validated, $request, $invoiceNumberService, $pynum);
                         }
                         return $pynum;
                     });
@@ -502,7 +502,7 @@ class PaymentController extends Controller
                 if ($checkConfirmed) {
                     $pyNo = DB::transaction(function () use ($validated, $request, $invoiceNumberService, $paymentNumberService) {
                         $pynum = $this->createDirectPaymentRecords($validated, $request, $paymentNumberService);
-                        $this->createArRecords($validated, $request, $invoiceNumberService);
+                        $this->createArRecords($validated, $request, $invoiceNumberService, $pynum);
                         return $pynum;
                     });
                 } else {
@@ -1512,11 +1512,11 @@ class PaymentController extends Controller
         });
     }
 
-    private function createArRecords($validated, $request, $invoiceNumberService)
+    private function createArRecords($validated, $request, $invoiceNumberService, $paymentNo = null)
     {
-        DB::transaction(function () use ($validated, $request, $invoiceNumberService) {
+        DB::transaction(function () use ($validated, $request, $invoiceNumberService, $paymentNo) {
             $customer = CustomerService::getCustomerByCode($validated['cust_code']);
-            $invoiceNumber = $invoiceNumberService->generate(true);
+            $invoiceNumber = $paymentNo ?? $invoiceNumberService->generate(true);
 
             $ledgerData = [
                 'invoice_number' => $invoiceNumber,
