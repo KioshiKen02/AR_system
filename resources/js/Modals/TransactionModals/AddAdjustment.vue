@@ -85,6 +85,7 @@
                         <DropdownInput label="Apply To" v-model="form.apply_to"
                             :options="[
                                 'Sales Invoice',
+                                'MPD Sales Invoice',
                                 'Other Income',
                                 'Merchandise Charge Invoice',
                                 'Merchandise Transfer Out',

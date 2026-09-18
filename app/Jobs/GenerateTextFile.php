@@ -666,7 +666,6 @@ class GenerateTextFile
                             }
 
                             $lineCustomerExportCode = $lineCustomerCusCode;
-                            $docCode = $this->getPaymentDocumentCodeFromPaymentType($detail->type ?? $payment->type ?? '');
                             $normalizeReference = static function ($value): ?string {
                                 $v = trim((string) ($value ?? ''));
                                 if ($v === '' || strcasecmp($v, 'N/A') === 0) {
@@ -678,6 +677,10 @@ class GenerateTextFile
                                 ?? $normalizeReference($payment->reference_no)
                                 ?? $normalizeReference($detail->document_no)
                                 ?? '';
+                            $docCode = $this->resolveDocumentCode(
+                                $detail->type ?? $payment->type ?? '',
+                                $paymentReferenceNo
+                            );
                             if ($payment->payment_type === '5A - Cash') {
                                 $lines[] = $this->generateCashPaymentLine(
                                     $auto_increment,
@@ -1004,14 +1007,7 @@ class GenerateTextFile
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
         $journalCode = $this->tenantConfig->getJournalCode();
-        $applyToCode = match ($adjustment->apply_to) {
-            'Sales Invoice' => 'SI',
-            'Merchandise Transfer Out' => 'MTO',
-            'Merchandise Charge Invoice' => 'MCI',
-            'Sales Charge Invoice' => 'SCI',
-            'Beginning Balance' => 'BG',
-            default => 'CI',
-        };
+        $applyToCode = $this->resolveDocumentCode($adjustment->apply_to, $adjustment->invoice_no, 'CI');
 
         $headerLine = [
             'SALES',
@@ -1094,14 +1090,7 @@ class GenerateTextFile
         $companyCode = $this->tenantConfig->getCompanyCode();
         $deptCode = $this->tenantConfig->getDeptCode($locCode);
         $journalCode = $this->tenantConfig->getJournalCode();
-        $applyToCode = match ($adjustment->apply_to) {
-            'Sales Invoice' => 'SI',
-            'Merchandise Transfer Out' => 'MTO',
-            'Merchandise Charge Invoice' => 'MCI',
-            'Sales Charge Invoice' => 'SCI',
-            'Beginning Balance' => 'BG',
-            default => 'CI',
-        };
+        $applyToCode = $this->resolveDocumentCode($adjustment->apply_to, $adjustment->invoice_no, 'CI');
 
         $headerLine = [
             'SALES',
@@ -2237,8 +2226,9 @@ class GenerateTextFile
             'charge invoice', 'charges invoice', 'chargeinvoice', 'ci' => 'CI',
             'merchandise transfer out', 'merchandisetransferout', 'mto' => 'MTO',
             'merchandise charge invoice', 'merchandisechargeinvoice', 'mci' => 'MCI',
-            'sales charge invoice', 'saleschargeinvoice', 'sci' => 'SCI',
+            'sales charge invoice', 'saleschargeinvoice', 'sci' => 'CI',
             'bg', 'beginning balance', 'beginningbalance' => 'BG',
+            'payment', 'Payments', 'payments' => 'PY',
             default => 'CI',
         };
     }
@@ -2256,6 +2246,45 @@ class GenerateTextFile
             'sales charge invoice', 'sci' => 'SCI',
             default => 'CI',
         };
+    }
+
+    protected function resolveDocumentCode($type, $referenceNo = null, string $default = 'CI'): string
+    {
+        $key = strtolower(trim((string) $type));
+
+        $base = match ($key) {
+            'sales invoice', 'salesinvoice', 'si' => 'SI',
+            'bg', 'beginning balance', 'beginningbalance' => 'BG',
+            'charge invoice', 'charges invoice', 'chargeinvoice', 'ci' => 'CI',
+            'merchandise transfer out', 'merchandisetransferout', 'mto' => 'MTO',
+            'merchandise charge invoice', 'merchandisechargeinvoice', 'mci' => 'MCI',
+            'sales charge invoice', 'saleschargeinvoice', 'sci' => 'CI',
+            'payment', 'Payments', 'payments' => 'PY',
+            default => $default,
+        };
+
+        if ($base !== 'MTO' || $referenceNo === null || trim((string) $referenceNo) === '') {
+            return $base;
+        }
+
+        $ref = trim((string) $referenceNo);
+        $ledger = DB::table('customer_ledger')
+            ->select('trade_type', 'classification')
+            ->where('invoice_number', $ref)
+            ->first();
+
+        if ($ledger === null) {
+            return '';
+        }
+
+        $tradeType = strtolower(trim((string) ($ledger->trade_type ?? '')));
+        $classification = strtolower(trim((string) ($ledger->classification ?? '')));
+
+        if ($tradeType === 'non-trade' && $classification !== 'production') {
+            return 'STRAN';
+        }
+
+        return 'MTO';
     }
 
     protected function getLocCodeByCustomer($customers): array

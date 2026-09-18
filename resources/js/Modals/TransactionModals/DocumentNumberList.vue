@@ -107,6 +107,7 @@
                                 <DropdownInput data-testid="type-filter" v-model="selectedTypeFilter" :options="[
                                     'All Types',
                                     'Sales Invoice',
+                                    'MPD Sales Invoice',
                                     'Charge Invoice',
                                     'Merchandise Transfer Out',
                                     'Merchandise Charge Invoice',
@@ -656,6 +657,7 @@ watch(
                     wht_error: "",
                     total_amount_less_wht: 0.00,
                     trade_type: invoice.trade_type,
+                    classification: invoice.classification,
                     pdc_floating_amount: invoice.pdc_floating_amount,
                     has_pdc_floating_payments:
                         invoice.has_pdc_floating_payments,
@@ -1478,12 +1480,28 @@ watch(
             // Apply type filter
             if (typeFilter !== "All Types") {
                 filtered = filtered.filter(
-                    (document) =>
-                        typeFilter === "BG"
-                            ? ["BG", "Beginning Balance"].includes(
-                                  document.type
-                              )
-                            : document.type === typeFilter
+                    (document) => {
+                        if (typeFilter === "BG") {
+                            return ["BG", "Beginning Balance"].includes(document.type);
+                        }
+                        if (typeFilter === "MPD Sales Invoice") {
+                            if (document.type !== "Sales Invoice") return false;
+                            const c = (document.classification ?? "")
+                                .toString()
+                                .trim()
+                                .toLowerCase();
+                            return c !== "production";
+                        }
+                        if (typeFilter === "Sales Invoice") {
+                            if (document.type !== "Sales Invoice") return false;
+                            const c = (document.classification ?? "")
+                                .toString()
+                                .trim()
+                                .toLowerCase();
+                            return c === "" || c === "production";
+                        }
+                        return document.type === typeFilter;
+                    }
                 );
             }
 

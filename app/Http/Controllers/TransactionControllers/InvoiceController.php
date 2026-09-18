@@ -416,10 +416,11 @@ class InvoiceController extends Controller
         $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
             && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
 
-        if (in_array($request->input('apply_to'), ['Sales Invoice', 'Other Income', 'Merchandise Charge Invoice', 'Merchandise Transfer Out', 'Sales Charge Invoice'])) {
+        if (in_array($request->input('apply_to'), ['Sales Invoice', 'Other Income', 'Merchandise Charge Invoice', 'Merchandise Transfer Out', 'Sales Charge Invoice', 'MPD Sales Invoice'])) {
             $applyTo = $request->input('apply_to');
             $ledgerType = match ($applyTo) {
                 'Sales Invoice' => 'Sales Invoice',
+                'MPD Sales Invoice' => 'Sales Invoice',
                 'Other Income' => 'Charge Invoice',
                 'Merchandise Charge Invoice' => 'Merchandise Charge Invoice',
                 'Merchandise Transfer Out' => 'Merchandise Transfer Out',
@@ -427,10 +428,23 @@ class InvoiceController extends Controller
                 default => 'Charge Invoice',
             };
 
-            $ledgers = CustomerLedger::where('customer_code', $customerCode)
+            $ledgersQuery = CustomerLedger::where('customer_code', $customerCode)
                 ->where('type', $ledgerType)
-                ->where('amount', '>', 0)
-                ->get();
+                ->where('amount', '>', 0);
+
+            if ($applyTo === 'MPD Sales Invoice') {
+                $ledgersQuery->where(function ($q) {
+                    $q->whereNull('classification')
+                        ->orWhere(DB::raw('LOWER(TRIM(classification))'), '!=', 'production');
+                });
+            } elseif ($applyTo === 'Sales Invoice') {
+                $ledgersQuery->where(function ($q) {
+                    $q->whereNull('classification')
+                        ->orWhere(DB::raw('LOWER(TRIM(classification))'), '=', 'production');
+                });
+            }
+
+            $ledgers = $ledgersQuery->get();
 
             $invoiceNumbers = $ledgers->pluck('invoice_number')->unique()->values();
             $paidAmounts = PaymentDetails::where('customer_code', $customerCode)
@@ -937,7 +951,7 @@ class InvoiceController extends Controller
         }
 
         // Get all ledger entries for the customer
-        $columns = ['invoice_number', 'date', 'type', 'amount', 'amount_paid', 'running_balance', 'trade_type'];
+        $columns = ['invoice_number', 'date', 'type', 'amount', 'amount_paid', 'running_balance', 'trade_type', 'classification'];
         if ($hasLedgerWhtAmount) {
             $columns[] = 'wht_amount';
         }
@@ -1021,6 +1035,7 @@ class InvoiceController extends Controller
                 'applied_wht_amount' => $hasLedgerWhtAmount ? (float) ($ledger->wht_amount ?? 0) : 0.0,
                 'running_balance' => $ledger->running_balance,
                 'trade_type' => $ledger->trade_type ?? null,
+                'classification' => $ledger->classification ?? null,
                 'pdc_floating_amount' => $pdcFloatingAmount,
                 'has_pdc_floating_payments' => $pdcFloatingAmount > 0,
                 'dc_floating_amount' => $dcFloatingAmount,

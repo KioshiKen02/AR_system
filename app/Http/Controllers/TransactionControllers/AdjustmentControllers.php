@@ -363,7 +363,7 @@ class AdjustmentControllers extends Controller
                 'customer_code' => ['required', 'string'],
                 'name' => ['required', 'string'],
                 'type' => ['required', 'string'],
-                'apply_to' => ['required', 'in:Sales Invoice,Other Income,Merchandise Charge Invoice,Merchandise Transfer Out,Sales Charge Invoice,Beginning Balance'],
+                'apply_to' => ['required', 'in:Sales Invoice,MPD Sales Invoice,Other Income,Merchandise Charge Invoice,Merchandise Transfer Out,Sales Charge Invoice,Beginning Balance'],
                 'invoice_no' => ['required', 'string'],
                 'balance' => ['required', 'numeric'],
                 'adjustment_reason' => ['required', 'string'],

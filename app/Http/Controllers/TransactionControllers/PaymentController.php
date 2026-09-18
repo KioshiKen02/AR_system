@@ -475,10 +475,11 @@ class PaymentController extends Controller
                 break;
 
             case '5B - Journal Voucher':
-                $pyNo = DB::transaction(function () use ($validated, $request, $cl_type, $invoiceNumberService, $paymentNumberService) {
+                $pyNo = DB::transaction(function () use ($validated, $request, $cl_type, $invoiceNumberService, $paymentNumberService, $totalAmountLessWht, $whtAmount) {
                     $pynum = $this->processPayment($validated, $request, 'Paid', $cl_type, $paymentNumberService);
                     if (!empty($validated['cust_code'] ?? null)) {
-                        $this->createArRecords($validated, $request, $invoiceNumberService, $pynum);
+                        $transferAmount = $whtAmount > 0 ? $totalAmountLessWht : null;
+                        $this->createArRecords($validated, $request, $invoiceNumberService, $pynum, $transferAmount);
                     }
                     return $pynum;
                 });
@@ -486,10 +487,11 @@ class PaymentController extends Controller
 
             case '5C - Online Deposit':
                 if ($odConfirmed) {
-                    $pyNo = DB::transaction(function () use ($validated, $request, $cl_type, $invoiceNumberService, $paymentNumberService) {
+                    $pyNo = DB::transaction(function () use ($validated, $request, $cl_type, $invoiceNumberService, $paymentNumberService, $totalAmountLessWht, $whtAmount) {
                         $pynum = $this->processPayment($validated, $request, 'Paid', $cl_type, $paymentNumberService);
                         if (!empty($validated['cust_code'] ?? null)) {
-                            $this->createArRecords($validated, $request, $invoiceNumberService, $pynum);
+                            $transferAmount = $whtAmount > 0 ? $totalAmountLessWht : null;
+                            $this->createArRecords($validated, $request, $invoiceNumberService, $pynum, $transferAmount);
                         }
                         return $pynum;
                     });
@@ -500,9 +502,10 @@ class PaymentController extends Controller
 
             case '5D - Check':
                 if ($checkConfirmed) {
-                    $pyNo = DB::transaction(function () use ($validated, $request, $invoiceNumberService, $paymentNumberService) {
+                    $pyNo = DB::transaction(function () use ($validated, $request, $invoiceNumberService, $paymentNumberService, $totalAmountLessWht, $whtAmount) {
                         $pynum = $this->createDirectPaymentRecords($validated, $request, $paymentNumberService);
-                        $this->createArRecords($validated, $request, $invoiceNumberService, $pynum);
+                        $transferAmount = $whtAmount > 0 ? $totalAmountLessWht : null;
+                        $this->createArRecords($validated, $request, $invoiceNumberService, $pynum, $transferAmount);
                         return $pynum;
                     });
                 } else {
@@ -1512,11 +1515,31 @@ class PaymentController extends Controller
         });
     }
 
-    private function createArRecords($validated, $request, $invoiceNumberService, $paymentNo = null)
+    private function createArRecords($validated, $request, $invoiceNumberService, $paymentNo = null, $transferAmount = null)
     {
-        DB::transaction(function () use ($validated, $request, $invoiceNumberService, $paymentNo) {
+        DB::transaction(function () use ($validated, $request, $invoiceNumberService, $paymentNo, $transferAmount) {
             $customer = CustomerService::getCustomerByCode($validated['cust_code']);
             $invoiceNumber = $paymentNo ?? $invoiceNumberService->generate(true);
+
+            if ($transferAmount === null) {
+                $transferAmount = isset($validated['amount_paid'])
+                    ? (float) preg_replace('/[^0-9.]/', '', (string) $validated['amount_paid'])
+                    : (float) ($validated['net_total'] ?? 0.0);
+
+                $whtAmount = !empty($validated['wht_amount'])
+                    ? (float) preg_replace('/[^0-9.]/', '', (string) $validated['wht_amount'])
+                    : 0.0;
+
+                $totalLessWht = !empty($validated['total_amount_less_wht'])
+                    ? (float) preg_replace('/[^0-9.]/', '', (string) $validated['total_amount_less_wht'])
+                    : 0.0;
+
+                if ($whtAmount > 0 && $totalLessWht > 0) {
+                    $transferAmount = $totalLessWht;
+                } elseif ($whtAmount > 0) {
+                    $transferAmount = max($transferAmount - $whtAmount, 0.0);
+                }
+            }
 
             $ledgerData = [
                 'invoice_number' => $invoiceNumber,
@@ -1525,10 +1548,10 @@ class PaymentController extends Controller
                 'customer_code' => $validated['cust_code'],
                 'customer_name' => $customer->cus_name,
                 'currency' => "Php",
-                'amount' => $validated['amount_paid'],
+                'amount' => $transferAmount,
                 'adjusted_amount' => 0.00,
                 'amount_paid' => 0.00,
-                'running_balance' => $validated['amount_paid'],
+                'running_balance' => $transferAmount,
             ];
 
             if (Schema::connection('tenant')->hasColumn('customer_ledger', 'transfer_from')) {
