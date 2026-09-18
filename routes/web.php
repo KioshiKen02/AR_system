@@ -355,14 +355,48 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
 
         //Route for download export textfile
         Route::get('/download/exports/{filename}', function ($filename) {
-            $path = storage_path("app/private/exports/{$filename}");
-            if (!file_exists($path)) {
-                Log::error("Download failed. File not found: {$path}");
-                abort(404);
+            try {
+                $path = storage_path("app/private/exports/{$filename}");
+                if (!file_exists($path)) {
+                    $fallbackLocal = storage_path("app/exports/{$filename}");
+                    if (file_exists($fallbackLocal)) {
+                        $path = $fallbackLocal;
+                    } else {
+                        Log::error("Download failed. File not found: {$path}");
+                        return response()->json([
+                            'error' => 'File not found.',
+                            'filename' => $filename,
+                            'path_checked' => $path,
+                        ], 404);
+                    }
+                }
+
+                $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                $contentType = match ($ext) {
+                    'csv' => 'text/csv; charset=UTF-8',
+                    'json' => 'application/json; charset=UTF-8',
+                    'htm', 'html' => 'text/html; charset=UTF-8',
+                    'xml' => 'application/xml; charset=UTF-8',
+                    'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'pdf' => 'application/pdf',
+                    default => 'text/plain; charset=UTF-8',
+                };
+
+                return response()->download($path, $filename, [
+                    'Content-Type' => $contentType,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('Download export file failed.', [
+                    'filename' => $filename,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                return response()->json([
+                    'error' => 'Download failed. Please try again, or contact the server administrator.',
+                    'error_detail' => config('app.debug') ? $e->getMessage() : null,
+                ], 500);
             }
-            return response()->download($path, $filename, [
-                'Content-Type' => 'text/plain',
-            ]);
         })->name('exports.download');
 
         //messages

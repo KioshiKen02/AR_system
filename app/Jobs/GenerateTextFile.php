@@ -2131,7 +2131,35 @@ class GenerateTextFile
                 $locCode = $locCodeByCustomer[$customerCusCode] ?? null;
                 $bankName = $detail->cash_in_bank ?? '';
                 $bankCode = $cashInBanks->get($bankName)?->bank_code ?? '';
-                $docCode = $this->getPaymentDocumentCodeFromPaymentType($detail->type ?? '');
+
+                $normalizeReference = static function ($value): ?string {
+                    $v = $value;
+                    if (is_object($v)) {
+                        $v = (string) $v;
+                    }
+                    if (is_string($v)) {
+                        $v = trim($v);
+                        return $v !== '' ? $v : null;
+                    }
+                    if (is_numeric($v)) {
+                        return (string) $v;
+                    }
+                    return null;
+                };
+
+                $whtPaymentReferenceNo = $normalizeReference($detail->invoice_no)
+                    ?? $normalizeReference($detail->invoice_number)
+                    ?? $normalizeReference($detail->si_no)
+                    ?? $normalizeReference($detail->si_number)
+                    ?? $normalizeReference($detail->document_no)
+                    ?? $normalizeReference($detail->document_number)
+                    ?? $normalizeReference($detail->reference_no)
+                    ?? '';
+
+                $docCode = $this->resolveDocumentCode(
+                    $detail->type ?? '',
+                    $whtPaymentReferenceNo
+                );
 
                 $lines[] = $this->generateWHTLine(
                     $auto_increment,
@@ -2212,7 +2240,7 @@ class GenerateTextFile
         return match ($key) {
             'merchandise transfer out', 'mto' => 'MTO',
             'merchandise charge invoice', 'mci' => 'MCI',
-            'sales charge invoice', 'sci' => 'SCI',
+            'sales charge invoice', 'sci' => 'CI',
             default => 'CI',
         };
     }
@@ -2239,21 +2267,57 @@ class GenerateTextFile
 
         return match ($key) {
             'sales invoice', 'si' => 'SI',
+            'mpd sales invoice', 'mpdsalesinvoice' => 'SI',
             'beginning balance', 'beginningbalance', 'bg' => 'BG',
             'charge invoice', 'charges invoice', 'ci' => 'CI',
             'merchandise transfer out', 'mto' => 'MTO',
             'merchandise charge invoice', 'mci' => 'MCI',
-            'sales charge invoice', 'sci' => 'SCI',
+            'sales charge invoice', 'sci' => 'CI',
+            'payment', 'Payments', 'payments' => 'PY',
             default => 'CI',
         };
     }
 
     protected function resolveDocumentCode($type, $referenceNo = null, string $default = 'CI'): string
     {
-        $key = strtolower(trim((string) $type));
+        $hasRef = $referenceNo !== null && trim((string) $referenceNo) !== '';
+
+        $realType = $type;
+        $tradeType = null;
+        $classification = null;
+        $foundLedgerRow = false;
+        if ($hasRef) {
+            $ref = trim((string) $referenceNo);
+            try {
+                $ledger = DB::table('customer_ledger')
+                    ->select('type', 'trade_type', 'classification')
+                    ->where('invoice_number', $ref)
+                    ->first();
+
+                if ($ledger !== null) {
+                    $foundLedgerRow = true;
+                    $realType = $ledger->type ?? $type;
+                    $tradeType = $ledger->trade_type ?? null;
+                    $classification = $ledger->classification ?? null;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('resolveDocumentCode: customer_ledger lookup failed.', [
+                    'reference_no' => $ref,
+                    'passed_type' => $type,
+                    'error' => $e->getMessage(),
+                ]);
+                return '';
+            }
+            if (!$foundLedgerRow) {
+                return '';
+            }
+        }
+
+        $key = strtolower(trim((string) $realType));
 
         $base = match ($key) {
             'sales invoice', 'salesinvoice', 'si' => 'SI',
+            'mpd sales invoice', 'mpdsalesinvoice' => 'SI',
             'bg', 'beginning balance', 'beginningbalance' => 'BG',
             'charge invoice', 'charges invoice', 'chargeinvoice', 'ci' => 'CI',
             'merchandise transfer out', 'merchandisetransferout', 'mto' => 'MTO',
@@ -2263,24 +2327,14 @@ class GenerateTextFile
             default => $default,
         };
 
-        if ($base !== 'MTO' || $referenceNo === null || trim((string) $referenceNo) === '') {
+        if ($base !== 'MTO') {
             return $base;
         }
 
-        $ref = trim((string) $referenceNo);
-        $ledger = DB::table('customer_ledger')
-            ->select('trade_type', 'classification')
-            ->where('invoice_number', $ref)
-            ->first();
+        $tradeTypeStr = strtolower(trim((string) ($tradeType ?? '')));
+        $classificationStr = strtolower(trim((string) ($classification ?? '')));
 
-        if ($ledger === null) {
-            return '';
-        }
-
-        $tradeType = strtolower(trim((string) ($ledger->trade_type ?? '')));
-        $classification = strtolower(trim((string) ($ledger->classification ?? '')));
-
-        if ($tradeType === 'non-trade' && $classification !== 'production') {
+        if ($tradeTypeStr === 'non-trade' && $classificationStr !== 'production') {
             return 'STRAN';
         }
 

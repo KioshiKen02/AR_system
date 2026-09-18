@@ -414,8 +414,8 @@ class AdjustmentControllers extends Controller
             if ($cl_type === 'Beginning Balance') {
                 $formattedType = 'BG';
 
-                $ledger = CustomerLedger::where('invoice_number', $validated['invoice_no']) 
-                    ->where('type', $formattedType) 
+                $ledger = CustomerLedger::where('invoice_number', $validated['invoice_no'])
+                    ->where('type', $formattedType)
                     ->firstOrFail();
 
                 if ($isShrinkageReason && (float) ($ledger->shrinkage ?? 0) <= 0) {
@@ -557,20 +557,20 @@ class AdjustmentControllers extends Controller
 
             //DYNAMIC API LINK - Send API request for all adjustment types
             $userAppSetting = $request->user()->appSetting;
-            
+
             // We need a mapping between App Settings (DB config) and the Centralized Invoicing API URLs.
             // The switch case below hardcodes URLs based on app name. 
             // We should ideally store these URLs in the AppSetting model or derive them.
             // For now, we will try to use the user's app setting NAME to switch, 
             // effectively replacing config('app.name') with $userAppSetting->app_name.
-            
+
             $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
-            
+
             $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
             if ($baseUrl === null && $appName !== 'Ar System') {
                 throw new \Exception("Unknown app name: {$appName}");
             }
-            
+
             // Calculate the total of all adjustments for this invoice to send to the API
             $existingPositive = (float) Adjustment::where('invoice_no', $validated['invoice_no'])
                 ->where('apply_to', $validated['apply_to'])
@@ -580,7 +580,7 @@ class AdjustmentControllers extends Controller
                 ->where('apply_to', $validated['apply_to'])
                 ->where('type', 'Negative')
                 ->sum('amount');
-            
+
             $newPositive = $existingPositive;
             $newNegative = $existingNegative;
             if (strtolower($validated['type']) === 'positive') {
@@ -588,9 +588,9 @@ class AdjustmentControllers extends Controller
             } else {
                 $newNegative += $validated['amount'];
             }
-            
+
             $apiAdjustmentValue = $newPositive - $newNegative;
-            
+
             if ($baseUrl) {
                 $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
                 if (!filter_var($url, FILTER_VALIDATE_URL)) {
@@ -741,7 +741,7 @@ class AdjustmentControllers extends Controller
             ->where('apply_to', $applyTo)
             ->where('type', 'Negative')
             ->sum('amount');
-        
+
         $apiAdjustmentValue = $existingPositive - $existingNegative;
 
         $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
@@ -987,7 +987,7 @@ class AdjustmentControllers extends Controller
 
     public function getAdjustmentReasonSetup(Request $request)
     {
-        $apply_to = $request->input('apply_to');
+        $apply_to = (string) $request->input('apply_to');
 
         $reasons = AdjustmentReasonSetup::where('type', $apply_to)
             ->where('status', 'Active')

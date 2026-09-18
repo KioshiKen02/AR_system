@@ -1484,22 +1484,6 @@ watch(
                         if (typeFilter === "BG") {
                             return ["BG", "Beginning Balance"].includes(document.type);
                         }
-                        if (typeFilter === "MPD Sales Invoice") {
-                            if (document.type !== "Sales Invoice") return false;
-                            const c = (document.classification ?? "")
-                                .toString()
-                                .trim()
-                                .toLowerCase();
-                            return c !== "production";
-                        }
-                        if (typeFilter === "Sales Invoice") {
-                            if (document.type !== "Sales Invoice") return false;
-                            const c = (document.classification ?? "")
-                                .toString()
-                                .trim()
-                                .toLowerCase();
-                            return c === "" || c === "production";
-                        }
                         return document.type === typeFilter;
                     }
                 );

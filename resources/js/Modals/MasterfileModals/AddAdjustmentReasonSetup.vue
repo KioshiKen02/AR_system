@@ -40,6 +40,7 @@
                                 v-model="form.type"
                                 :options="[
                                     'Sales Invoice',
+                                    'MPD Sales Invoice',
                                     'Other Income',
                                     'Merchandise Transfer Out',
                                     'Merchandise Charge Invoice',

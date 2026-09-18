@@ -420,7 +420,7 @@ class InvoiceController extends Controller
             $applyTo = $request->input('apply_to');
             $ledgerType = match ($applyTo) {
                 'Sales Invoice' => 'Sales Invoice',
-                'MPD Sales Invoice' => 'Sales Invoice',
+                'MPD Sales Invoice' => 'MPD Sales Invoice',
                 'Other Income' => 'Charge Invoice',
                 'Merchandise Charge Invoice' => 'Merchandise Charge Invoice',
                 'Merchandise Transfer Out' => 'Merchandise Transfer Out',
@@ -428,23 +428,10 @@ class InvoiceController extends Controller
                 default => 'Charge Invoice',
             };
 
-            $ledgersQuery = CustomerLedger::where('customer_code', $customerCode)
+            $ledgers = CustomerLedger::where('customer_code', $customerCode)
                 ->where('type', $ledgerType)
-                ->where('amount', '>', 0);
-
-            if ($applyTo === 'MPD Sales Invoice') {
-                $ledgersQuery->where(function ($q) {
-                    $q->whereNull('classification')
-                        ->orWhere(DB::raw('LOWER(TRIM(classification))'), '!=', 'production');
-                });
-            } elseif ($applyTo === 'Sales Invoice') {
-                $ledgersQuery->where(function ($q) {
-                    $q->whereNull('classification')
-                        ->orWhere(DB::raw('LOWER(TRIM(classification))'), '=', 'production');
-                });
-            }
-
-            $ledgers = $ledgersQuery->get();
+                ->where('amount', '>', 0)
+                ->get();
 
             $invoiceNumbers = $ledgers->pluck('invoice_number')->unique()->values();
             $paidAmounts = PaymentDetails::where('customer_code', $customerCode)
@@ -773,7 +760,7 @@ class InvoiceController extends Controller
             $ledgersToRecompute = CustomerLedger::on('tenant')
                 ->where('customer_code', $customerCode)
                 ->where('date', '<=', $date)
-                ->whereIn('type', ['Sales Invoice', 'Charge Invoice', 'Merchandise Charge Invoice', 'Merchandise Transfer Out', 'Sales Charge Invoice', 'BG', 'Beginning Balance', 'Payment'])
+                ->whereIn('type', ['Sales Invoice', 'MPD Sales Invoice', 'Charge Invoice', 'Merchandise Charge Invoice', 'Merchandise Transfer Out', 'Sales Charge Invoice', 'BG', 'Beginning Balance', 'Payment'])
                 ->get([
                     'id',
                     'invoice_number',

@@ -119,6 +119,19 @@
                                         </label>
                                         <label class="flex items-center space-x-2">
                                             <label class="relative inline-block w-4 h-4">
+                                                <input type="checkbox" v-model="typeFilters" value="MPD Sales Invoice"
+                                                    class="peer appearance-none w-4 h-4 border-2 rounded-sm border-[var(--color-border)] bg-transparent checked:bg-[var(--color-primary)] checked:!border-[var(--color-primary)] focus:outline-none transition-colors duration-200" />
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                                    class="absolute p-0.5 top-0.5 left-0 right-0 bottom-0 w-4 h-4 text-[var(--color-bg-primary)] hidden peer-checked:block pointer-events-none"
+                                                    fill="currentColor">
+                                                    <path
+                                                        d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
+                                                </svg>
+                                            </label>
+                                            <span class="text-sm">MPD Sales Invoice</span>
+                                        </label>
+                                        <label class="flex items-center space-x-2">
+                                            <label class="relative inline-block w-4 h-4">
                                                 <input type="checkbox" v-model="typeFilters" value="Other Income"
                                                     class="peer appearance-none w-4 h-4 border-2 rounded-sm border-[var(--color-border)] bg-transparent checked:bg-[var(--color-primary)] checked:!border-[var(--color-primary)] focus:outline-none transition-colors duration-200" />
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
@@ -325,6 +338,9 @@
                                     'bg-cyan-700 text-cyan-300':
                                         adjustment_reason_setup.type ===
                                         'Sales Invoice',
+                                    'bg-teal-700 text-teal-300':
+                                        adjustment_reason_setup.type ===
+                                        'MPD Sales Invoice',
                                     'bg-lime-700 text-lime-300':
                                         adjustment_reason_setup.type ===
                                         'Other Income',

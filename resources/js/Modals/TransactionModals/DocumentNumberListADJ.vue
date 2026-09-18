@@ -224,16 +224,16 @@ watch(
                     props.apply_to === "Sales Invoice"
                         ? "Sales Invoice"
                         : props.apply_to === "MPD Sales Invoice"
-                            ? "Sales Invoice"
+                            ? "MPD Sales Invoice"
                         : props.apply_to === "Other Income"
                             ? "Charge Invoice"
                             : props.apply_to === "Merchandise Charge Invoice"
                                 ? "Merchandise Charge Invoice"
-                            : props.apply_to === "Merchandise Transfer Out"
-                                ? "Merchandise Transfer Out"
-                                : props.apply_to === "Sales Charge Invoice"
-                                    ? "Sales Charge Invoice"
-                                : null;
+                                : props.apply_to === "Merchandise Transfer Out"
+                                    ? "Merchandise Transfer Out"
+                                    : props.apply_to === "Sales Charge Invoice"
+                                        ? "Sales Charge Invoice"
+                                    : null;
 
                 documents.value = response.data
                     .filter(

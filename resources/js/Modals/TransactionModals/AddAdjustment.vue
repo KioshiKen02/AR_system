@@ -82,17 +82,15 @@
                         <DropdownInput label="Type" v-model="form.type" :options="['Positive', 'Negative']"
                             :message="form.errors.type" :disabled="!form.name" placeholder="Click to Select"
                             disabledPlaceholder="Select Customer First" />
-                        <DropdownInput label="Apply To" v-model="form.apply_to"
-                            :options="[
-                                'Sales Invoice',
-                                'MPD Sales Invoice',
-                                'Other Income',
-                                'Merchandise Charge Invoice',
-                                'Merchandise Transfer Out',
-                                'Sales Charge Invoice',
-                                'Beginning Balance',
-                            ]"
-                            :message="form.errors.apply_to" :disabled="!form.type" placeholder="Click to Select"
+                        <DropdownInput label="Apply To" v-model="form.apply_to" :options="[
+                            'Sales Invoice',
+                            'MPD Sales Invoice',
+                            'Other Income',
+                            'Merchandise Charge Invoice',
+                            'Merchandise Transfer Out',
+                            'Sales Charge Invoice',
+                            'Beginning Balance',
+                        ]" :message="form.errors.apply_to" :disabled="!form.type" placeholder="Click to Select"
                             disabledPlaceholder="Select Type First" />
                         <TextInput label="Document Number" @click="onDocuNumberClick()" v-model="form.invoice_no"
                             type="text" :message="form.errors.invoice_no" :readonly="!form.apply_to"
@@ -136,396 +134,396 @@
 </template>
 
 <script setup>
-import {
-    computed,
-    ref,
-    watch,
-    onMounted,
-    onUnmounted,
-    onBeforeUnmount,
-    nextTick,
-} from "vue";
-import { route } from "../../../../vendor/tightenco/ziggy/src/js";
-import TextInput from "../../Pages/Components/TextInput.vue";
-import { useForm, usePage } from "@inertiajs/vue3";
-import ManagersKey from "../ManagersKey.vue";
-import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
-import axios from "axios";
-import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
-import DocumentNumberListADJ from "./DocumentNumberListADJ.vue";
-import CustomerListModal from "./CustomerListModal.vue";
-import DropdownInput from "../../Pages/Components/DropdownInput.vue";
-import DropdownInputObject from "../../Pages/Components/DropdownInputObject.vue";
-import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
-import PdfPreviewModal from "../PdfPreviewModal.vue";
-import DatePicker from "../../Pages/Components/DatePicker.vue";
-import usePermissions from "../../Pages/Composables/usePermissions";
+    import {
+        computed,
+        ref,
+        watch,
+        onMounted,
+        onUnmounted,
+        onBeforeUnmount,
+        nextTick,
+    } from "vue";
+    import { route } from "../../../../vendor/tightenco/ziggy/src/js";
+    import TextInput from "../../Pages/Components/TextInput.vue";
+    import { useForm, usePage } from "@inertiajs/vue3";
+    import ManagersKey from "../ManagersKey.vue";
+    import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
+    import axios from "axios";
+    import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
+    import DocumentNumberListADJ from "./DocumentNumberListADJ.vue";
+    import CustomerListModal from "./CustomerListModal.vue";
+    import DropdownInput from "../../Pages/Components/DropdownInput.vue";
+    import DropdownInputObject from "../../Pages/Components/DropdownInputObject.vue";
+    import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
+    import PdfPreviewModal from "../PdfPreviewModal.vue";
+    import DatePicker from "../../Pages/Components/DatePicker.vue";
+    import usePermissions from "../../Pages/Composables/usePermissions";
 
-const props = defineProps({
-    show: Boolean,
-});
-
-const page = usePage();
-
-const form = useForm({
-    adjustment_no: null,
-    receipt_date: null,
-    transaction_date: null,
-    customer_code: null,
-    name: null,
-    type: null,
-    apply_to: null,
-    invoice_no: null,
-    balance: null,
-    adjustment_code: null,
-    adjustment_reason: null,
-    particulars: null,
-    amount: null,
-});
-
-const { canPrint } = usePermissions();
-
-const showManagerModal = ref(false);
-const pendingOldDate = ref(null);
-const adjustmentreasonOptions = ref([]);
-const modalLoading = ref(false);
-const showDocumentNumberListModal = ref(false);
-const showCustomerModal = ref(false);
-const selectedInvoiceShrinkage = ref(0);
-
-form.transaction_date = new Date().toISOString().split("T")[0];
-
-function daysBetween(date1, date2) {
-    const diffTime = Math.abs(date2 - date1);
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-}
-
-function openManagerModal(date) {
-    pendingOldDate.value = date;
-    showManagerModal.value = true;
-}
-
-function onManagerSuccess() {
-    showManagerModal.value = false;
-    pendingOldDate.value = null;
-}
-
-function onManagerCancel() {
-    form.receipt_date = new Date().toISOString().split("T")[0];
-    showManagerModal.value = false;
-    pendingOldDate.value = null;
-}
-
-function onDocuNumberClick() {
-    showDocumentNumberListModal.value = true;
-}
-
-const emit = defineEmits(["close", "closeSuccess"]);
-
-const closeModal = () => {
-    emit("close");
-};
-
-const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("en-PH", {
-        style: "currency",
-        currency: "PHP",
-    }).format(amount);
-};
-
-//#region ////////////////TOAST///////////////////////////////////////////////////////////////////////////////////////////////////////
-const showToast = ref(false);
-const toastMessage = ref("");
-let toastTimeout = null;
-
-const showWarningToast = (message) => {
-    toastMessage.value = message;
-    showToast.value = false;
-    if (toastTimeout) clearTimeout(toastTimeout);
-
-    setTimeout(() => {
-        showToast.value = true;
-    }, 0);
-
-    toastTimeout = setTimeout(() => {
-        showToast.value = false;
-        toastTimeout = null;
-    }, 3000);
-};
-//#endregion
-
-/////// CUSTOMER CODE DROPDOWN /////////////////////////////////////////////////////////////////////////////////////////////
-function onCustomerClick() {
-    showCustomerModal.value = true;
-}
-const handleSelectedCustomer = (selectedData) => {
-    form.customer_code = selectedData.cus_code;
-    form.name = selectedData.cus_name;
-
-    showCustomerModal.value = false;
-};
-
-/////////////////////////DOCUMENT NO FETCH DATA FROM TABLE//////////////////////////////////////
-const ledgerType = ref(null);
-const bal = ref(null);
-const handleSelectedInvoices = (selectedData) => {
-    form.invoice_no = selectedData.invoiceNumber;
-    const totalAmount = Number(selectedData.totalAmount);
-    bal.value = formatCurrency(totalAmount);
-    form.balance = totalAmount;
-    ledgerType.value = selectedData.type;
-    selectedInvoiceShrinkage.value = Number(selectedData.shrinkage ?? 0);
-};
-
-const normalizedAdjustmentReasonOptions = computed(() => {
-    const hasShrinkage = Number(selectedInvoiceShrinkage.value) > 0;
-
-    return adjustmentreasonOptions.value.map((option) => {
-        const label = String(option?.label ?? "");
-        const isShrinkageReason =
-            label === "Sales: Shrinkage" || label === "Shrinkage";
-
-        return {
-            ...option,
-            disabled: isShrinkageReason && !hasShrinkage,
-        };
+    const props = defineProps({
+        show: Boolean,
     });
-});
 
-//#region /////// PREVIEW PDF/////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Preview PDF
-const showPdfModal = ref(false);
-const pdfFormData = ref(null);
-const apiRoute = ref(null);
-const previewInvoice = async () => {
-    try {
-        apiRoute.value = "preview-adjustment";
-        pdfFormData.value = form;
-        showPdfModal.value = true;
-    } catch (error) {
-        console.error("Error previewing invoice:", error);
-    }
-};
+    const page = usePage();
 
-const pdfPrintSuccess = () => {
-    showPdfModal.value = false;
-    emit("closeSuccess");
-};
-
-////////SHOW DIALOG FOR PRINT///////////////////////////
-const showDialog = ref(false);
-const handleConfirm = async (confirmed) => {
-    showDialog.value = false;
-    if (confirmed) {
-        previewInvoice();
-    } else {
-        emit("closeSuccess");
-    }
-};
-//#endregion
-
-//#region /////// WATCH //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-watch(
-    () => props.show,
-    async (visible, oldVisible) => {
-        if (visible && !oldVisible) {
-            modalLoading.value = true;
-            form.type = "";
-            form.apply_to = "";
-            form.adjustment_reason = "";
-            form.adjustment_no = "********";
-
-            modalLoading.value = false;
-        }
-    },
-    { immediate: true }
-);
-
-// watch(
-//     () => form.receipt_date,
-//     (newDate, oldDate) => {
-//         if (newDate && newDate !== oldDate) {
-//             const diffDays = daysBetween(new Date(newDate), new Date());
-//             if (diffDays > 3) openManagerModal(newDate);
-//         }
-//     }
-// );
-
-watch(
-    () => form.apply_to,
-    async (newVal, oldVal) => {
-        if (newVal && newVal !== oldVal) {
-            form.invoice_no = "";
-            form.balance = "";
-            form.adjustment_reason = "";
-            form.particulars = "";
-            form.amount = "";
-            selectedInvoiceShrinkage.value = 0;
-
-            if (form.apply_to === "Sales Invoice") {
-                try {
-                    const response = await axios.get(
-                        route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),
-                        {
-                            params: {
-                                apply_to: form.apply_to,
-                            },
-                        }
-                    );
-                    adjustmentreasonOptions.value = response.data.map((item) => ({
-                        label: item.reason_name,
-                        value: item.reason_name,
-                        acc_code: item.acc_code,
-                    }));
-                } catch (error) {
-                    console.error(
-                        "Failed to fetch adjustmen reason setup:",
-                        error
-                    );
-                }
-            } else if (form.apply_to === "Other Income") {
-                try {
-                    const response = await axios.get(
-                        route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),
-                        {
-                            params: {
-                                apply_to: form.apply_to,
-                            },
-                        }
-                    );
-                    adjustmentreasonOptions.value = response.data.map((item) => ({
-                        label: item.reason_name,
-                        value: item.reason_name,
-                        acc_code: item.acc_code,
-                    }));
-                } catch (error) {
-                    console.error(
-                        "Failed to fetch adjustment reason setup:",
-                        error
-                    );
-                }
-            } else { 
-                try {
-                    const response = await axios.get(
-                        route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),
-                        {
-                            params: {
-                                apply_to: form.apply_to,
-                            },
-                        }
-                    );
-                    adjustmentreasonOptions.value = response.data.map((item) => ({
-                        label: item.reason_name,
-                        value: item.reason_name,
-                        acc_code: item.acc_code,
-                    }));
-                }
-                catch (error) {
-                    console.error(
-                        "Failed to fetch beginning balance reason setup:",
-                        error
-                    );
-                }
-            }
-        }
-    }
-);
-
-watch(
-    () => form.customer_code,
-    async (newVal, oldVal) => {
-        if (newVal === "" || newVal !== oldVal) {
-            form.type = "";
-            form.apply_to = "";
-            form.invoice_no = "";
-            form.balance = "";
-            form.adjustment_reason = "";
-            form.particulars = "";
-            form.amount = "";
-            selectedInvoiceShrinkage.value = 0;
-        }
-    }
-);
-
-watch(
-    () => form.invoice_no,
-    async (newVal, oldVal) => {
-        if (newVal && newVal !== oldVal) {
-            form.adjustment_reason = "";
-            form.adjustment_code = "";
-            form.particulars = "";
-            form.amount = "";
-        }
-    }
-);
-
-watch(
-    () => form.adjustment_reason,
-    (newVal) => {
-        if (!newVal) {
-            form.adjustment_code = "";
-            return;
-        }
-
-        const selected = adjustmentreasonOptions.value.find(
-            (opt) => opt.value === newVal
-        );
-        form.adjustment_code = selected ? selected.acc_code : "";
-    }
-);
-
-//#endregion
-
-//////////////////////////SUBMIT////////////////////
-const submit = () => {
-    Object.keys(form.errors).forEach((key) => {
-        form.errors[key] = "";
+    const form = useForm({
+        adjustment_no: null,
+        receipt_date: null,
+        transaction_date: null,
+        customer_code: null,
+        name: null,
+        type: null,
+        apply_to: null,
+        invoice_no: null,
+        balance: null,
+        adjustment_code: null,
+        adjustment_reason: null,
+        particulars: null,
+        amount: null,
     });
-    const submissionData = {
-        ...form.data(),
-        _cl_type: ledgerType.value,
+
+    const { canPrint } = usePermissions();
+
+    const showManagerModal = ref(false);
+    const pendingOldDate = ref(null);
+    const adjustmentreasonOptions = ref([]);
+    const modalLoading = ref(false);
+    const showDocumentNumberListModal = ref(false);
+    const showCustomerModal = ref(false);
+    const selectedInvoiceShrinkage = ref(0);
+
+    form.transaction_date = new Date().toISOString().split("T")[0];
+
+    function daysBetween(date1, date2) {
+        const diffTime = Math.abs(date2 - date1);
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    function openManagerModal(date) {
+        pendingOldDate.value = date;
+        showManagerModal.value = true;
+    }
+
+    function onManagerSuccess() {
+        showManagerModal.value = false;
+        pendingOldDate.value = null;
+    }
+
+    function onManagerCancel() {
+        form.receipt_date = new Date().toISOString().split("T")[0];
+        showManagerModal.value = false;
+        pendingOldDate.value = null;
+    }
+
+    function onDocuNumberClick() {
+        showDocumentNumberListModal.value = true;
+    }
+
+    const emit = defineEmits(["close", "closeSuccess"]);
+
+    const closeModal = () => {
+        emit("close");
     };
 
-    form.transform((data) => submissionData).post(route("addAdjustment", { tenant: page.props.tenant }), {
-        onSuccess: () => {
-            axios
-                .get(route("adjustment.latest.adjustmentNumber", { tenant: page.props.tenant }))
-                .then((res) => {
-                    form.adjustment_no = res.data.adjustment_number;
-                    if (canPrint("0202-ADT")) {
-                        showDialog.value = true;
-                    } else {
-                        emit("closeSuccess");
-                    }
-                });
-        },
-        onError: (errors) => {
-            if (Object.keys(errors).length === 1) {
-                const firstError = Object.values(errors)[0]; // get the first error message
-                showWarningToast(firstError);
-            } else if (Object.keys(errors).length !== 1) {
-                showWarningToast("Please Fill Up Necessary Fields");
-            }
-            // console.log(errors); // helpful for debugging
-        },
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat("en-PH", {
+            style: "currency",
+            currency: "PHP",
+        }).format(amount);
+    };
+
+    //#region ////////////////TOAST///////////////////////////////////////////////////////////////////////////////////////////////////////
+    const showToast = ref(false);
+    const toastMessage = ref("");
+    let toastTimeout = null;
+
+    const showWarningToast = (message) => {
+        toastMessage.value = message;
+        showToast.value = false;
+        if (toastTimeout) clearTimeout(toastTimeout);
+
+        setTimeout(() => {
+            showToast.value = true;
+        }, 0);
+
+        toastTimeout = setTimeout(() => {
+            showToast.value = false;
+            toastTimeout = null;
+        }, 3000);
+    };
+    //#endregion
+
+    /////// CUSTOMER CODE DROPDOWN /////////////////////////////////////////////////////////////////////////////////////////////
+    function onCustomerClick() {
+        showCustomerModal.value = true;
+    }
+    const handleSelectedCustomer = (selectedData) => {
+        form.customer_code = selectedData.cus_code;
+        form.name = selectedData.cus_name;
+
+        showCustomerModal.value = false;
+    };
+
+    /////////////////////////DOCUMENT NO FETCH DATA FROM TABLE//////////////////////////////////////
+    const ledgerType = ref(null);
+    const bal = ref(null);
+    const handleSelectedInvoices = (selectedData) => {
+        form.invoice_no = selectedData.invoiceNumber;
+        const totalAmount = Number(selectedData.totalAmount);
+        bal.value = formatCurrency(totalAmount);
+        form.balance = totalAmount;
+        ledgerType.value = selectedData.type;
+        selectedInvoiceShrinkage.value = Number(selectedData.shrinkage ?? 0);
+    };
+
+    const normalizedAdjustmentReasonOptions = computed(() => {
+        const hasShrinkage = Number(selectedInvoiceShrinkage.value) > 0;
+
+        return adjustmentreasonOptions.value.map((option) => {
+            const label = String(option?.label ?? "");
+            const isShrinkageReason =
+                label === "Sales: Shrinkage" || label === "Shrinkage";
+
+            return {
+                ...option,
+                disabled: isShrinkageReason && !hasShrinkage,
+            };
+        });
     });
-};
+
+    //#region /////// PREVIEW PDF/////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Preview PDF
+    const showPdfModal = ref(false);
+    const pdfFormData = ref(null);
+    const apiRoute = ref(null);
+    const previewInvoice = async () => {
+        try {
+            apiRoute.value = "preview-adjustment";
+            pdfFormData.value = form;
+            showPdfModal.value = true;
+        } catch (error) {
+            console.error("Error previewing invoice:", error);
+        }
+    };
+
+    const pdfPrintSuccess = () => {
+        showPdfModal.value = false;
+        emit("closeSuccess");
+    };
+
+    ////////SHOW DIALOG FOR PRINT///////////////////////////
+    const showDialog = ref(false);
+    const handleConfirm = async (confirmed) => {
+        showDialog.value = false;
+        if (confirmed) {
+            previewInvoice();
+        } else {
+            emit("closeSuccess");
+        }
+    };
+    //#endregion
+
+    //#region /////// WATCH //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    watch(
+        () => props.show,
+        async (visible, oldVisible) => {
+            if (visible && !oldVisible) {
+                modalLoading.value = true;
+                form.type = "";
+                form.apply_to = "";
+                form.adjustment_reason = "";
+                form.adjustment_no = "********";
+
+                modalLoading.value = false;
+            }
+        },
+        { immediate: true }
+    );
+
+    // watch(
+    //     () => form.receipt_date,
+    //     (newDate, oldDate) => {
+    //         if (newDate && newDate !== oldDate) {
+    //             const diffDays = daysBetween(new Date(newDate), new Date());
+    //             if (diffDays > 3) openManagerModal(newDate);
+    //         }
+    //     }
+    // );
+
+    watch(
+        () => form.apply_to,
+        async (newVal, oldVal) => {
+            if (newVal && newVal !== oldVal) {
+                form.invoice_no = "";
+                form.balance = "";
+                form.adjustment_reason = "";
+                form.particulars = "";
+                form.amount = "";
+                selectedInvoiceShrinkage.value = 0;
+
+                if (form.apply_to === "Sales Invoice") {
+                    try {
+                        const response = await axios.get(
+                            route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),
+                            {
+                                params: {
+                                    apply_to: form.apply_to,
+                                },
+                            }
+                        );
+                        adjustmentreasonOptions.value = response.data.map((item) => ({
+                            label: item.reason_name,
+                            value: item.reason_name,
+                            acc_code: item.acc_code,
+                        }));
+                    } catch (error) {
+                        console.error(
+                            "Failed to fetch adjustmen reason setup:",
+                            error
+                        );
+                    }
+                } else if (form.apply_to === "Other Income") {
+                    try {
+                        const response = await axios.get(
+                            route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),
+                            {
+                                params: {
+                                    apply_to: form.apply_to,
+                                },
+                            }
+                        );
+                        adjustmentreasonOptions.value = response.data.map((item) => ({
+                            label: item.reason_name,
+                            value: item.reason_name,
+                            acc_code: item.acc_code,
+                        }));
+                    } catch (error) {
+                        console.error(
+                            "Failed to fetch adjustment reason setup:",
+                            error
+                        );
+                    }
+                } else {
+                    try {
+                        const response = await axios.get(
+                            route("getAdjustmentReasonSetup", { tenant: page.props.tenant }),
+                            {
+                                params: {
+                                    apply_to: form.apply_to,
+                                },
+                            }
+                        );
+                        adjustmentreasonOptions.value = response.data.map((item) => ({
+                            label: item.reason_name,
+                            value: item.reason_name,
+                            acc_code: item.acc_code,
+                        }));
+                    }
+                    catch (error) {
+                        console.error(
+                            "Failed to fetch beginning balance reason setup:",
+                            error
+                        );
+                    }
+                }
+            }
+        }
+    );
+
+    watch(
+        () => form.customer_code,
+        async (newVal, oldVal) => {
+            if (newVal === "" || newVal !== oldVal) {
+                form.type = "";
+                form.apply_to = "";
+                form.invoice_no = "";
+                form.balance = "";
+                form.adjustment_reason = "";
+                form.particulars = "";
+                form.amount = "";
+                selectedInvoiceShrinkage.value = 0;
+            }
+        }
+    );
+
+    watch(
+        () => form.invoice_no,
+        async (newVal, oldVal) => {
+            if (newVal && newVal !== oldVal) {
+                form.adjustment_reason = "";
+                form.adjustment_code = "";
+                form.particulars = "";
+                form.amount = "";
+            }
+        }
+    );
+
+    watch(
+        () => form.adjustment_reason,
+        (newVal) => {
+            if (!newVal) {
+                form.adjustment_code = "";
+                return;
+            }
+
+            const selected = adjustmentreasonOptions.value.find(
+                (opt) => opt.value === newVal
+            );
+            form.adjustment_code = selected ? selected.acc_code : "";
+        }
+    );
+
+    //#endregion
+
+    //////////////////////////SUBMIT////////////////////
+    const submit = () => {
+        Object.keys(form.errors).forEach((key) => {
+            form.errors[key] = "";
+        });
+        const submissionData = {
+            ...form.data(),
+            _cl_type: ledgerType.value,
+        };
+
+        form.transform((data) => submissionData).post(route("addAdjustment", { tenant: page.props.tenant }), {
+            onSuccess: () => {
+                axios
+                    .get(route("adjustment.latest.adjustmentNumber", { tenant: page.props.tenant }))
+                    .then((res) => {
+                        form.adjustment_no = res.data.adjustment_number;
+                        if (canPrint("0202-ADT")) {
+                            showDialog.value = true;
+                        } else {
+                            emit("closeSuccess");
+                        }
+                    });
+            },
+            onError: (errors) => {
+                if (Object.keys(errors).length === 1) {
+                    const firstError = Object.values(errors)[0]; // get the first error message
+                    showWarningToast(firstError);
+                } else if (Object.keys(errors).length !== 1) {
+                    showWarningToast("Please Fill Up Necessary Fields");
+                }
+                // console.log(errors); // helpful for debugging
+            },
+        });
+    };
 </script>
 
 <style scoped>
-@keyframes fadeIn {
-    0% {
-        opacity: 0;
-        transform: translateY(10px);
+    @keyframes fadeIn {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
-    100% {
-        opacity: 1;
-        transform: translateY(0);
+    .animate-fade-in {
+        animation: fadeIn 0.4s ease-out;
     }
-}
-
-.animate-fade-in {
-    animation: fadeIn 0.4s ease-out;
-}
 </style>
