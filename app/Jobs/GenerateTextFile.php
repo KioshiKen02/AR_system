@@ -369,6 +369,10 @@ class GenerateTextFile
                 $this->validatedData['end_date']
             ])
                 ->where('exported', false)
+                ->where(function ($q) {
+                    $q->whereNull('apply_to')
+                        ->orWhere(DB::raw('LOWER(TRIM(apply_to))'), '!=', 'mpd sales invoice');
+                })
                 ->orderBy('receipt_date');
 
             /* Commented out to prevent local file creation - direct network save only */
@@ -421,6 +425,11 @@ class GenerateTextFile
                         $adjustmentAccCode = $adjAccCode->get($adjustment->adjustment_reason)?->acc_code ?? '';
                         $customerCusPosting = $customers->get($adjustment->customer_code)?->cus_posting ?? '';
                         $customerLocCode = $locCodeByCustomer[$adjustment->customer_code] ?? null;
+
+                        $applyTo = trim((string) ($adjustment->apply_to ?? ''));
+                        if (strcasecmp($applyTo, 'MPD Sales Invoice') === 0) {
+                            continue;
+                        }
 
                         if ($adjustment->type === 'Negative') {
                             $lines[] = $this->generateCreditAdjustmentLine(
@@ -491,6 +500,10 @@ class GenerateTextFile
                     $this->validatedData['start_date'],
                     $this->validatedData['end_date']
                 ])
+                ->where(function ($q) {
+                    $q->whereNull('apply_to')
+                        ->orWhere(DB::raw('LOWER(TRIM(apply_to))'), '!=', 'mpd sales invoice');
+                })
                 ->update(['exported' => true]);
 
             $this->updateProgress(100, 'Ready to Download!');
@@ -514,7 +527,11 @@ class GenerateTextFile
 
             $query = Payment::with(['paymentDetails' => function ($q) {
                 $q->where('status', '!=', 'Floating')
-                    ->where('status', '!=', 'Cancelled');
+                    ->where('status', '!=', 'Cancelled')
+                    ->where(function ($qq) {
+                        $qq->whereNull('type')
+                            ->orWhere(DB::raw('LOWER(TRIM(type))'), '!=', 'mpd sales invoice');
+                    });
             }])
                 ->whereBetween('receipt_date', [
                     $this->validatedData['start_date'],
@@ -624,6 +641,11 @@ class GenerateTextFile
                         $hasExportedDetail = false;
 
                         foreach ($payment->paymentDetails as $detail) {
+                            $detailType = trim((string) ($detail->type ?? ''));
+                            if (strcasecmp($detailType, 'MPD Sales Invoice') === 0) {
+                                continue;
+                            }
+
                             $detailStatus = trim((string) ($detail->status ?? ''));
                             $detailWhtStatus = trim((string) ($detail->wht_status ?? ''));
                             $detailPaymentType = trim((string) ($detail->payment_type ?? ''));
@@ -2089,6 +2111,10 @@ class GenerateTextFile
             ->where('payment_details.wht_status', 'Cleared')
             ->whereNotNull('payment_details.wht_clearing_date')
             ->whereNull('payment_details.wht_exported_at')
+            ->where(function ($q) {
+                $q->whereNull('payment_details.type')
+                    ->orWhere(DB::raw('LOWER(TRIM(payment_details.type))'), '!=', 'mpd sales invoice');
+            })
             ->whereBetween('payment_details.wht_clearing_date', [
                 $this->validatedData['start_date'],
                 $this->validatedData['end_date'],
@@ -2108,6 +2134,11 @@ class GenerateTextFile
             $whtAccountDescription
         ) {
             foreach ($details as $detail) {
+                $whtDetailType = trim((string) ($detail->type ?? ''));
+                if (strcasecmp($whtDetailType, 'MPD Sales Invoice') === 0) {
+                    continue;
+                }
+
                 $customerCode = trim((string) ($detail->customer_code ?: $detail->payment_customer_code));
                 if ($customerCode === '') {
                     continue;
