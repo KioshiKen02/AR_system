@@ -700,9 +700,12 @@ class GenerateTextFile
                                 ?? $normalizeReference($detail->document_no)
                                 ?? '';
                             $docCode = $this->resolveDocumentCode(
-                                $detail->type ?? $payment->type ?? '',
-                                $paymentReferenceNo
+                                $detail->type ?? '',
+                                $normalizeReference($detail->document_no)
                             );
+                            if ($docCode === '') {
+                                $docCode = $this->getPaymentDocumentCode($detail);
+                            }
                             if ($payment->payment_type === '5A - Cash') {
                                 $lines[] = $this->generateCashPaymentLine(
                                     $auto_increment,
@@ -2319,11 +2322,17 @@ class GenerateTextFile
         $foundLedgerRow = false;
         if ($hasRef) {
             $ref = trim((string) $referenceNo);
+            $passedType = trim((string) ($type ?? ''));
             try {
-                $ledger = DB::table('customer_ledger')
+                $query = DB::table('customer_ledger')
                     ->select('type', 'trade_type', 'classification')
-                    ->where('invoice_number', $ref)
-                    ->first();
+                    ->where('invoice_number', $ref);
+
+                if ($passedType !== '') {
+                    $query->where('type', $passedType);
+                }
+
+                $ledger = $query->first();
 
                 if ($ledger !== null) {
                     $foundLedgerRow = true;
