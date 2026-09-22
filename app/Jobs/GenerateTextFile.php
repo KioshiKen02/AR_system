@@ -655,7 +655,7 @@ class GenerateTextFile
                             $hasFloatingWht = $whtAmountValue > 0
                                 && (
                                     strcasecmp($detailWhtStatus, 'Floating') === 0
-                                    || ($detailWhtStatus === '' && strcasecmp($detailStatus, 'Floating') === 0)
+                                    || $detailWhtStatus === ''
                                 );
 
                             if ($hasFloatingCheck) {
@@ -1404,7 +1404,7 @@ class GenerateTextFile
         $whtAmountValue = (float) ($detail->wht_amount ?? 0);
         $overpaymentAmountValue = (float) ($detail->overpayment_amount ?? 0);
         $headerAmountValue = $grossAmountValue;
-        if ($accountType === 'Bank Account' && $whtAmountValue > 0) {
+        if ($whtAmountValue > 0) {
             $headerAmountValue = max($grossAmountValue - $whtAmountValue, 0);
         }
 
@@ -1490,7 +1490,7 @@ class GenerateTextFile
         $detailAmountValue = max(
             $grossAmountValue
                 - $overpaymentAmountValue
-                - (!$includeWhtLine && $accountType === 'Bank Account' ? $whtAmountValue : 0),
+                - (!$includeWhtLine ? $whtAmountValue : 0),
             0
         );
         $detailAmount = $this->fmt($detailAmountValue);
@@ -1613,7 +1613,7 @@ class GenerateTextFile
         $whtAmountValue = (float) ($detail->wht_amount ?? 0);
         $overpaymentAmountValue = (float) ($detail->overpayment_amount ?? 0);
         $headerAmountValue = $grossAmountValue;
-        if ($accountType === 'Bank Account' && $whtAmountValue > 0) {
+        if ($whtAmountValue > 0) {
             $headerAmountValue = max($grossAmountValue - $whtAmountValue, 0);
         }
 
@@ -1622,7 +1622,7 @@ class GenerateTextFile
         $detailAmountValue = max(
             $grossAmountValue
                 - $overpaymentAmountValue
-                - (!$includeWhtLine && $accountType === 'Bank Account' ? $whtAmountValue : 0),
+                - (!$includeWhtLine ? $whtAmountValue : 0),
             0
         );
         $amount = $this->fmt($detailAmountValue);
@@ -1819,7 +1819,7 @@ class GenerateTextFile
         $whtAmountValue = (float) ($detail->wht_amount ?? 0);
         $overpaymentAmountValue = (float) ($detail->overpayment_amount ?? 0);
         $headerAmountValue = $grossAmountValue;
-        if ($accountType === 'Bank Account' && $whtAmountValue > 0) {
+        if ($whtAmountValue > 0) {
             $headerAmountValue = max($grossAmountValue - $whtAmountValue, 0);
         }
 
@@ -1828,7 +1828,7 @@ class GenerateTextFile
         $detailAmountValue = max(
             $grossAmountValue
                 - $overpaymentAmountValue
-                - (!$includeWhtLine && $accountType === 'Bank Account' ? $whtAmountValue : 0),
+                - (!$includeWhtLine ? $whtAmountValue : 0),
             0
         );
         $amount = $this->fmt($detailAmountValue);

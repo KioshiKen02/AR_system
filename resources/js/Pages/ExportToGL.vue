@@ -3,74 +3,37 @@
         <ToastAlertWarning :show="showToast" :message="toastMessage" />
         <ToastAlert :show="showSToast" :message="toastSMessage" />
         <Transition name="fade-overlay">
-            <div
-                v-if="exportStatus !== 'idle'"
-                class="fixed inset-0 z-[10000] flex items-center justify-center"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="export-loading-title"
-                aria-describedby="export-loading-description"
-            >
+            <div v-if="exportStatus !== 'idle'" class="fixed inset-0 z-[10000] flex items-center justify-center"
+                role="dialog" aria-modal="true" aria-labelledby="export-loading-title"
+                aria-describedby="export-loading-description">
                 <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
                 <div
-                    class="relative z-10 w-full max-w-sm mx-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-6 shadow-2xl flex flex-col items-center text-center"
-                >
+                    class="relative z-10 w-full max-w-sm mx-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-6 shadow-2xl flex flex-col items-center text-center">
                     <div class="mb-4 flex items-center justify-center">
-                        <div
-                            v-if="exportStatus === 'loading'"
+                        <div v-if="exportStatus === 'loading'"
                             class="w-10 h-10 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin"
-                            aria-hidden="true"
-                        />
-                        <div
-                            v-else-if="exportStatus === 'success'"
+                            aria-hidden="true" />
+                        <div v-else-if="exportStatus === 'success'"
                             class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500"
-                            aria-hidden="true"
-                        >
+                            aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none">
-                                <path
-                                    d="M9 12.5l2 2 4-4"
-                                    stroke="currentColor"
-                                    stroke-width="1.8"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                />
-                                <circle
-                                    cx="12"
-                                    cy="12"
-                                    r="8"
-                                    stroke="currentColor"
-                                    stroke-width="1.4"
-                                />
+                                <path d="M9 12.5l2 2 4-4" stroke="currentColor" stroke-width="1.8"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                                <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.4" />
                             </svg>
                         </div>
-                        <div
-                            v-else-if="exportStatus === 'error'"
+                        <div v-else-if="exportStatus === 'error'"
                             class="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500"
-                            aria-hidden="true"
-                        >
+                            aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none">
-                                <path
-                                    d="M12 8v5"
-                                    stroke="currentColor"
-                                    stroke-width="1.8"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                />
+                                <path d="M12 8v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                                    stroke-linejoin="round" />
                                 <circle cx="12" cy="16" r="0.8" fill="currentColor" />
-                                <circle
-                                    cx="12"
-                                    cy="12"
-                                    r="8"
-                                    stroke="currentColor"
-                                    stroke-width="1.4"
-                                />
+                                <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.4" />
                             </svg>
                         </div>
                     </div>
-                    <h2
-                        id="export-loading-title"
-                        class="text-lg font-semibold text-[var(--color-text-primary)]"
-                    >
+                    <h2 id="export-loading-title" class="text-lg font-semibold text-[var(--color-text-primary)]">
                         <span v-if="exportStatus === 'loading'">
                             Generating your export file...
                         </span>
@@ -81,12 +44,9 @@
                             Export failed
                         </span>
                     </h2>
-                    <p
-                        id="export-loading-description"
-                        class="mt-2 text-sm text-[var(--color-text-secondary)]"
-                    >
+                    <p id="export-loading-description" class="mt-2 text-sm text-[var(--color-text-secondary)]">
                         <span v-if="exportStatus === 'loading'">
-                            {{ generationStatus || "We are generating your export file. This can take several minutes for larger date ranges. Please keep this window open." }}
+                            {{ generationStatus || "We are generating your export file. This can take several minutes for larger date ranges.Please keep this window open." }}
                         </span>
                         <span v-else-if="exportStatus === 'success'">
                             Your export file is successfully generate.
@@ -96,20 +56,14 @@
                         </span>
                     </p>
                     <div class="mt-6 flex flex-col gap-3 w-full">
-                        <button
-                            v-if="exportStatus === 'loading'"
-                            type="button"
+                        <button v-if="exportStatus === 'loading'" type="button"
                             class="w-full inline-flex items-center justify-center rounded-xl border border-[var(--color-border)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] transition-colors"
-                            @click="cancelExport"
-                        >
+                            @click="cancelExport">
                             Cancel export
                         </button>
-                        <button
-                            v-else
-                            type="button"
+                        <button v-else type="button"
                             class="w-full inline-flex items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] hover:border-[var(--color-primary)] transition-colors"
-                            @click="closeExportOverlay"
-                        >
+                            @click="closeExportOverlay">
                             Close
                         </button>
                     </div>
@@ -124,13 +78,16 @@
                 <h2 class="text-lg font-bold mb-6 text-[var(--color-text-primary)]">
                     Select Export Format
                 </h2>
-                
+
                 <div class="flex flex-col gap-3">
                     <button @click="handleExportChoice('txt')"
                         class="w-full py-3 px-4 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-bg-primary)] hover:border-[var(--color-primary)] transition-all flex items-center justify-center gap-3 group">
-                        <div class="p-2 rounded-lg bg-gray-100 group-hover:bg-[var(--color-primary)]/10 text-gray-600 group-hover:text-[var(--color-primary)] transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <div
+                            class="p-2 rounded-lg bg-gray-100 group-hover:bg-[var(--color-primary)]/10 text-gray-600 group-hover:text-[var(--color-primary)] transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                         </div>
                         <span class="font-medium text-[var(--color-text-primary)]">Text File (.txt)</span>
@@ -138,9 +95,12 @@
 
                     <button @click="handleExportChoice('csv')"
                         class="w-full py-3 px-4 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-bg-primary)] hover:border-[var(--color-primary)] transition-all flex items-center justify-center gap-3 group">
-                        <div class="p-2 rounded-lg bg-green-50 group-hover:bg-green-500/10 text-green-600 group-hover:text-green-600 transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        <div
+                            class="p-2 rounded-lg bg-green-50 group-hover:bg-green-500/10 text-green-600 group-hover:text-green-600 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                         </div>
                         <span class="font-medium text-[var(--color-text-primary)]">CSV File (.csv)</span>
@@ -162,8 +122,7 @@
                         class="w-8 h-8 text-[var(--color-primary)]" />
                     Export To GL (Navision)
                 </h3>
-                <div
-                    v-if="isGenerating || generationStatus"
+                <div v-if="isGenerating || generationStatus"
                     class="mb-4 p-3 rounded-lg bg-[var(--color-bg-secondary)]/40 border border-[var(--color-border)]/40 flex items-center gap-3 transition-all">
                     <div
                         class="w-5 h-5 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
@@ -182,12 +141,8 @@
                                     <div class="w-full flex gap-4 mt-4">
                                         <!-- Other Income Option -->
                                         <label class="w-full inline-flex items-center cursor-pointer group">
-                                            <input
-                                                type="radio"
-                                                v-model="form.export_type"
-                                                value="Other Income"
-                                                class="hidden peer"
-                                            />
+                                            <input type="radio" v-model="form.export_type" value="Other Income"
+                                                class="hidden peer" />
                                             <div class="w-full relative flex items-center justify-center p-2">
                                                 <!-- Hover circle -->
                                                 <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
@@ -220,12 +175,8 @@
 
                                         <!-- Adjustment Option -->
                                         <label class="w-full inline-flex items-center cursor-pointer group">
-                                            <input
-                                                type="radio"
-                                                v-model="form.export_type"
-                                                value="Adjustment"
-                                                class="hidden peer"
-                                            />
+                                            <input type="radio" v-model="form.export_type" value="Adjustment"
+                                                class="hidden peer" />
                                             <div class="w-full relative flex items-center justify-center p-2">
                                                 <!-- Hover circle -->
                                                 <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
@@ -257,12 +208,8 @@
 
                                         <!-- Payment Option -->
                                         <label class="w-full inline-flex items-center cursor-pointer group">
-                                            <input
-                                                type="radio"
-                                                v-model="form.export_type"
-                                                value="Payment"
-                                                class="hidden peer"
-                                            />
+                                            <input type="radio" v-model="form.export_type" value="Payment"
+                                                class="hidden peer" />
                                             <div class="w-full relative flex items-center justify-center p-2">
                                                 <!-- Hover circle -->
                                                 <div class="absolute -inset-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[var(--color-border)]/40"
@@ -299,51 +246,80 @@
                                         <label
                                             class="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Start
                                             Date</label>
-                                        <DatePicker
-                                            v-model="form.start_date"
-                                            placeholder="Select Date"
-                                            format="MM-DD-YYYY"
-                                            :message="form.errors.start_date"
-                                        />
+                                        <DatePicker v-model="form.start_date" placeholder="Select Date"
+                                            format="MM-DD-YYYY" :message="form.errors.start_date" />
                                     </div>
                                     <div class="space-y-1">
-                                        <label class="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">End
+                                        <label
+                                            class="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">End
                                             Date</label>
-                                        <DatePicker
-                                            v-model="form.end_date"
-                                            placeholder="Select Date"
-                                            format="MM-DD-YYYY"
-                                            :message="form.errors.end_date"
-                                        />
+                                        <DatePicker v-model="form.end_date" placeholder="Select Date"
+                                            format="MM-DD-YYYY" :message="form.errors.end_date" />
                                     </div>
                                 </div>
 
+                                <div v-if="form.export_type === 'Payment'"
+                                    class="rounded-xl border border-[var(--color-border)]/50 bg-[var(--color-bg-secondary)]/30 p-4">
+                                    <label class="flex items-start gap-3 cursor-pointer select-none group">
+                                        <div class="relative mt-0.5">
+                                            <input type="checkbox" v-model="form.include_wht" class="peer sr-only" />
+                                            <div
+                                                class="w-5 h-5 rounded-md border-2 border-[var(--color-border)] bg-[var(--color-bg-primary)] transition-all group-hover:border-[var(--color-primary)] peer-checked:border-[var(--color-primary)] peer-checked:bg-[var(--color-primary)]">
+                                            </div>
+                                            <svg v-if="form.include_wht"
+                                                class="absolute top-0.5 left-0.5 w-4 h-4 text-white pointer-events-none"
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                                stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        </div>
+                                        <div class="flex flex-col">
+                                            <span class="text-sm font-semibold text-[var(--color-text-primary)]">
+                                                Also untag Withholding Tax (WHT)
+                                            </span>
+                                            <span
+                                                class="text-xs text-[var(--color-text-secondary)] mt-1 leading-relaxed">
+                                                Check this if you also want the WHT lines to re-export on the next run.
+                                                Leave unchecked if you only want to regenerate the main payment
+                                                header/detail lines without touching WHT.
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+
                                 <div class="w-full flex justify-center items-center gap-4">
-                                    <button
-                                        v-if="canUpdate('0404-EXPRTGL')"
-                                        type="submit"
-                                        @click="submitType = 'untag'"
+                                    <button v-if="canUpdate('0404-EXPRTGL')" type="submit" @click="submitType = 'untag'"
                                         class="submitButton w-full !flex !justify-center !items-center"
-                                        :disabled="form.processing || isGenerating"
-                                    >
+                                        :disabled="form.processing || isGenerating">
                                         <span>{{
                                             form.processing
-                                                ? "Untagging Text File..."
-                                                : "Untag Selected Export Type"
+                                                ? "Untagging..."
+                                                : untagButtonLabel
                                         }}</span>
                                     </button>
-                                    <button
-                                        type="submit"
-                                        @click="submitType = 'generate'"
+                                    <button type="submit" @click="submitType = 'generate'"
                                         class="submitButton w-full !flex !justify-center !items-center"
-                                        :disabled="form.processing || isGenerating"
-                                    >
+                                        :disabled="form.processing || isGenerating">
                                         <span>{{
                                             isGenerating
                                                 ? "Generating your report..."
-                                                : "Generate Selected Export Type"
+                                                : "Generate " + form.export_type + " Export"
                                         }}</span>
                                     </button>
+                                </div>
+
+                                <div v-if="form.export_type === 'Payment'"
+                                    class="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)]/20 border border-[var(--color-border)]/30 rounded-xl p-3 space-y-1">
+                                    <p>
+                                        <span class="font-medium text-[var(--color-text-primary)]">Tip:</span>
+                                        <span> Use <em>Untag</em> when you need to re-export an already-exported date
+                                            range.</span>
+                                    </p>
+                                    <p>
+                                        <span class="font-medium text-[var(--color-text-primary)]">WHT checkbox:</span>
+                                        <span> Untags the WHT-only flag (payment_details.wht_exported_at) so inline or
+                                            late-cleared WHT posts again.</span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -355,99 +331,105 @@
 </template>
 
 <script setup>
-import { useForm, usePage } from "@inertiajs/vue3";
+    import { useForm, usePage } from "@inertiajs/vue3";
 import { mdiInvoiceTextSendOutline } from "@mdi/js";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import ToastAlertWarning from "./Components/ToastAlertWarning.vue";
-import { onMounted, onUnmounted, ref } from "vue";
-import DatePicker from "./Components/DatePicker.vue";
-import ToastAlert from "./Components/ToastAlert.vue";
-import usePermissions from "./Composables/usePermissions";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+    import DatePicker from "./Components/DatePicker.vue";
+    import ToastAlert from "./Components/ToastAlert.vue";
+    import usePermissions from "./Composables/usePermissions";
 
-const { canUpdate } = usePermissions();
+    const { canUpdate } = usePermissions();
 
-const triggerDownload = (url) => {
-    if (!url) return;
-    const link = document.createElement("a");
-    link.href = url;
-    link.rel = "noopener";
-    link.download = "";
-    link.style.display = "none";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-};
+    const triggerDownload = (url) => {
+        if (!url) return;
+        const link = document.createElement("a");
+        link.href = url;
+        link.rel = "noopener";
+        link.download = "";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
-const triggerBatchDownloads = (urls) => {
-    if (!Array.isArray(urls)) return;
-    urls.filter(Boolean).forEach((url) => {
-        triggerDownload(url);
+    const triggerBatchDownloads = (urls) => {
+        if (!Array.isArray(urls)) return;
+        urls.filter(Boolean).forEach((url) => {
+            triggerDownload(url);
+        });
+    };
+
+    const form = useForm({
+        export_type: "Other Income",
+        start_date: null,
+        end_date: null,
+        file_format: 'csv',
+        include_wht: false,
     });
-};
 
-const form = useForm({
-    export_type: "Other Income",
-    start_date: null,
-    end_date: null,
-    file_format: 'csv',
-});
+    const untagButtonLabel = computed(() => {
+        const base = "Untag " + form.export_type;
+        if (form.export_type === "Payment" && form.include_wht) {
+            return base + " (incl. WHT)";
+        }
+        return base;
+    });
 
-const showExportTypeModal = ref(false);
+    const showExportTypeModal = ref(false);
 
-const submitType = ref(null);
-const error = ref(null);
-const userId = ref(null);
-const page = usePage();
-const pathDelete = ref(null);
+    const submitType = ref(null);
+    const error = ref(null);
+    const userId = ref(null);
+    const page = usePage();
+    const pathDelete = ref(null);
 
-const isGenerating = ref(false);
-const exportStatus = ref("idle");
-const exportAbortController = ref(null);
-const generationProgress = ref(null);
-const generationStatus = ref("");
+    const isGenerating = ref(false);
+    const exportStatus = ref("idle");
+    const exportAbortController = ref(null);
+    const generationProgress = ref(null);
+    const generationStatus = ref("");
 
-const showToast = ref(false);
-const toastMessage = ref("");
-let toastTimeout = null;
+    const showToast = ref(false);
+    const toastMessage = ref("");
+    let toastTimeout = null;
 
-const showSToast = ref(false);
-const toastSMessage = ref("");
-let toastSTimeout = null;
+    const showSToast = ref(false);
+    const toastSMessage = ref("");
+    let toastSTimeout = null;
 
-const showSuccessToast = (message) => {
-    toastSMessage.value = message;
-    showSToast.value = false;
-    if (toastSTimeout) clearTimeout(toastSTimeout);
-
-    setTimeout(() => {
-        showSToast.value = true;
-    }, 0);
-
-    toastSTimeout = setTimeout(() => {
+    const showSuccessToast = (message) => {
+        toastSMessage.value = message;
         showSToast.value = false;
-        toastSTimeout = null;
-    }, 3000);
-};
+        if (toastSTimeout) clearTimeout(toastSTimeout);
 
-const showWarningToast = (message) => {
-    toastMessage.value = message;
-    showToast.value = false;
-    if (toastTimeout) clearTimeout(toastTimeout);
+        setTimeout(() => {
+            showSToast.value = true;
+        }, 0);
 
-    setTimeout(() => {
-        showToast.value = true;
-    }, 0);
+        toastSTimeout = setTimeout(() => {
+            showSToast.value = false;
+            toastSTimeout = null;
+        }, 3000);
+    };
 
-    toastTimeout = setTimeout(() => {
+    const showWarningToast = (message) => {
+        toastMessage.value = message;
         showToast.value = false;
-        toastTimeout = null;
-    }, 3000);
-};
+        if (toastTimeout) clearTimeout(toastTimeout);
 
-const submit = async () => {
-    if (submitType.value === "untag") {
-        untagExport();
-    } else {
+        setTimeout(() => {
+            showToast.value = true;
+        }, 0);
+
+        toastTimeout = setTimeout(() => {
+            showToast.value = false;
+            toastTimeout = null;
+        }, 3000);
+    };
+
+    const submit = async () => {
         if (!form.export_type || !form.start_date || !form.end_date) {
             showWarningToast("Please Fill In All Required Fields");
             return;
@@ -457,221 +439,267 @@ const submit = async () => {
             showWarningToast("End Date Must Be After Start Date");
             return;
         }
-        showExportTypeModal.value = true;
-    }
-};
 
-const handleExportChoice = (format) => {
-    form.file_format = format;
-    showExportTypeModal.value = false;
-    generateExport();
-};
-
-const generateExport = async () => {
-    if (exportStatus.value === "loading" || isGenerating.value) {
-        return;
-    }
-
-    if (!form.export_type || !form.start_date || !form.end_date) {
-        showWarningToast("Please Fill In All Required Fields");
-        return;
-    }
-
-    if (new Date(form.start_date) > new Date(form.end_date)) {
-        showWarningToast("End Date Must Be After Start Date");
-        return;
-    }
-
-    exportStatus.value = "loading";
-    isGenerating.value = true;
-    generationProgress.value = 1;
-    generationStatus.value = "Preparing to generate report...";
-
-    const channelName = `textfile-generation.${userId.value}`;
-
-    let echoChannel = null;
-    try {
-        if (window.Echo && window.Echo.private) {
-            echoChannel = window.Echo.private(channelName)
-                .listen(".App\\Events\\ExportTextFileGenerationProgress", (event) => {
-                    if (typeof event.progress === "number") {
-                        generationProgress.value = Math.min(
-                            100,
-                            Math.max(0, event.progress)
-                        );
-                    }
-                    if (event.message) {
-                        generationStatus.value = event.message;
-                    }
-                })
-                .listen(".App\\Events\\ExportTextFileGenerated", () => {
-                    generationProgress.value = 100;
-                    generationStatus.value = "Report ready!";
-                })
-                .error(() => {});
+        if (submitType.value === "untag") {
+            untagExport();
+        } else {
+            showExportTypeModal.value = true;
         }
-    } catch (e) {}
+    };
 
-    try {
+    const handleExportChoice = (format) => {
+        form.file_format = format;
+        showExportTypeModal.value = false;
+        generateExport();
+    };
+
+    const generateExport = async () => {
+        if (exportStatus.value === "loading" || isGenerating.value) {
+            return;
+        }
+
+        if (!form.export_type || !form.start_date || !form.end_date) {
+            showWarningToast("Please Fill In All Required Fields");
+            return;
+        }
+
+        if (new Date(form.start_date) > new Date(form.end_date)) {
+            showWarningToast("End Date Must Be After Start Date");
+            return;
+        }
+
+        exportStatus.value = "loading";
+        isGenerating.value = true;
+        generationProgress.value = 1;
+        generationStatus.value = "Preparing to generate report...";
+
+        const channelName = `textfile-generation.${userId.value}`;
+
+        let echoChannel = null;
+        try {
+            if (window.Echo && window.Echo.private) {
+                echoChannel = window.Echo.private(channelName)
+                    .listen(".App\\Events\\ExportTextFileGenerationProgress", (event) => {
+                        if (typeof event.progress === "number") {
+                            generationProgress.value = Math.min(
+                                100,
+                                Math.max(0, event.progress)
+                            );
+                        }
+                        if (event.message) {
+                            generationStatus.value = event.message;
+                        }
+                    })
+                    .listen(".App\\Events\\ExportTextFileGenerated", () => {
+                        generationProgress.value = 100;
+                        generationStatus.value = "Report ready!";
+                    })
+                    .error(() => { });
+            }
+        } catch (e) { }
+
+        try {
+            if (exportAbortController.value) {
+                exportAbortController.value.abort();
+            }
+            exportAbortController.value = new AbortController();
+
+            const response = await axios.post(
+                route("generateTextFile", { tenant: page.props.tenant }),
+                form.data(),
+                {
+                    signal: exportAbortController.value.signal,
+                }
+            );
+
+            if (response.data.success === false) {
+                const message =
+                    response.data.message ||
+                    "No data found for the selected date range";
+                error.value = message;
+                generationStatus.value = message;
+                exportStatus.value = "error";
+                showWarningToast(
+                    message
+                );
+                return;
+            }
+
+            exportStatus.value = "success";
+            triggerBatchDownloads(response.data.download_urls);
+            showSuccessToast(
+                "Report ready!"
+            );
+            form.reset();
+        } catch (err) {
+            if (err?.code === "ERR_CANCELED") {
+                exportStatus.value = "idle";
+                isGenerating.value = false;
+                generationProgress.value = null;
+                generationStatus.value = "";
+                return;
+            }
+
+            exportStatus.value = "error";
+
+            if (err.response?.status === 422 && err.response?.data?.errors) {
+                const validationErrors = err.response.data.errors;
+
+                if (Object.keys(validationErrors).length === 1) {
+                    const firstError = Object.values(validationErrors)[0][0]; // Get first error message
+                    showWarningToast(firstError);
+                } else {
+                    showWarningToast(
+                        "Please fill in all required fields correctly"
+                    );
+                }
+            } else {
+                const message =
+                    err.response?.data?.message ||
+                    err.message ||
+                    "Failed to start TextFile generation";
+                error.value = message;
+                showWarningToast(message);
+            }
+
+        } finally {
+            isGenerating.value = false;
+
+            if (exportAbortController.value) {
+                exportAbortController.value = null;
+            }
+
+            if (echoChannel && window.Echo && window.Echo.leave) {
+                try {
+                    window.Echo.leave(channelName);
+                } catch (e) { }
+            }
+
+            setTimeout(() => {
+                generationProgress.value = null;
+                generationStatus.value = "";
+            }, 1500);
+        }
+    };
+
+    const cancelExport = () => {
+        if (exportStatus.value !== "loading") {
+            return;
+        }
+
         if (exportAbortController.value) {
             exportAbortController.value.abort();
         }
-        exportAbortController.value = new AbortController();
 
-        const response = await axios.post(
-            route("generateTextFile", { tenant: page.props.tenant }),
-            form.data(),
-            {
-                signal: exportAbortController.value.signal,
+        showWarningToast("Export cancelled");
+    };
+
+    const closeExportOverlay = () => {
+        exportStatus.value = "idle";
+        generationProgress.value = null;
+        generationStatus.value = "";
+        error.value = null;
+    };
+
+    const untagExport = () => {
+    const payload = {
+        export_type: form.export_type,
+        start_date: form.start_date,
+        end_date: form.end_date,
+    };
+    if (form.export_type === "Payment") {
+        payload.include_wht = !!form.include_wht;
+    }
+
+    form.processing = true;
+    axios
+        .post(route("untagExport", { tenant: page.props.tenant }), payload)
+        .then((response) => {
+            const data = response.data || {};
+            const count = Number(data.count ?? 0);
+            const whtCount = Number(data.wht_count ?? 0);
+            const parts = [];
+            if (count > 0) {
+                parts.push(`${count} ${form.export_type}` + (count === 1 ? " record" : " records"));
             }
-        );
-
-        if (response.data.success === false) {
-            const message =
-                response.data.message ||
-                "No data found for the selected date range";
-            error.value = message;
-            generationStatus.value = message;
-            exportStatus.value = "error";
-            showWarningToast(
-                message
-            );
-            return;
-        }
-
-        exportStatus.value = "success";
-        triggerBatchDownloads(response.data.download_urls);
-        showSuccessToast(
-            "Report ready!"
-        );
-        form.reset();
-    } catch (err) {
-        if (err?.code === "ERR_CANCELED") {
-            exportStatus.value = "idle";
-            isGenerating.value = false;
-            generationProgress.value = null;
-            generationStatus.value = "";
-            return;
-        }
-
-        exportStatus.value = "error";
-
-        if (err.response?.status === 422 && err.response?.data?.errors) {
-            const validationErrors = err.response.data.errors;
-
-            if (Object.keys(validationErrors).length === 1) {
-                const firstError = Object.values(validationErrors)[0][0]; // Get first error message
-                showWarningToast(firstError);
+            if (whtCount > 0) {
+                parts.push(`${whtCount} WHT` + (whtCount === 1 ? " line" : " lines"));
+            }
+            const msg = parts.length
+                ? `Untagged ${parts.join(" and ")} successfully.`
+                : "Untagged successfully.";
+            showSuccessToast(msg);
+            form.include_wht = false;
+        })
+        .catch((err) => {
+            showToast.value = false;
+            if (err?.response?.status === 422 && err.response?.data?.errors) {
+                const validationErrors = err.response.data.errors;
+                if (validationErrors.general) {
+                    const general = Array.isArray(validationErrors.general)
+                        ? validationErrors.general[0]
+                        : validationErrors.general;
+                    showWarningToast(general);
+                } else if (Object.keys(validationErrors).length === 1) {
+                    const firstError = Object.values(validationErrors)[0];
+                    const msg = Array.isArray(firstError) ? firstError[0] : firstError;
+                    showWarningToast(msg);
+                } else {
+                    showWarningToast("Please fill in all required fields correctly");
+                }
             } else {
-                showWarningToast(
-                    "Please fill in all required fields correctly"
-                );
+                const msg =
+                    err?.response?.data?.message ||
+                    err?.message ||
+                    "Failed to untag. Please try again.";
+                showWarningToast(msg);
             }
-        } else {
-            const message =
-                err.response?.data?.message ||
-                err.message ||
-                "Failed to start TextFile generation";
-            error.value = message;
-            showWarningToast(message);
+        })
+        .finally(() => {
+            form.processing = false;
+        });
+};
+
+    const deletePdf = async () => {
+        if (!pathDelete.value) return;
+
+        try {
+            await axios.delete(route("pdf.delete", { tenant: page.props.tenant }), {
+                data: { path: pathDelete.value.split("/storage/")[1] },
+            });
+        } catch (err) {
+            console.warn("Failed to delete TextFile:", err);
         }
+    };
 
-    } finally {
-        isGenerating.value = false;
+    onMounted(() => {
+        userId.value = page.props.auth.user.id || null;
+    });
 
+    onUnmounted(() => {
         if (exportAbortController.value) {
-            exportAbortController.value = null;
+            exportAbortController.value.abort();
         }
 
-        if (echoChannel && window.Echo && window.Echo.leave) {
+        const channelName = `textfile-generation.${userId.value}`;
+        if (window.Echo && window.Echo.leave) {
             try {
                 window.Echo.leave(channelName);
-            } catch (e) {}
+            } catch (e) { }
         }
-
-        setTimeout(() => {
-            generationProgress.value = null;
-            generationStatus.value = "";
-        }, 1500);
-    }
-};
-
-const cancelExport = () => {
-    if (exportStatus.value !== "loading") {
-        return;
-    }
-
-    if (exportAbortController.value) {
-        exportAbortController.value.abort();
-    }
-
-    showWarningToast("Export cancelled");
-};
-
-const closeExportOverlay = () => {
-    exportStatus.value = "idle";
-    generationProgress.value = null;
-    generationStatus.value = "";
-    error.value = null;
-};
-
-const untagExport = () => {
-    form.post(route("untagExport", { tenant: page.props.tenant }), {
-        onSuccess: () => {
-            showSuccessToast("Untagged Successfully");
-            form.reset();
-        },
-        onError: (error) => {
-            showToast.value = false;
-            if (Object.keys(error).length === 1) {
-                const firstError = Object.values(error)[0];
-                showWarningToast(firstError);
-            } else if (Object.keys(error).length !== 1) {
-                showWarningToast("Please Fill In All Required Fields");
-            }
-        },
     });
-};
-
-const deletePdf = async () => {
-    if (!pathDelete.value) return;
-
-    try {
-        await axios.delete(route("pdf.delete", { tenant: page.props.tenant }), {
-            data: { path: pathDelete.value.split("/storage/")[1] },
-        });
-    } catch (err) {
-        console.warn("Failed to delete TextFile:", err);
-    }
-};
-
-onMounted(() => {
-    userId.value = page.props.auth.user.id || null;
-});
-
-onUnmounted(() => {
-    if (exportAbortController.value) {
-        exportAbortController.value.abort();
-    }
-
-    const channelName = `textfile-generation.${userId.value}`;
-    if (window.Echo && window.Echo.leave) {
-        try {
-            window.Echo.leave(channelName);
-        } catch (e) {}
-    }
-});
 </script>
 
 <style scoped>
-.fade-overlay-enter-active,
-.fade-overlay-leave-active {
-    transition: opacity 0.25s ease, transform 0.25s ease;
-}
 
-.fade-overlay-enter-from,
-.fade-overlay-leave-to {
-    opacity: 0;
-    transform: scale(0.98);
-}
+    .fade-overlay-enter-active,
+    .fade-overlay-leave-active {
+        transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+
+    .fade-overlay-enter-from,
+    .fade-overlay-leave-to {
+        opacity: 0;
+        transform: scale(0.98);
+    }
 </style>

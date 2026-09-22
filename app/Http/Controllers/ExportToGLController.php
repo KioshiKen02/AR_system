@@ -228,30 +228,80 @@ class ExportToGLController extends Controller
 
     public function untag(Request $request)
     {
-        $validated = $request->validate([
-            "export_type" => "required|string|in:Other Income,Adjustment,Payment",
-            "start_date" => "required|date",
-            "end_date" => "required|date|after_or_equal:start_date",
-        ]);
-
-        $table = match ($validated["export_type"]) {
-            'Other Income' => 'invoice',
-            'Adjustment' => 'adjustment',
-            'Payment' => 'payment',
-        };
-
-        $count = DB::table($table)
-            ->whereBetween('receipt_date', [
-                $validated['start_date'],
-                $validated['end_date']
-            ])
-            ->where('exported', true) // Only target exported records
-            ->update(['exported' => false]);
-
-        if ($count === 0) {
-            throw ValidationException::withMessages([
-                'general' => 'No exported records found for the selected date range',
+        try {
+            $validated = $request->validate([
+                "export_type" => "required|string|in:Other Income,Adjustment,Payment",
+                "start_date" => "required|date",
+                "end_date" => "required|date|after_or_equal:start_date",
+                "include_wht" => "sometimes|boolean",
             ]);
+
+            $table = match ($validated["export_type"]) {
+                'Other Income' => 'invoice',
+                'Adjustment' => 'adjustment',
+                'Payment' => 'payment',
+            };
+
+            $count = DB::table($table)
+                ->whereBetween('receipt_date', [
+                    $validated['start_date'],
+                    $validated['end_date']
+                ])
+                ->where('exported', true)
+                ->update(['exported' => false]);
+
+            $whtCount = 0;
+            if ($validated["export_type"] === 'Payment' && !empty($validated['include_wht'])) {
+                $paymentNos = DB::table('payment')
+                    ->whereBetween('receipt_date', [
+                        $validated['start_date'],
+                        $validated['end_date'],
+                    ])
+                    ->pluck('payment_no');
+
+                if ($paymentNos->isNotEmpty()) {
+                    $whtCount = DB::table('payment_details')
+                        ->whereIn('payment_no', $paymentNos->all())
+                        ->where('wht_amount', '>', 0)
+                        ->whereNotNull('wht_exported_at')
+                        ->update(['wht_exported_at' => null]);
+                }
+            }
+
+            if ($count === 0 && $whtCount === 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No exported records found for the selected date range',
+                    'errors' => [
+                        'general' => ['No exported records found for the selected date range'],
+                    ],
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Untagged successfully.',
+                'count' => $count,
+                'wht_count' => $whtCount,
+                'export_type' => $validated['export_type'],
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('Untag export failed.', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to untag. Please try again or contact the server administrator.',
+                'error_detail' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
         }
     }
 }
