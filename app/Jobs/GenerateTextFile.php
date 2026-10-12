@@ -69,6 +69,46 @@ class GenerateTextFile
             ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%']);
     }
 
+    /**
+     * Resolve (bank_code, bank_name) from a cash_in_bank label.
+     *
+     * Special case: when the label (case-insensitive, trimmed) is exactly
+     * "Cash On Hand" we hard-code the account to the COH Peso denominations
+     * GL account, regardless of whether an entry exists in cash_in_banks.
+     * Otherwise, we fall back to the lookup collection (typically keyed by
+     * the cash_in_bank label), returning empty strings on miss.
+     *
+     * @param  mixed  $cashInBankLabel  Raw value from payment.cash_in_bank (or equivalent column)
+     * @param  \Illuminate\Support\Collection|array|null  $lookup  Optional lookup keyed by label
+     * @return array{0: string, 1: string}  [bank_code, bank_name]
+     */
+    protected function resolveCashInBankAccount($cashInBankLabel, $lookup = null): array
+    {
+        $cohCode = '10.01.01.01';
+        $cohName = 'COH - PESO DENOMINATIONS';
+
+        $label = trim((string) ($cashInBankLabel ?? ''));
+        if (strcasecmp($label, 'Cash On Hand') === 0) {
+            return [$cohCode, $cohName];
+        }
+
+        if ($label === '' || ! $lookup) {
+            return ['', ''];
+        }
+
+        $row = $lookup instanceof \Illuminate\Support\Collection
+            ? $lookup->get($cashInBankLabel)
+            : ($lookup[$cashInBankLabel] ?? null);
+
+        $code = is_object($row) ? ($row->bank_code ?? '') : (is_array($row) ? ($row['bank_code'] ?? '') : '');
+        $name = is_object($row) ? ($row->bank_name ?? '') : (is_array($row) ? ($row['bank_name'] ?? '') : '');
+
+        return [
+            trim((string) $code),
+            trim((string) $name),
+        ];
+    }
+
     public function __construct(
         protected array $validatedData,
         protected string $userId,
@@ -217,8 +257,11 @@ class GenerateTextFile
                         $customerCusNavCodeDescription = $accCodes->get($customerCusNavCode)?->gl_account_name ?? '';
                         $customerCusPosting = $customers->get($invoice->customer_code)?->cus_posting ?? '';
                         $customerLocCode = $locCodeByCustomer[$invoice->customer_code] ?? null;
-                        $bankName = $bankNames->get($invoice->invoice_no)?->cash_in_bank ?? '';
-                        $bankCode = $banks->get($bankName)?->bank_code ?? '';
+                        $bankNameRaw = $bankNames->get($invoice->invoice_no)?->cash_in_bank ?? '';
+                        [$bankCode, $bankName] = $this->resolveCashInBankAccount(
+                            $bankNameRaw,
+                            $banks
+                        );
 
                         $itemName = $invoice->items->first()?->item_name ?? '';
                         $itemCode = $itemsList->get($this->normalizeItemNameKey($itemName))?->acc_code ?? '';
@@ -608,8 +651,10 @@ class GenerateTextFile
                     $detailIdsToMarkWhtExported = [];
                     $lines = [];
                     foreach ($payments as $payment) {
-                        $bankCode = $cashInBanks->get($payment->cash_in_bank)?->bank_code ?? '';
-                        $bankName = $cashInBanks->get($payment->cash_in_bank)?->bank_name ?? '';
+                        [$bankCode, $bankName] = $this->resolveCashInBankAccount(
+                            $payment->cash_in_bank ?? '',
+                            $cashInBanks
+                        );
 
                         $paymentCustomerCode = trim((string) ($payment->cust_code ?? $payment->customer_code));
                         if ($paymentCustomerCode === '') {
@@ -2163,8 +2208,10 @@ class GenerateTextFile
                 $customerCusPosting = $customer?->cus_posting ?? '';
                 $customerName = $detail->customer_name ?: $detail->payment_customer_name ?: '';
                 $locCode = $locCodeByCustomer[$customerCusCode] ?? null;
-                $bankName = $detail->cash_in_bank ?? '';
-                $bankCode = $cashInBanks->get($bankName)?->bank_code ?? '';
+                [$bankCode, $bankName] = $this->resolveCashInBankAccount(
+                    $detail->cash_in_bank ?? '',
+                    $cashInBanks
+                );
 
                 $normalizeReference = static function ($value): ?string {
                     $v = $value;

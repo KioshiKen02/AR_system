@@ -85,6 +85,41 @@ class GeneratePdfJob
         return (bool) ($setting?->allow_overpayment ?? true);
     }
 
+    /**
+     * Build a "dedupe key" for a customer-ledger row. Rows with the same customer,
+     * invoice number, type, receipt date and gross amount are treated as
+     * duplicates and emitted only once. Returns null for rows that are
+     * missing both an invoice number and a ledger id (shouldn't happen).
+     */
+    private function outstandingDocDedupeKey(string $customerCode, CustomerLedger $ledger): ?string
+    {
+        $parts = [
+            'c=' . trim($customerCode),
+        ];
+
+        $invoiceNo = trim((string) ($ledger->invoice_number ?? ''));
+        if ($invoiceNo !== '') {
+            $parts[] = 'doc=' . $invoiceNo;
+        } else {
+            $parts[] = 'docid=' . ((int) ($ledger->id ?? 0));
+        }
+
+        $type = trim((string) ($ledger->type ?? ''));
+        if ($type !== '') {
+            $parts[] = 't=' . $type;
+        }
+
+        $date = trim((string) ($ledger->date ?? ''));
+        if ($date !== '') {
+            $parts[] = 'd=' . $date;
+        }
+
+        $amount = number_format((float) ($ledger->amount ?? 0), 4, '.', '');
+        $parts[] = 'a=' . $amount;
+
+        return implode('|', $parts);
+    }
+
     private function getStoredFloatingDeductionForProoflist(PaymentDetails $detail): float
     {
         if (
@@ -2716,7 +2751,7 @@ class GeneratePdfJob
             });
 
         if ($this->validatedData['customer_type'] === 'All Customer') {
-            $customerCodesQuery = Customer::select('cus_code');
+            $customerCodesQuery = Customer::on('tenant')->select('cus_code')->distinct('cus_code');
             $typeMappings = [
                 'booking' => 'Booking',
                 'concession' => 'Concession',
@@ -2729,20 +2764,28 @@ class GeneratePdfJob
                 'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
-            $conditions = [];
+            $selectedTypes = [];
             foreach ($typeMappings as $option => $type) {
                 if (($this->validatedData['customerOptions'][$option] ?? false) === true) {
-                    $conditions[] = ['cus_type', '=', $type];
+                    $selectedTypes[] = $type;
                 }
             }
 
-            $customerCodesQuery->where(function ($q) use ($conditions) {
-                foreach ($conditions as $condition) {
-                    $q->orWhere(...$condition);
-                }
-            });
+            if (! empty($selectedTypes)) {
+                $customerCodesQuery->where(function ($q) use ($selectedTypes) {
+                    foreach ($selectedTypes as $type) {
+                        $needle = trim(mb_strtoupper($type));
+                        $q->orWhereRaw(
+                            "FIND_IN_SET(?, REPLACE(UPPER(TRIM(cus_type)), ', ', ',')) > 0",
+                            [$needle]
+                        );
+                    }
+                });
+            } else {
+                $customerCodesQuery->whereRaw('1 = 0');
+            }
 
-            $customerCodes = $customerCodesQuery->pluck('cus_code');
+            $customerCodes = $customerCodesQuery->pluck('cus_code')->unique()->values()->all();
             $query->whereIn('customer_code', $customerCodes);
         } elseif ($this->validatedData['customer_type'] === 'By Customer') {
             $query->where('customer_code', $this->validatedData['customer_code']);
@@ -2755,6 +2798,7 @@ class GeneratePdfJob
         $groupedData = [];
         $customerOverallAmountTotal = 0;
         $customerCodes = [];
+        $globalSeenDocKeys = [];
 
         $query->chunkById(500, function ($chunk) use (&$customerCodes) {
             $chunk->each(function ($item) use (&$customerCodes) {
@@ -2806,14 +2850,17 @@ class GeneratePdfJob
             $floatingAmounts,
             &$processedRows,
             $totalRows,
-            &$lastProgress
+            &$lastProgress,
+            &$globalSeenDocKeys
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
-                return $item->customer_code.'|'.$item->customer_name;
+                return (string) $item->customer_code;
             });
 
-            foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
-                [$customerCode, $customerName] = explode('|', $customerKey);
+            foreach ($chunkGrouped as $customerCode => $customerOutstandingBalances) {
+                $customerCode = (string) $customerCode;
+                $firstItem = $customerOutstandingBalances->first();
+                $customerName = (string) ($firstItem->customer_name ?? '');
 
                 $customerIndex = collect($groupedData)->search(
                     fn ($customer) => $customer['customer_code'] === $customerCode
@@ -2827,6 +2874,14 @@ class GeneratePdfJob
                 ];
 
                 foreach ($customerOutstandingBalances as $outstandingBalance) {
+                    $dedupeKey = $this->outstandingDocDedupeKey($customerCode, $outstandingBalance);
+                    if ($dedupeKey !== null && isset($globalSeenDocKeys[$dedupeKey])) {
+                        continue;
+                    }
+                    if ($dedupeKey !== null) {
+                        $globalSeenDocKeys[$dedupeKey] = true;
+                    }
+
                     $key = $customerCode.'|'.$outstandingBalance->invoice_number.'|'.$outstandingBalance->type;
                     $floatingPdcDc = $floatingAmounts[$key]['pdc_dc'] ?? 0;
                     $floatingWht = $floatingAmounts[$key]['wht'] ?? 0;
@@ -2879,6 +2934,13 @@ class GeneratePdfJob
             $group['outstandingBalances'] = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
                 return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
             }));
+            $group['customerAmountTotal'] = array_reduce(
+                $group['outstandingBalances'],
+                function ($sum, $row) {
+                    return $sum + (float) ($row['ar_net_amount'] ?? 0);
+                },
+                0
+            );
 
             return $group;
         }, $groupedData), function ($group) {
@@ -2940,7 +3002,7 @@ class GeneratePdfJob
             });
 
         if ($this->validatedData['customer_type'] === 'All Customer') {
-            $customerCodesQuery = Customer::select('cus_code');
+            $customerCodesQuery = Customer::on('tenant')->select('cus_code')->distinct('cus_code');
             $typeMappings = [
                 'booking' => 'Booking',
                 'concession' => 'Concession',
@@ -2953,20 +3015,28 @@ class GeneratePdfJob
                 'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
-            $conditions = [];
+            $selectedTypes = [];
             foreach ($typeMappings as $option => $type) {
                 if (($this->validatedData['customerOptions'][$option] ?? false) === true) {
-                    $conditions[] = ['cus_type', '=', $type];
+                    $selectedTypes[] = $type;
                 }
             }
 
-            $customerCodesQuery->where(function ($q) use ($conditions) {
-                foreach ($conditions as $condition) {
-                    $q->orWhere(...$condition);
-                }
-            });
+            if (! empty($selectedTypes)) {
+                $customerCodesQuery->where(function ($q) use ($selectedTypes) {
+                    foreach ($selectedTypes as $type) {
+                        $needle = trim(mb_strtoupper($type));
+                        $q->orWhereRaw(
+                            "FIND_IN_SET(?, REPLACE(UPPER(TRIM(cus_type)), ', ', ',')) > 0",
+                            [$needle]
+                        );
+                    }
+                });
+            } else {
+                $customerCodesQuery->whereRaw('1 = 0');
+            }
 
-            $customerCodes = $customerCodesQuery->pluck('cus_code');
+            $customerCodes = $customerCodesQuery->pluck('cus_code')->unique()->values()->all();
             $query->whereIn('customer_code', $customerCodes);
         } elseif ($this->validatedData['customer_type'] === 'By Customer') {
             $query->where('customer_code', $this->validatedData['customer_code']);
@@ -2979,6 +3049,7 @@ class GeneratePdfJob
         $groupedData = [];
         $customerOverallAmountTotal = 0;
         $customerCodes = [];
+        $globalSeenDocKeys = [];
 
         $query->chunkById(200, function ($chunk) use (&$customerCodes) {
             $chunk->each(function ($item) use (&$customerCodes) {
@@ -3030,14 +3101,17 @@ class GeneratePdfJob
             $floatingAmounts,
             &$processedRows,
             $totalRows,
-            &$lastProgress
+            &$lastProgress,
+            &$globalSeenDocKeys
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
-                return $item->customer_code.'|'.$item->customer_name;
+                return (string) $item->customer_code;
             });
 
-            foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
-                [$customerCode, $customerName] = explode('|', $customerKey);
+            foreach ($chunkGrouped as $customerCode => $customerOutstandingBalances) {
+                $customerCode = (string) $customerCode;
+                $firstItem = $customerOutstandingBalances->first();
+                $customerName = (string) ($firstItem->customer_name ?? '');
 
                 $customerIndex = collect($groupedData)->search(
                     fn ($customer) => $customer['customer_code'] === $customerCode
@@ -3051,6 +3125,14 @@ class GeneratePdfJob
                 ];
 
                 foreach ($customerOutstandingBalances as $outstandingBalance) {
+                    $dedupeKey = $this->outstandingDocDedupeKey($customerCode, $outstandingBalance);
+                    if ($dedupeKey !== null && isset($globalSeenDocKeys[$dedupeKey])) {
+                        continue;
+                    }
+                    if ($dedupeKey !== null) {
+                        $globalSeenDocKeys[$dedupeKey] = true;
+                    }
+
                     $key = $customerCode.'|'.$outstandingBalance->invoice_number.'|'.$outstandingBalance->type;
                     $floatingPdcDc = $floatingAmounts[$key]['pdc_dc'] ?? 0;
                     $floatingWht = $floatingAmounts[$key]['wht'] ?? 0;
@@ -3104,6 +3186,13 @@ class GeneratePdfJob
             $group['outstandingBalances'] = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
                 return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
             }));
+            $group['customerAmountTotal'] = array_reduce(
+                $group['outstandingBalances'],
+                function ($sum, $row) {
+                    return $sum + (float) ($row['ar_net_amount'] ?? 0);
+                },
+                0
+            );
 
             return $group;
         }, $groupedData), function ($group) {
@@ -3164,7 +3253,7 @@ class GeneratePdfJob
             });
 
         if ($this->validatedData['customer_type'] === 'All Customer') {
-            $customerCodesQuery = Customer::select('cus_code');
+            $customerCodesQuery = Customer::on('tenant')->select('cus_code')->distinct('cus_code');
             $typeMappings = [
                 'booking' => 'Booking',
                 'concession' => 'Concession',
@@ -3177,20 +3266,28 @@ class GeneratePdfJob
                 'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
-            $conditions = [];
+            $selectedTypes = [];
             foreach ($typeMappings as $option => $type) {
                 if (($this->validatedData['customerOptions'][$option] ?? false) === true) {
-                    $conditions[] = ['cus_type', '=', $type];
+                    $selectedTypes[] = $type;
                 }
             }
 
-            $customerCodesQuery->where(function ($q) use ($conditions) {
-                foreach ($conditions as $condition) {
-                    $q->orWhere(...$condition);
-                }
-            });
+            if (! empty($selectedTypes)) {
+                $customerCodesQuery->where(function ($q) use ($selectedTypes) {
+                    foreach ($selectedTypes as $type) {
+                        $needle = trim(mb_strtoupper($type));
+                        $q->orWhereRaw(
+                            "FIND_IN_SET(?, REPLACE(UPPER(TRIM(cus_type)), ', ', ',')) > 0",
+                            [$needle]
+                        );
+                    }
+                });
+            } else {
+                $customerCodesQuery->whereRaw('1 = 0');
+            }
 
-            $customerCodes = $customerCodesQuery->pluck('cus_code');
+            $customerCodes = $customerCodesQuery->pluck('cus_code')->unique()->values()->all();
             $query->whereIn('customer_code', $customerCodes);
         } elseif ($this->validatedData['customer_type'] === 'By Customer') {
             $query->where('customer_code', $this->validatedData['customer_code']);
@@ -3203,6 +3300,7 @@ class GeneratePdfJob
         $groupedData = [];
         $customerOverallAmountTotal = 0;
         $customerCodes = [];
+        $globalSeenDocKeys = [];
 
         $query->chunkById(500, function ($chunk) use (&$customerCodes) {
             $chunk->each(function ($item) use (&$customerCodes) {
@@ -3254,14 +3352,17 @@ class GeneratePdfJob
             $floatingAmounts,
             &$processedRows,
             $totalRows,
-            &$lastProgress
+            &$lastProgress,
+            &$globalSeenDocKeys
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
-                return $item->customer_code.'|'.$item->customer_name;
+                return (string) $item->customer_code;
             });
 
-            foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
-                [$customerCode, $customerName] = explode('|', $customerKey);
+            foreach ($chunkGrouped as $customerCode => $customerOutstandingBalances) {
+                $customerCode = (string) $customerCode;
+                $firstItem = $customerOutstandingBalances->first();
+                $customerName = (string) ($firstItem->customer_name ?? '');
 
                 $customerIndex = collect($groupedData)->search(
                     fn ($customer) => $customer['customer_code'] === $customerCode
@@ -3275,6 +3376,14 @@ class GeneratePdfJob
                 ];
 
                 foreach ($customerOutstandingBalances as $outstandingBalance) {
+                    $dedupeKey = $this->outstandingDocDedupeKey($customerCode, $outstandingBalance);
+                    if ($dedupeKey !== null && isset($globalSeenDocKeys[$dedupeKey])) {
+                        continue;
+                    }
+                    if ($dedupeKey !== null) {
+                        $globalSeenDocKeys[$dedupeKey] = true;
+                    }
+
                     $key = $customerCode.'|'.$outstandingBalance->invoice_number.'|'.$outstandingBalance->type;
                     $floatingPdcDc = $floatingAmounts[$key]['pdc_dc'] ?? 0;
                     $floatingWht = $floatingAmounts[$key]['wht'] ?? 0;
@@ -3327,6 +3436,13 @@ class GeneratePdfJob
             $group['outstandingBalances'] = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
                 return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
             }));
+            $group['customerAmountTotal'] = array_reduce(
+                $group['outstandingBalances'],
+                function ($sum, $row) {
+                    return $sum + (float) ($row['ar_net_amount'] ?? 0);
+                },
+                0
+            );
 
             return $group;
         }, $groupedData), function ($group) {
@@ -3367,7 +3483,7 @@ class GeneratePdfJob
             });
 
         if ($this->validatedData['customer_type'] === 'All Customer') {
-            $customerCodesQuery = Customer::select('cus_code');
+            $customerCodesQuery = Customer::on('tenant')->select('cus_code')->distinct('cus_code');
             $typeMappings = [
                 'booking' => 'Booking',
                 'concession' => 'Concession',
@@ -3380,20 +3496,28 @@ class GeneratePdfJob
                 'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
-            $conditions = [];
+            $selectedTypes = [];
             foreach ($typeMappings as $option => $type) {
                 if (($this->validatedData['customerOptions'][$option] ?? false) === true) {
-                    $conditions[] = ['cus_type', '=', $type];
+                    $selectedTypes[] = $type;
                 }
             }
 
-            $customerCodesQuery->where(function ($q) use ($conditions) {
-                foreach ($conditions as $condition) {
-                    $q->orWhere(...$condition);
-                }
-            });
+            if (! empty($selectedTypes)) {
+                $customerCodesQuery->where(function ($q) use ($selectedTypes) {
+                    foreach ($selectedTypes as $type) {
+                        $needle = trim(mb_strtoupper($type));
+                        $q->orWhereRaw(
+                            "FIND_IN_SET(?, REPLACE(UPPER(TRIM(cus_type)), ', ', ',')) > 0",
+                            [$needle]
+                        );
+                    }
+                });
+            } else {
+                $customerCodesQuery->whereRaw('1 = 0');
+            }
 
-            $customerCodes = $customerCodesQuery->pluck('cus_code');
+            $customerCodes = $customerCodesQuery->pluck('cus_code')->unique()->values()->all();
             $query->whereIn('customer_code', $customerCodes);
         } elseif ($this->validatedData['customer_type'] === 'By Customer') {
             $query->where('customer_code', $this->validatedData['customer_code']);
@@ -3406,6 +3530,7 @@ class GeneratePdfJob
         $groupedData = [];
         $customerOverallAmountTotal = 0;
         $customerCodes = [];
+        $globalSeenDocKeys = [];
 
         $query->chunkById(200, function ($chunk) use (&$customerCodes) {
             $chunk->each(function ($item) use (&$customerCodes) {
@@ -3457,14 +3582,17 @@ class GeneratePdfJob
             $floatingAmounts,
             &$processedRows,
             $totalRows,
-            &$lastProgress
+            &$lastProgress,
+            &$globalSeenDocKeys
         ) {
             $chunkGrouped = $outstandingBalancesChunk->groupBy(function ($item) {
-                return $item->customer_code.'|'.$item->customer_name;
+                return (string) $item->customer_code;
             });
 
-            foreach ($chunkGrouped as $customerKey => $customerOutstandingBalances) {
-                [$customerCode, $customerName] = explode('|', $customerKey);
+            foreach ($chunkGrouped as $customerCode => $customerOutstandingBalances) {
+                $customerCode = (string) $customerCode;
+                $firstItem = $customerOutstandingBalances->first();
+                $customerName = (string) ($firstItem->customer_name ?? '');
 
                 $customerIndex = collect($groupedData)->search(
                     fn ($customer) => $customer['customer_code'] === $customerCode
@@ -3478,6 +3606,14 @@ class GeneratePdfJob
                 ];
 
                 foreach ($customerOutstandingBalances as $outstandingBalance) {
+                    $dedupeKey = $this->outstandingDocDedupeKey($customerCode, $outstandingBalance);
+                    if ($dedupeKey !== null && isset($globalSeenDocKeys[$dedupeKey])) {
+                        continue;
+                    }
+                    if ($dedupeKey !== null) {
+                        $globalSeenDocKeys[$dedupeKey] = true;
+                    }
+
                     $key = $customerCode.'|'.$outstandingBalance->invoice_number.'|'.$outstandingBalance->type;
                     $floatingPdcDc = $floatingAmounts[$key]['pdc_dc'] ?? 0;
                     $floatingWht = $floatingAmounts[$key]['wht'] ?? 0;
@@ -3531,6 +3667,13 @@ class GeneratePdfJob
             $group['outstandingBalances'] = array_values(array_filter($group['outstandingBalances'] ?? [], function ($row) {
                 return round((float) ($row['ar_net_amount'] ?? 0), 2) != 0;
             }));
+            $group['customerAmountTotal'] = array_reduce(
+                $group['outstandingBalances'],
+                function ($sum, $row) {
+                    return $sum + (float) ($row['ar_net_amount'] ?? 0);
+                },
+                0
+            );
 
             return $group;
         }, $groupedData), function ($group) {

@@ -164,6 +164,13 @@
             <ConfirmationDialog :show="showDialog" message="Are you sure about deleting this user?"
                 @close="handleConfirm" />
         </Transition>
+        <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
+            leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+            <ConfirmationDialog :show="showResetDialog"
+                :message="`Reset username & password of ${pendingResetUser?.name || 'this user'} back to default (Employee ID)?`"
+                @close="handleResetConfirm" />
+        </Transition>
 
         <div class="bg-[var(--color-bg-secondary)]/20 p-4 rounded-md shadow-[0_0_20px_var(--color-shadow)]/20 mt-4">
             <table class="w-full text-sm text-[var(--color-text-primary)] rounded-xl overflow-hidden mb-2">
@@ -307,6 +314,14 @@
                                         class="w-4 h-4 text-[var(--color-primary)]" />
                                 </button>
 
+                                <!-- Reset Credentials -->
+                                <button @click="resetUserCredentials(user)"
+                                    class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-amber-500/30 hover:bg-amber-500/50 hover:shadow-lg group-hover:opacity-100"
+                                    title="Reset username & password to default (Employee ID)">
+                                    <svg-icon type="mdi" :path="mdiKey"
+                                        class="w-4 h-4 text-amber-600" />
+                                </button>
+
                                 <!-- Delete -->
                                 <button @click="deleteUser(user)"
                                     class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-red-500/30 hover:bg-red-500/50 hover:shadow-lg group-hover:opacity-100">
@@ -359,7 +374,7 @@ import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import ToastAlert from "./Components/ToastAlert.vue";
 import { Transition } from "vue";
 import ConfirmationDialog from "./Components/ConfirmationDialog.vue";
-import { mdiMagnify, mdiPencil } from "@mdi/js";
+import { mdiMagnify, mdiPencil, mdiKey } from "@mdi/js";
 import SvgIcon from "@jamescoyle/vue-icon";
 
 const props = defineProps({
@@ -393,6 +408,8 @@ const showToast = ref(false);
 const toastMessage = ref("");
 const showDialog = ref(false);
 const pendingDeleteID = ref(null);
+const showResetDialog = ref(false);
+const pendingResetUser = ref(null);
 const userPositions = ref({});
 const positionCache = new Map();
 
@@ -511,6 +528,36 @@ const handleConfirm = async (confirmed) => {
         }
     }
     pendingDeleteID.value = null;
+};
+
+const resetUserCredentials = (user) => {
+    pendingResetUser.value = user;
+    showResetDialog.value = true;
+};
+
+const handleResetConfirm = async (confirmed) => {
+    showResetDialog.value = false;
+    if (confirmed && pendingResetUser.value) {
+        try {
+            await router.put(route("user-masterfile.reset-credentials", {
+                tenant: page.props.tenant,
+                user: pendingResetUser.value.id,
+            }), {}, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => showSuccessToast("User credentials reset to default (Employee ID) successfully"),
+                onError: (errors) => {
+                    console.error(errors);
+                    if (errors?.error) {
+                        showSuccessToast(errors.error);
+                    }
+                },
+            });
+        } catch (error) {
+            console.error(error);
+        }
+    }
+    pendingResetUser.value = null;
 };
 
 const getFirstValidChar = (name) => {

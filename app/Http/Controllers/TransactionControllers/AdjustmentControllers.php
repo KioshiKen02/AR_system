@@ -566,8 +566,9 @@ class AdjustmentControllers extends Controller
 
             $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
 
-            $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
-            if ($baseUrl === null && $appName !== 'Ar System') {
+            $endpointUrl = $this->adjustmentSalesApiEndpointForApp($appName);
+            $buParam = $this->adjustmentSalesBuForApp($appName);
+            if ($endpointUrl === null && $appName !== 'Ar System') {
                 throw new \Exception("Unknown app name: {$appName}");
             }
 
@@ -591,8 +592,17 @@ class AdjustmentControllers extends Controller
 
             $apiAdjustmentValue = $newPositive - $newNegative;
 
-            if ($baseUrl) {
-                $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
+            if ($endpointUrl) {
+                $typeParam = $this->adjustmentSalesTypeForApplyTo($validated['apply_to'] ?? '');
+                if ($typeParam === null) {
+                    Log::info('Adjustment sync skipped: apply_to not supported by the adjustment-sales API.', [
+                        'app_name' => $appName,
+                        'invoice_no' => $validated['invoice_no'],
+                        'apply_to' => $validated['apply_to'] ?? null,
+                    ]);
+                    return $adjustmentNumber;
+                }
+                $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($endpointUrl));
                 if (!filter_var($url, FILTER_VALIDATE_URL)) {
                     Log::error('Adjustment Sales API Failed', [
                         'app_name' => $appName,
@@ -603,20 +613,25 @@ class AdjustmentControllers extends Controller
                         'payload' => [
                             'adj_sales' => (string) $apiAdjustmentValue,
                             'tds_no'    => $validated['invoice_no'],
+                            'type'      => $typeParam,
+                            'bu'        => $buParam,
                         ],
                         'exception' => 'Invalid URL',
                     ]);
                     return $adjustmentNumber;
                 }
                 try {
+                    $payload = [
+                        'adj_sales' => (string) $apiAdjustmentValue,
+                        'tds_no'    => $validated['invoice_no'],
+                        'type'      => $typeParam,
+                        'bu'        => (string) $buParam,
+                    ];
                     $response = Http::timeout(3)
                         ->retry(2, 200)
                         ->withHeaders([
                             'Accept' => 'application/json',
-                        ])->post($url, [
-                            'adj_sales' => (string) $apiAdjustmentValue,
-                            'tds_no' => $validated['invoice_no'],
-                        ]);
+                        ])->post($url, $payload);
                     if (!$response->successful()) {
                         Log::error('Adjustment Sales API Failed', [
                             'app_name' => $appName,
@@ -624,10 +639,7 @@ class AdjustmentControllers extends Controller
                             'status' => $response->status(),
                             'response_body' => $response->body(),
                             'response_json' => $response->json(),
-                            'payload' => [
-                                'adj_sales' => (string) $apiAdjustmentValue,
-                                'tds_no'    => $validated['invoice_no'],
-                            ],
+                            'payload' => $payload,
                         ]);
                     }
                 } catch (\Throwable $e) {
@@ -640,6 +652,8 @@ class AdjustmentControllers extends Controller
                         'payload' => [
                             'adj_sales' => (string) $apiAdjustmentValue,
                             'tds_no'    => $validated['invoice_no'],
+                            'type'      => $typeParam,
+                            'bu'        => $buParam,
                         ],
                         'exception' => $e->getMessage(),
                     ]);
@@ -717,20 +731,31 @@ class AdjustmentControllers extends Controller
             }
         }
 
-        $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
-        if ($baseUrl === null && $appName !== 'Ar System') {
+        $endpointUrl = $this->adjustmentSalesApiEndpointForApp($appName);
+        $buParam = $this->adjustmentSalesBuForApp($appName);
+        if ($endpointUrl === null && $appName !== 'Ar System') {
             return response()->json([
                 'success' => false,
                 'message' => "Unknown app name: {$appName}",
             ], 422);
         }
 
-        if (!$baseUrl) {
+        if (!$endpointUrl) {
             return response()->json([
                 'success' => false,
                 'message' => 'No sync URL configured for this app.',
             ], 422);
         }
+
+        $typeParam = $this->adjustmentSalesTypeForApplyTo($applyTo);
+        if ($typeParam === null) {
+            return response()->json([
+                'success' => false,
+                'message' => "Apply-to type ({$applyTo}) is not supported for syncing adjustment sales.",
+            ], 422);
+        }
+
+        $syncUrl = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($endpointUrl));
 
         // Calculate the total of all adjustments for this invoice to send to the API
         $existingPositive = (float) Adjustment::on('tenant')->where('invoice_no', $invoiceNo)
@@ -744,17 +769,18 @@ class AdjustmentControllers extends Controller
 
         $apiAdjustmentValue = $existingPositive - $existingNegative;
 
-        $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        if (!filter_var($syncUrl, FILTER_VALIDATE_URL)) {
             Log::error('Adjustment Sales API Failed', [
                 'app_name' => $appName,
-                'url' => $url,
+                'url' => $syncUrl,
                 'status' => null,
                 'response_body' => null,
                 'response_json' => null,
                 'payload' => [
                     'adj_sales' => (string) $apiAdjustmentValue,
                     'tds_no'    => $invoiceNo,
+                    'type'      => $typeParam,
+                    'bu'        => $buParam,
                 ],
                 'exception' => 'Invalid URL',
             ]);
@@ -766,26 +792,26 @@ class AdjustmentControllers extends Controller
         }
 
         try {
+            $payload = [
+                'adj_sales' => (string) $apiAdjustmentValue,
+                'tds_no'    => $invoiceNo,
+                'type'      => $typeParam,
+                'bu'        => (string) $buParam,
+            ];
             $response = Http::timeout(5)
                 ->retry(2, 200)
                 ->withHeaders([
                     'Accept' => 'application/json',
-                ])->post($url, [
-                    'adj_sales' => (string) $apiAdjustmentValue,
-                    'tds_no' => $invoiceNo,
-                ]);
+                ])->post($syncUrl, $payload);
 
             if (!$response->successful()) {
                 Log::error('Adjustment Sales API Failed', [
                     'app_name' => $appName,
-                    'url' => $url,
+                    'url' => $syncUrl,
                     'status' => $response->status(),
                     'response_body' => $response->body(),
                     'response_json' => $response->json(),
-                    'payload' => [
-                        'adj_sales' => (string) $apiAdjustmentValue,
-                        'tds_no'    => $invoiceNo,
-                    ],
+                    'payload' => $payload,
                 ]);
 
                 return response()->json([
@@ -801,13 +827,15 @@ class AdjustmentControllers extends Controller
         } catch (\Throwable $e) {
             Log::error('Adjustment Sales API Failed', [
                 'app_name' => $appName,
-                'url' => $url,
+                'url' => $syncUrl ?? $endpointUrl ?? null,
                 'status' => null,
                 'response_body' => null,
                 'response_json' => null,
                 'payload' => [
                     'adj_sales' => (string) $apiAdjustmentValue,
                     'tds_no'    => $invoiceNo,
+                    'type'      => $typeParam,
+                    'bu'        => $buParam,
                 ],
                 'exception' => $e->getMessage(),
             ]);
@@ -819,34 +847,79 @@ class AdjustmentControllers extends Controller
         }
     }
 
-    private function adjustmentSalesBaseUrlForApp(string $appName): ?string
+    private function adjustmentSalesApiEndpointForApp(string $appName): ?string
     {
         $map = [
-            'Bilar Breeder Local' => 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=13',
-            'Bilar Breeder' => 'http://172.16.220.1:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=13',
-            'Gp Jagna' => 'http://172.16.112.51:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=50',
-            'Ice Plant' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=25',
-            'Peanut Kisses' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=26',
-            'Cortes Poultry' => 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=12',
-            'Cortes Piggery' => 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=11',
-            'Canhayupon Breeder' => 'http://172.16.220.223:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=15',
-            'Bilar Hatchery' => 'http://172.16.219.200:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=14',
-            'Lapsaon Breeder' => 'http://172.16.220.222:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=16',
-            'Rizal Breeder' => 'http://172.16.217.11:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=43',
-            'Feedmill' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=19',
-            'Growout' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=20',
-            'Cortes Fertilizer' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=42',
-            'Ubay Fertilizer' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=22',
-            'Piggery Untaga' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=23',
-            'Demo Farm' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=21',
-            'Dressing Plant' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=17',
-            'Farmers Market' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=41',
-            'Meat Processing' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=46',
-            'Rendering' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales?bu=18',
-            'Ar System' => null,
+            'Bilar Breeder Local' => 'http://172.16.43.148/centralized_invoicing/sales-invoice/update/adjustment-sales',
+            'Bilar Breeder' => 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Gp Jagna' => 'http://172.16.112.51:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Ice Plant' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Peanut Kisses' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Cortes Poultry' => 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Cortes Piggery' => 'http://172.16.192.68:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Canhayupon Breeder' => 'http://172.16.220.223:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Bilar Hatchery' => 'http://172.16.219.200:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Lapsaon Breeder' => 'http://172.16.220.222:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Rizal Breeder' => 'http://172.16.217.11:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Feedmill' => 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Growout' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Cortes Fertilizer' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Ubay Fertilizer' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Piggery Untaga' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Demo Farm' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Dressing Plant' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Farmers Market' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Meat Processing' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Rendering' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Ar System' => 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales',
         ];
 
         return $map[$appName] ?? null;
+    }
+
+    private function adjustmentSalesBuForApp(string $appName): ?string
+    {
+        $map = [
+            'Bilar Breeder Local' => '13',
+            'Bilar Breeder' => '13',
+            'Gp Jagna' => '50',
+            'Ice Plant' => '25',
+            'Peanut Kisses' => '26',
+            'Cortes Poultry' => '12',
+            'Cortes Piggery' => '11',
+            'Canhayupon Breeder' => '15',
+            'Bilar Hatchery' => '14',
+            'Lapsaon Breeder' => '16',
+            'Rizal Breeder' => '43',
+            'Feedmill' => '19',
+            'Growout' => '20',
+            'Cortes Fertilizer' => '42',
+            'Ubay Fertilizer' => '22',
+            'Piggery Untaga' => '23',
+            'Demo Farm' => '21',
+            'Dressing Plant' => '17',
+            'Farmers Market' => '41',
+            'Meat Processing' => '46',
+            'Rendering' => '18',
+            'Ar System' => '13',
+        ];
+
+        return $map[$appName] ?? null;
+    }
+
+    private function adjustmentSalesTypeForApplyTo($applyTo): ?string
+    {
+        $key = strtolower(trim((string) ($applyTo ?? '')));
+
+        return match ($key) {
+            'sales invoice', 'salesinvoice', 'si' => 'Sales Invoice',
+            'merchandise transfer out', 'merchandisetransferout', 'mto' => 'Merchandise Transfer Out',
+            'mpd sales invoice', 'mpdsalesinvoice', 'mpd si' => 'MPD Sales Invoice',
+            'mpd merchandise transfer out', 'mpdmerchandisetransferout', 'mpd mto' => 'MPD Merchandise Transfer Out',
+            'sales charge invoice', 'saleschargeinvoice', 'sci', 'ci', 'charge invoice', 'charges invoice', 'chargeinvoice' => 'Sales Charge Invoice',
+            'merchandise charge invoice', 'merchandisechargeinvoice', 'mci' => 'Merchandise Charge Invoice',
+            default => null,
+        };
     }
 
     private function appNameFromTenant(string $tenant): ?string
@@ -931,31 +1004,37 @@ class AdjustmentControllers extends Controller
             $this->recomputeLedgerFromCurrentState($ledger);
             $this->syncLedgerOverpayment($ledger);
 
-            if ($adj->apply_to === 'Sales Invoice') {
-                $userAppSetting = $request->user()?->appSetting;
-                $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
+            $userAppSetting = $request->user()?->appSetting;
+            $appName = $userAppSetting ? $userAppSetting->app_name : config('app.name');
 
-                $baseUrl = $this->adjustmentSalesBaseUrlForApp($appName);
-                if ($baseUrl) {
-                    $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($baseUrl));
-                    if (filter_var($url, FILTER_VALIDATE_URL)) {
-                        try {
-                            Http::timeout(3)
-                                ->retry(2, 200)
-                                ->withHeaders([
-                                    'Accept' => 'application/json',
-                                ])->post($url, [
-                                    'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
-                                    'tds_no' => $adj->invoice_no,
-                                ]);
-                        } catch (\Throwable $e) {
-                            Log::error('Adjustment cancel sales sync failed', [
-                                'adjustment_id' => $adj->id,
-                                'invoice_no' => $adj->invoice_no,
-                                'url' => $url,
-                                'exception' => $e->getMessage(),
-                            ]);
-                        }
+            $endpointUrl = $this->adjustmentSalesApiEndpointForApp($appName);
+            $buParam = $this->adjustmentSalesBuForApp($appName);
+            if ($endpointUrl) {
+                $typeParam = $this->adjustmentSalesTypeForApplyTo($adj->apply_to ?? '');
+                $url = preg_replace('/^(https?:\/\/)\s+/', '$1', trim($endpointUrl));
+                if ($typeParam !== null && filter_var($url, FILTER_VALIDATE_URL)) {
+                    try {
+                        $payload = [
+                            'adj_sales' => (string) ($ledger->adjusted_amount ?? 0),
+                            'tds_no'    => $adj->invoice_no,
+                            'type'      => $typeParam,
+                            'bu'        => (string) $buParam,
+                        ];
+                        Http::timeout(3)
+                            ->retry(2, 200)
+                            ->withHeaders([
+                                'Accept' => 'application/json',
+                            ])->post($url, $payload);
+                    } catch (\Throwable $e) {
+                        Log::error('Adjustment cancel sales sync failed', [
+                            'adjustment_id' => $adj->id,
+                            'invoice_no' => $adj->invoice_no,
+                            'apply_to' => $adj->apply_to ?? null,
+                            'type' => $typeParam,
+                            'bu' => $buParam,
+                            'url' => $url,
+                            'exception' => $e->getMessage(),
+                        ]);
                     }
                 }
             }

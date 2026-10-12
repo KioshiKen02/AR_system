@@ -127,6 +127,7 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
             Route::post('/user-masterfile', [UserMasterfileController::class, 'store'])->name('user-masterfile.store');
             Route::put('/user-masterfile/{user}', [UserMasterfileController::class, 'update'])->name('user-masterfile.update');
             Route::delete('/user-masterfile/{user}', [UserMasterfileController::class, 'destroy'])->name('user-masterfile.destroy');
+            Route::put('/user-masterfile/{user}/reset-credentials', [UserMasterfileController::class, 'resetCredentials'])->name('user-masterfile.reset-credentials');
         });
 
         //App Settings

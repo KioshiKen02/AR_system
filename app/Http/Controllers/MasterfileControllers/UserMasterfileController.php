@@ -155,4 +155,40 @@ class UserMasterfileController extends Controller
 
         return redirect()->back()->with('success', 'User deleted successfully.');
     }
+
+    public function resetCredentials(Request $request, $id)
+    {
+        $targetId = $request->route('user') ?? $request->route('id') ?? $request->route('userId');
+
+        if (!$targetId) {
+            $targetId = $id;
+        }
+
+        if (!is_numeric($targetId)) {
+            Log::warning("UserMasterfile Reset Credentials: ID is non-numeric '{$targetId}'. This likely means route parameter mismatch.");
+            $params = array_values($request->route()->parameters());
+            if (count($params) >= 2) {
+                $targetId = $params[1];
+            }
+        }
+
+        if ($request->user()->role !== 'Admin') {
+            abort(403);
+        }
+
+        $user = User::on('mysql')->findOrFail($targetId);
+
+        if (empty($user->employee_id)) {
+            return redirect()->back()->with('error', 'Cannot reset credentials: this user has no Employee ID to use as the default.');
+        }
+
+        $defaultCredentials = $user->employee_id;
+
+        $user->update([
+            'username' => $defaultCredentials,
+            'password' => Hash::make($defaultCredentials),
+        ]);
+
+        return redirect()->back()->with('success', 'User credentials reset to default (Employee ID) successfully.');
+    }
 }

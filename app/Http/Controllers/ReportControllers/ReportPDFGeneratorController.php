@@ -850,7 +850,7 @@ class ReportPDFGeneratorController extends Controller
             });
 
         if ($validated['customer_type'] === 'All Customer') {
-            $customerCodesQuery = Customer::select('cus_code');
+            $customerCodesQuery = Customer::on('tenant')->select('cus_code')->distinct('cus_code');
             $typeMappings = [
                 'booking' => 'Booking',
                 'concession' => 'Concession',
@@ -863,20 +863,28 @@ class ReportPDFGeneratorController extends Controller
                 'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
-            $conditions = [];
+            $selectedTypes = [];
             foreach ($typeMappings as $option => $type) {
                 if ($request->customerOptions[$option] ?? false) {
-                    $conditions[] = ['cus_type', '=', $type];
+                    $selectedTypes[] = $type;
                 }
             }
 
-            $customerCodesQuery->where(function ($q) use ($conditions) {
-                foreach ($conditions as $condition) {
-                    $q->orWhere(...$condition);
-                }
-            });
+            if (! empty($selectedTypes)) {
+                $customerCodesQuery->where(function ($q) use ($selectedTypes) {
+                    foreach ($selectedTypes as $type) {
+                        $needle = trim(mb_strtoupper($type));
+                        $q->orWhereRaw(
+                            "FIND_IN_SET(?, REPLACE(UPPER(TRIM(cus_type)), ', ', ',')) > 0",
+                            [$needle]
+                        );
+                    }
+                });
+            } else {
+                $customerCodesQuery->whereRaw('1 = 0');
+            }
 
-            $customerCodes = $customerCodesQuery->pluck('cus_code');
+            $customerCodes = $customerCodesQuery->pluck('cus_code')->unique()->values()->all();
             $query->whereIn('customer_code', $customerCodes);
         } elseif ($validated['customer_type'] === 'By Customer') {
             $query->where('customer_code', $validated['customer_code']);
@@ -1006,7 +1014,7 @@ class ReportPDFGeneratorController extends Controller
             });
 
         if ($validated['customer_type'] === 'All Customer') {
-            $customerCodesQuery = Customer::select('cus_code');
+            $customerCodesQuery = Customer::on('tenant')->select('cus_code')->distinct('cus_code');
             $typeMappings = [
                 'booking' => 'Booking',
                 'concession' => 'Concession',
@@ -1019,20 +1027,28 @@ class ReportPDFGeneratorController extends Controller
                 'easyLinkEmployees' => 'EasyLink Employees',
             ];
 
-            $conditions = [];
+            $selectedTypes = [];
             foreach ($typeMappings as $option => $type) {
                 if ($request->customerOptions[$option] ?? false) {
-                    $conditions[] = ['cus_type', '=', $type];
+                    $selectedTypes[] = $type;
                 }
             }
 
-            $customerCodesQuery->where(function ($q) use ($conditions) {
-                foreach ($conditions as $condition) {
-                    $q->orWhere(...$condition);
-                }
-            });
+            if (! empty($selectedTypes)) {
+                $customerCodesQuery->where(function ($q) use ($selectedTypes) {
+                    foreach ($selectedTypes as $type) {
+                        $needle = trim(mb_strtoupper($type));
+                        $q->orWhereRaw(
+                            "FIND_IN_SET(?, REPLACE(UPPER(TRIM(cus_type)), ', ', ',')) > 0",
+                            [$needle]
+                        );
+                    }
+                });
+            } else {
+                $customerCodesQuery->whereRaw('1 = 0');
+            }
 
-            $customerCodes = $customerCodesQuery->pluck('cus_code');
+            $customerCodes = $customerCodesQuery->pluck('cus_code')->unique()->values()->all();
             $query->whereIn('customer_code', $customerCodes);
         } elseif ($validated['customer_type'] === 'By Customer') {
             $query->where('customer_code', $validated['customer_code']);
