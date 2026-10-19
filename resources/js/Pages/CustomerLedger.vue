@@ -604,23 +604,16 @@
 
         filteredRows.value.forEach((row, index) => {
             const key = row?.id ?? `row-${index}`;
-            const isPaymentType = row?.type === 'Payment';
-
             const debit = Math.max(0, toNumber(row?.debit_amount));
             const credit = Math.max(0, toNumber(row?.amount_paid));
 
-            let displayCredit;
-            if (isPaymentType) {
-                displayCredit = credit;
-            } else {
-                const overpay = debit > 0 ? Math.max(credit - debit, 0) : 0;
-                displayCredit = credit - overpay;
-                runningAdjustment += overpay;
-            }
+            const overpay = debit > 0 ? Math.max(credit - debit, 0) : 0;
+            const displayCredit = credit - overpay;
+            runningAdjustment += overpay;
 
             const displayRunningBalance = Math.max(
                 0,
-                toNumber(row?.running_balance) + (isPaymentType ? 0 : runningAdjustment)
+                toNumber(row?.running_balance) + runningAdjustment
             );
 
             map.set(key, {

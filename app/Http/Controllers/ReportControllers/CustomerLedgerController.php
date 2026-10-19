@@ -135,10 +135,6 @@ class CustomerLedgerController extends Controller
         };
 
         $computeNetDebit = function ($record) use ($val) {
-            if ($record->type === 'Payment') {
-                return $val($record->adjusted_amount ?? $record->amount);
-            }
-
             $amount = $val($record->amount);
             $shrinkage = $val($record->shrinkage);
             $overage = $val($record->overage);
@@ -147,16 +143,12 @@ class CustomerLedgerController extends Controller
             return $amount - $shrinkage + $overage - $return;
         };
 
-        $computeCredit = function ($record, $netDebit, $paidAmounts, $floatingAmounts) use ($val) {
-            if ($record->type === 'Payment') {
-                return $val($record->amount_paid);
-            }
-
+        $computeCredit = function ($record, $paidAmounts, $floatingAmounts) use ($val) {
             $paidRow = $paidAmounts
                 ->get($record->invoice_number, collect())
                 ->get($record->type, collect())
                 ->first();
-            $creditPaid = $paidRow?->total_paid ?? 0;
+            $creditPaid = $paidRow?->total_paid ?? $record->amount_paid ?? 0;
 
             $floatingRow = $floatingAmounts
                 ->get($record->invoice_number, collect())
@@ -189,7 +181,7 @@ class CustomerLedgerController extends Controller
             $negSum = $posNeg->neg_sum ?? 0;
             $netDebit += ($posSum - $negSum);
 
-            $credit = $computeCredit($prev, $netDebit, $paidAmounts, $floatingAmounts);
+            $credit = $computeCredit($prev, $paidAmounts, $floatingAmounts);
             $paymentForwarded += ($netDebit - $credit);
         }
 
@@ -221,7 +213,7 @@ class CustomerLedgerController extends Controller
             $negSum = $posNeg->neg_sum ?? 0;
             $netDebit += ($posSum - $negSum);
 
-            $credit = $computeCredit($record, $netDebit, $paidAmounts, $floatingAmounts);
+            $credit = $computeCredit($record, $paidAmounts, $floatingAmounts);
 
             $floatingRow = $floatingAmounts
                 ->get($record->invoice_number, collect())

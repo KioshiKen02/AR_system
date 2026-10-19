@@ -28,9 +28,18 @@ class AuthController extends Controller
         );
 
         if (Auth::attempt($fields)) {
+            $authenticatedUser = Auth::user();
+
+            if ($authenticatedUser->status !== 'Active') {
+                Auth::logout();
+
+                return back()->withErrors([
+                    'username' => 'This account is inactive. Please contact an administrator.',
+                ])->onlyInput('username');
+            }
 
             try {
-                $employeeId = Auth::user()->employee_id;
+                $employeeId = $authenticatedUser->employee_id;
 
                 if (!$employeeId) {
                     Auth::logout();
