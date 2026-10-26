@@ -46,16 +46,25 @@ class GenerateTextFile
             return $this->walkInCustomerCodes;
         }
 
-        $codes = Customer::query()
-            ->whereRaw($this->normalizedSql('cus_name') . " LIKE ?", ['%walkin%'])
-            ->pluck('cus_code')
-            ->filter(fn($code) => trim((string) $code) !== '')
+        // Only walk-in customers on COD payment terms are excluded from the GL export.
+        // Walk-ins on other payment terms must be included in the generated text file.
+        // TAG-00972 is treated as a walk-in only while its own payment terms are COD.
+        $walkInCustomers = Customer::query()
+            ->where(function ($query) {
+                $query->whereRaw($this->normalizedSql('cus_name') . " LIKE ?", ['%walkin%'])
+                    ->orWhere('cus_code', 'TAG-00972');
+            })
+            ->whereRaw($this->normalizedSql('payment_terms') . " = ?", ['cod'])
+            ->get(['cus_code', 'nav_code']);
+
+        $codes = $walkInCustomers
+            ->flatMap(fn($customer) => [$customer->cus_code, $customer->nav_code])
+            ->map(fn($code) => trim((string) $code))
+            ->filter(fn($code) => $code !== '')
             ->values()
             ->all();
 
-        $codes[] = 'TAG-00972';
-
-        $this->walkInCustomerCodes = array_values(array_unique(array_filter($codes, fn($code) => trim((string) $code) !== '')));
+        $this->walkInCustomerCodes = array_values(array_unique($codes));
 
         return $this->walkInCustomerCodes;
     }
@@ -64,9 +73,9 @@ class GenerateTextFile
     {
         $walkInCustomerCodes = $this->getWalkInCustomerCodes();
 
-        return $query->whereNotIn('customer_code', $walkInCustomerCodes)
-            ->whereRaw($this->normalizedSql('customer_code') . " NOT LIKE ?", ['%walkin%'])
-            ->whereRaw($this->normalizedSql('name') . " NOT LIKE ?", ['%walkin%']);
+        // Exclude only walk-in customers on COD terms (see getWalkInCustomerCodes()).
+        // Name-based "walkin" matching was removed so non-COD walk-ins stay in the export.
+        return $query->whereNotIn('customer_code', $walkInCustomerCodes);
     }
 
     /**
@@ -2192,13 +2201,9 @@ class GenerateTextFile
                     continue;
                 }
 
-                $normalizedCustomerCode = Str::lower(str_replace(['-', ' '], '', $customerCode));
-                $normalizedCustomerName = Str::lower(str_replace(['-', ' '], '', (string) ($detail->customer_name ?: $detail->payment_customer_name ?: '')));
-                if (
-                    in_array($customerCode, $this->getWalkInCustomerCodes(), true)
-                    || str_contains($normalizedCustomerCode, 'walkin')
-                    || str_contains($normalizedCustomerName, 'walkin')
-                ) {
+                // Skip only walk-in customers on COD terms (see getWalkInCustomerCodes()).
+                // Non-COD walk-ins must remain in the GL export.
+                if (in_array($customerCode, $this->getWalkInCustomerCodes(), true)) {
                     continue;
                 }
 

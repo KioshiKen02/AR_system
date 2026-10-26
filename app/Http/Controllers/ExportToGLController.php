@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Jobs\GenerateTextFile;
 use App\Models\AppSetting;
 use App\Models\MasterfileModels\CashInBank;
-use App\Models\MasterfileModels\Customer;
 use App\Models\TransactionModels\Adjustment;
 use App\Models\TransactionModels\Invoice;
 use App\Models\TransactionModels\Payment;
@@ -20,25 +19,6 @@ use Illuminate\Validation\ValidationException;
 
 class ExportToGLController extends Controller
 {
-    protected function normalizedSql(string $column): string
-    {
-        return "REPLACE(REPLACE(LOWER(COALESCE({$column}, '')), '-', ''), ' ', '')";
-    }
-
-    protected function walkInCustomerCodes(): array
-    {
-        $codes = Customer::query()
-            ->whereRaw($this->normalizedSql('cus_name') . " LIKE ?", ['%walkin%'])
-            ->pluck('cus_code')
-            ->filter(fn($code) => trim((string) $code) !== '')
-            ->values()
-            ->all();
-
-        $codes[] = 'TAG-00972';
-
-        return array_values(array_unique(array_filter($codes, fn($code) => trim((string) $code) !== '')));
-    }
-
     public function export(Request $request)
     {
         try {
