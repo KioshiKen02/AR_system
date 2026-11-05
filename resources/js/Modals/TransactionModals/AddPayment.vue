@@ -354,15 +354,15 @@
                                                     (form.check_type === 'Dated Check' || form.aging_days)
                                                 " class="w-full grid grid-cols-3 gap-x-[16px]">
                                                     <TextInput label="Account Name & Address" v-model="form.acc_name_address
-                                                        " type="textarea" :message="form.errors
+                                                        " type="textarea" @keydown="preventCommaInput" :message="form.errors
                                                             .acc_name_address
                                                             " class="col-span-3" />
                                                     <TextInput label="Referral Name" v-model="form.referral_name
-                                                        " type="text" :message="form.errors
+                                                        " type="text" @keydown="preventCommaInput" :message="form.errors
                                                             .referral_name
                                                             " />
                                                     <TextInput label="Account Number" v-model="form.acc_number
-                                                        " type="text" :message="form.errors
+                                                        " type="text" @keydown="preventCommaInput" :message="form.errors
                                                             .acc_number
                                                             " />
                                                     <TextInput label="Due Date" v-model="form.due_date" type="date"
@@ -1220,6 +1220,27 @@ watch(
     }
 );
 
+/////////////////// COMMA-FREE VARCHAR FIELDS ///////////////////////////
+// Name/address style fields land in varchar columns that must not store
+// commas. Typing a comma is blocked outright, and any stray comma (paste,
+// autofill or prefilled value) is stripped right before the save.
+const COMMA_FREE_FIELDS = ["acc_name_address", "referral_name", "acc_number"];
+
+const preventCommaInput = (event) => {
+    if (event.key === ",") {
+        event.preventDefault();
+    }
+};
+
+const stripCommasFromFields = (data) => {
+    COMMA_FREE_FIELDS.forEach((field) => {
+        if (typeof data[field] === "string") {
+            data[field] = data[field].replace(/,/g, "");
+        }
+    });
+    return data;
+};
+
 /////////////////// submit /////////////////////////// 
 const submit = () => {
     if (manualSelectIdentifier.value && typeof form.amount_paid === "string") {
@@ -1227,12 +1248,12 @@ const submit = () => {
         form.amount_paid = cleaned ? parseFloat(cleaned) : 0;
     }
 
-    const submissionData = {
+    const submissionData = stripCommasFromFields({
         ...form.data(),
         _od_confirmation: od_confirmation.value,
         _check_confirmation: check_confirmation.value,
         _cl_type: ledgerType.value,
-    };
+    });
     if (form.payment_type === '5D - Check' && form.check_type === 'Dated Check') {
         delete submissionData.aging_basis;
         delete submissionData.aging_days;

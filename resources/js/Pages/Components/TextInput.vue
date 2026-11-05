@@ -171,6 +171,8 @@
             <textarea
                 v-else-if="type === 'textarea'"
                 v-model="model"
+                @keydown="$emit('keydown', $event)"
+                @blur="$emit('blur', $event)"
                 :rows="rows"
                 :readonly="readonly"
                 :disabled="readonly"

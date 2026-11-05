@@ -32,6 +32,69 @@
             <ConfirmationDialog :show="showDialog" message="Are you sure about deleting this packing type?"
                 @close="handleConfirm" />
         </Transition>
+
+        <!-- Invoice Type picker for Excel export -->
+        <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100" leave-active-class="transition ease-in duration-200"
+            leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+            <div v-if="showExportTypeModal"
+                class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] px-4">
+                <div
+                    class="bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-2xl border border-[var(--color-border)] shadow-xl w-full max-w-md">
+                    <div class="px-5 py-4 border-b border-[var(--color-border)]">
+                        <h2 class="text-base font-semibold">
+                            Select Invoice Type To Export
+                        </h2>
+                        <p class="text-xs text-[var(--color-text-secondary)] mt-1">
+                            {{ selectedExportTypes.length }} of
+                            {{ exportTypeOptions.length }} type(s) selected across
+                            {{ filteredRows.length }} record(s)
+                        </p>
+                    </div>
+
+                    <div class="flex items-center justify-between px-5 py-2 border-b border-[var(--color-border)]">
+                        <button type="button" @click="selectAllExportTypes"
+                            class="text-xs font-semibold text-[var(--color-primary)] hover:underline">
+                            Select All
+                        </button>
+                        <button type="button" @click="clearExportTypes"
+                            class="text-xs font-semibold text-[var(--color-text-secondary)] hover:underline">
+                            Clear
+                        </button>
+                    </div>
+
+                    <div class="max-h-72 overflow-y-auto px-3 py-3 space-y-1">
+                        <label v-for="option in exportTypeOptions" :key="option.value"
+                            class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-[var(--color-primary)]/10 transition-colors">
+                            <span class="flex items-center gap-3 min-w-0">
+                                <input type="checkbox" class="w-4 h-4 accent-[var(--color-primary)]"
+                                    :checked="selectedExportTypes.includes(option.value)"
+                                    @change="toggleExportType(option.value)" />
+                                <span class="text-sm truncate">{{ option.value }}</span>
+                            </span>
+                            <span
+                                class="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-full px-2 py-0.5">
+                                {{ option.count }}
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="flex justify-end gap-3 px-5 py-4 border-t border-[var(--color-border)]">
+                        <button type="button" @click="showExportTypeModal = false"
+                            class="px-6 py-2 rounded-md border border-[var(--color-border)] text-[var(--color-text-primary)] font-medium hover:bg-[var(--color-primary-hover)]/20">
+                            Cancel
+                        </button>
+                        <button type="button" @click="confirmExportToExcel"
+                            :disabled="selectedExportTypes.length === 0"
+                            class="px-6 py-2 rounded-md bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                            <svg-icon type="mdi" :path="mdiMicrosoftExcel" class="w-4 h-4" />
+                            Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Transition>
+
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center pb-3 pt-1 gap-4">
             <div class="w-full lg:w-auto lg:flex-shrink-0">
                 <div
@@ -65,7 +128,7 @@
                         filteredRows.length === 0 &&
                         generateTableData) ||
                         !generateTableData
-                        " @click="exportToExcel"
+                        " @click="openExportTypeModal"
                         class="w-full sm:w-auto px-4 py-2 rounded-md font-medium transition-all duration-300 flex items-center justify-center gap-2 relative overflow-hidden disabled:opacity-70 disabled:cursor-not-allowed group bg-[var(--color-primary)] text-white hover:bg-transparent hover:text-[var(--color-primary)] hover:ring-1 hover:ring-[var(--color-primary)]">
                         <div class="relative flex items-center justify-center gap-2">
                             <span class="transition-transform duration-300 group-hover:rotate-360">
@@ -432,6 +495,10 @@
     const search = ref(props.searchTerm || "");
     const hideFloatingDeducted = ref(false);
 
+    // Invoice type picker for the Excel export
+    const showExportTypeModal = ref(false);
+    const selectedExportTypes = ref([]);
+
     const showSuccessToast = (message) => {
         toastMessage.value = message;
         showToast.value = true;
@@ -598,34 +665,64 @@
         });
     });
 
-    const ledgerDisplayMap = computed(() => {
+    const normalizeExportType = (row) =>
+        ((row?.type ?? "").toString().trim() || "Unspecified");
+
+    // Distinct invoice types currently loaded, with record counts
+    const exportTypeOptions = computed(() => {
+        const counts = new Map();
+
+        (filteredRows.value || []).forEach((row) => {
+            const type = normalizeExportType(row);
+            counts.set(type, (counts.get(type) || 0) + 1);
+        });
+
+        return Array.from(counts, ([value, count]) => ({ value, count })).sort(
+            (a, b) => a.value.localeCompare(b.value)
+        );
+    });
+
+    const getDisplayKey = (row, idx) => row?.id ?? `row-${idx}`;
+
+    // Overpay-capped credit plus the running balance.
+    //
+    // - Default: seeds from the backend's absolute `running_balance`, so the
+    //   on-screen view keeps the real ledger carry-over.
+    // - restartFromZero: ignores that carry-over and rebuilds the balance from
+    //   the rows handed in, so a type-filtered report starts a fresh,
+    //   self-contained running total for the selected invoice type.
+    const buildLedgerDisplayMap = (entries, { restartFromZero = false } = {}) => {
         const map = new Map();
         let runningAdjustment = 0;
+        let accumulated = 0;
 
-        filteredRows.value.forEach((row, index) => {
-            const key = row?.id ?? `row-${index}`;
+        entries.forEach(({ row, idx }) => {
             const debit = Math.max(0, toNumber(row?.debit_amount));
             const credit = Math.max(0, toNumber(row?.amount_paid));
 
             const overpay = debit > 0 ? Math.max(credit - debit, 0) : 0;
-            const displayCredit = credit - overpay;
             runningAdjustment += overpay;
 
-            const displayRunningBalance = Math.max(
-                0,
-                toNumber(row?.running_balance) + runningAdjustment
-            );
+            const cappedCredit = credit - overpay;
+            accumulated += debit - cappedCredit;
 
-            map.set(key, {
-                credit: displayCredit,
-                runningBalance: displayRunningBalance,
+            map.set(getDisplayKey(row, idx), {
+                credit: cappedCredit,
+                runningBalance: restartFromZero
+                    ? accumulated
+                    : Math.max(
+                          0,
+                          toNumber(row?.running_balance) + runningAdjustment
+                      ),
             });
         });
 
         return map;
-    });
+    };
 
-    const getDisplayKey = (row, idx) => row?.id ?? `row-${idx}`;
+    const ledgerDisplayMap = computed(() =>
+        buildLedgerDisplayMap(filteredRows.value.map((row, idx) => ({ row, idx })))
+    );
 
     const getDisplayCredit = (row, idx) => {
         const key = getDisplayKey(row, idx);
@@ -815,10 +912,67 @@
         }, 3000);
     };
 
-    const exportToExcel = async () => {
+    const openExportTypeModal = () => {
+        if (!filteredRows.value || filteredRows.value.length === 0) {
+            showWarningToast("No data available to export.");
+            return;
+        }
+
+        selectedExportTypes.value = exportTypeOptions.value.map(
+            (type) => type.value
+        );
+        showExportTypeModal.value = true;
+    };
+
+    const toggleExportType = (value) => {
+        const selected = new Set(selectedExportTypes.value);
+
+        if (selected.has(value)) {
+            selected.delete(value);
+        } else {
+            selected.add(value);
+        }
+
+        selectedExportTypes.value = Array.from(selected);
+    };
+
+    const selectAllExportTypes = () => {
+        selectedExportTypes.value = exportTypeOptions.value.map(
+            (type) => type.value
+        );
+    };
+
+    const clearExportTypes = () => {
+        selectedExportTypes.value = [];
+    };
+
+    const confirmExportToExcel = async () => {
+        if (selectedExportTypes.value.length === 0) {
+            showWarningToast("Please select at least one invoice type to export.");
+            return;
+        }
+
+        showExportTypeModal.value = false;
+        await exportToExcel(selectedExportTypes.value);
+    };
+
+    const exportToExcel = async (selectedTypes = null) => {
         try {
-            const exportRows = filteredRows.value;
-            if (!exportRows || exportRows.length === 0) {
+            const activeTypes =
+                Array.isArray(selectedTypes) && selectedTypes.length > 0
+                    ? new Set(selectedTypes)
+                    : null;
+
+            // Keep the original index so the running-balance fallback
+            // (rows without an id) still resolves correctly.
+            const exportRows = (filteredRows.value || [])
+                .map((row, idx) => ({ row, idx }))
+                .filter(
+                    ({ row }) =>
+                        !activeTypes || activeTypes.has(normalizeExportType(row))
+                );
+
+            if (exportRows.length === 0) {
                 showWarningToast("No data available to export.");
                 return;
             }
@@ -853,7 +1007,32 @@
                 cell.alignment = { horizontal: "center", vertical: "middle" };
             });
 
-            exportRows.forEach((customerledger, idx) => {
+            // Rebuild the balance from the exported rows only and restart from
+            // zero, so a type-filtered report is self-contained: it starts on the
+            // selected type's own balance instead of inheriting the carry-over of
+            // the rows the user left out of the report.
+            const exportDisplayMap = buildLedgerDisplayMap(exportRows, {
+                restartFromZero: true,
+            });
+
+            const getExportCredit = (row, idx) =>
+                exportDisplayMap.get(getDisplayKey(row, idx))?.credit ??
+                toNumber(row?.amount_paid);
+
+            const getExportRunningBalance = (row, idx) =>
+                exportDisplayMap.get(getDisplayKey(row, idx))?.runningBalance ??
+                Math.max(0, toNumber(row?.running_balance));
+
+            // "Payment Forwarded" for the exported set = summed balance of the
+            // selected invoice type(s). Derived from the very rows being written
+            // so it always matches the last running balance in the table.
+            const exportPaymentForwarded = exportRows.reduce(
+                (total, { row, idx }) =>
+                    total + toNumber(row?.debit_amount) - getExportCredit(row, idx),
+                0
+            );
+
+            exportRows.forEach(({ row: customerledger, idx }) => {
                 const row = worksheet.addRow([
                     customerledger.invoice_number || "",
                     customerledger.date ? formatDate(customerledger.date) : "",
@@ -861,8 +1040,8 @@
                     customerledger.customer_code || "No Code",
                     customerledger.type || "",
                     calculateNetAmount(customerledger) || 0,
-                    getDisplayCredit(customerledger, idx),
-                    getDisplayRunningBalance(customerledger, idx),
+                    getExportCredit(customerledger, idx),
+                    getExportRunningBalance(customerledger, idx),
                 ]);
 
                 row.eachCell((cell) => {
@@ -907,7 +1086,7 @@
                 "Total Records:",
                 exportRows.length,
             ]);
-            worksheet.insertRow(4, ["Payment Forwarded:", props.paymentForwarded]);
+            worksheet.insertRow(4, ["Balance:", exportPaymentForwarded]);
             worksheet.insertRow(5, []);
 
             worksheet.getCell("A1").font = {
@@ -923,7 +1102,7 @@
             worksheet.getCell("B3").value = exportRows.length;
 
             worksheet.getCell("B4").numFmt = "#,##0.00";
-            worksheet.getCell("B4").value = props.paymentForwarded;
+            worksheet.getCell("B4").value = exportPaymentForwarded;
 
             worksheet.mergeCells("A1:H1");
             worksheet.getCell("A1").alignment = {
