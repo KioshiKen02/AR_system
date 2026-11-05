@@ -89,6 +89,10 @@ $safeCopyFiles = @(
     "database\migrations\2026_06_19_120000_add_overpayment_amount_to_payment_details_table.php",
     "database\migrations\2026_06_19_130000_add_floating_deducted_amount_to_payment_details_table.php",
     "database\migrations\2026_06_19_180000_add_allow_overpayment_to_app_settings_table.php",
+    "database\migrations\2026_11_05_100000_add_allow_shortage_to_app_settings_table.php",
+    "database\migrations\2026_11_05_100100_add_shortage_amount_to_payment_details_table.php",
+    "database\migrations\2026_11_05_100200_add_shortage_amount_to_customer_ledger.php",
+    "scripts\ar_aqua_manual_schema_sync.sql",
     "tests\Feature\PaymentWhtLogicTest.php"
 )
 

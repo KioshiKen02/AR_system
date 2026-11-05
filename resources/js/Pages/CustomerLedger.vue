@@ -244,23 +244,26 @@
                 <table class="w-full text-sm text-[var(--color-text-primary)] rounded-xl overflow-hidden mb-2">
                     <thead class="sticky top-0 z-10">
                         <tr>
-                            <th class="px-3 py-2 w-[12%] text-left font-semibold tracking-wider">
+                            <th class="px-3 py-2 w-[11%] text-left font-semibold tracking-wider">
                                 DOCUMENT NO
                             </th>
-                            <th class="px-3 py-2 w-[10%] text-left font-semibold tracking-wider">
+                            <th class="px-3 py-2 w-[9%] text-left font-semibold tracking-wider">
                                 DATE
                             </th>
-                            <th class="px-3 py-2 w-[28%] text-left font-semibold tracking-wider">
+                            <th class="px-3 py-2 w-[24%] text-left font-semibold tracking-wider">
                                 CUSTOMER NAME
                             </th>
-                            <th class="px-3 py-2 w-[10%] text-center font-semibold tracking-wider">
+                            <th class="px-3 py-2 w-[9%] text-center font-semibold tracking-wider">
                                 TYPE
                             </th>
-                            <th class="px-3 py-2 w-[10%] text-center font-semibold tracking-wider">
+                            <th class="px-3 py-2 w-[9%] text-center font-semibold tracking-wider">
                                 DEBIT
                             </th>
-                            <th class="px-3 py-2 w-[10%] text-center font-semibold tracking-wider">
+                            <th class="px-3 py-2 w-[9%] text-center font-semibold tracking-wider">
                                 CREDIT
+                            </th>
+                            <th class="px-3 py-2 w-[9%] text-center font-semibold tracking-wider">
+                                SHORTAGE
                             </th>
                             <th class="px-3 py-2 w-[10%] text-center font-semibold tracking-wider">
                                 BALANCE
@@ -275,7 +278,7 @@
                     <tbody>
                         <!-- Loading State -->
                         <tr v-if="isLoading && generateTableData">
-                            <td colspan="8" class="text-center py-8">
+                            <td colspan="9" class="text-center py-8">
                                 <div class="flex justify-center items-center">
                                     <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
                                         fill="var(--color-icon)">
@@ -371,6 +374,9 @@
                                 {{ formatCurrency(getDisplayCredit(customerledger, idx)) }}
                             </td>
                             <td class="px-3 py-1 text-right">
+                                {{ formatCurrency(getDisplayShortage(customerledger)) }}
+                            </td>
+                            <td class="px-3 py-1 text-right">
                                 {{ formatCurrency(getDisplayRunningBalance(customerledger, idx)) }}
                             </td>
                             <td class="px-3 py-1">
@@ -406,7 +412,7 @@
                             shouldUseInfiniteScroll &&
                             renderedRows.length < filteredRows.length
                         ">
-                            <td colspan="8" class="px-5 py-4 text-center">
+                            <td colspan="9" class="px-5 py-4 text-center">
                                 <div ref="loadMoreSentinel" class="text-xs text-[var(--color-text-secondary)]">
                                     Loading more rows...
                                 </div>
@@ -418,7 +424,7 @@
                             (!generateTableData ||
                                 (generateTableData && filteredRows.length === 0))
                         ">
-                            <td colspan="8" class="px-5 py-6 text-center">
+                            <td colspan="9" class="px-5 py-6 text-center">
                                 <div class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2" fill="none"
                                         viewBox="0 0 24 24" stroke="currentColor">
@@ -699,12 +705,13 @@
         entries.forEach(({ row, idx }) => {
             const debit = Math.max(0, toNumber(row?.debit_amount));
             const credit = Math.max(0, toNumber(row?.amount_paid));
+            const shortage = Math.max(0, toNumber(row?.shortage_amount));
 
             const overpay = debit > 0 ? Math.max(credit - debit, 0) : 0;
             runningAdjustment += overpay;
 
             const cappedCredit = credit - overpay;
-            accumulated += debit - cappedCredit;
+            accumulated += debit - cappedCredit - shortage;
 
             map.set(getDisplayKey(row, idx), {
                 credit: cappedCredit,
@@ -728,6 +735,9 @@
         const key = getDisplayKey(row, idx);
         return ledgerDisplayMap.value.get(key)?.credit ?? toNumber(row?.amount_paid);
     };
+
+    const getDisplayShortage = (row) =>
+        Math.max(0, toNumber(row?.shortage_amount));
 
     const getDisplayRunningBalance = (row, idx) => {
         const key = getDisplayKey(row, idx);
@@ -988,6 +998,7 @@
                 "Type",
                 "Net Amount",
                 "Amount Paid",
+                "Shortage",
                 "Running Balance",
             ]);
 
@@ -1028,7 +1039,10 @@
             // so it always matches the last running balance in the table.
             const exportPaymentForwarded = exportRows.reduce(
                 (total, { row, idx }) =>
-                    total + toNumber(row?.debit_amount) - getExportCredit(row, idx),
+                    total +
+                    toNumber(row?.debit_amount) -
+                    getExportCredit(row, idx) -
+                    Math.max(0, toNumber(row?.shortage_amount)),
                 0
             );
 
@@ -1041,6 +1055,7 @@
                     customerledger.type || "",
                     calculateNetAmount(customerledger) || 0,
                     getExportCredit(customerledger, idx),
+                    Math.max(0, toNumber(customerledger?.shortage_amount)),
                     getExportRunningBalance(customerledger, idx),
                 ]);
 
@@ -1062,10 +1077,11 @@
                 { key: "type", width: 18 },
                 { key: "net_amount", width: 15 },
                 { key: "amount_paid", width: 15 },
+                { key: "shortage", width: 15 },
                 { key: "running_balance", width: 18 },
             ];
 
-            const currencyColumns = [6, 7, 8]; // Columns F, G, H
+            const currencyColumns = [6, 7, 8, 9]; // Columns F, G, H, I
             currencyColumns.forEach((colIndex) => {
                 worksheet.getColumn(colIndex).numFmt = "#,##0.00";
             });
@@ -1104,7 +1120,7 @@
             worksheet.getCell("B4").numFmt = "#,##0.00";
             worksheet.getCell("B4").value = exportPaymentForwarded;
 
-            worksheet.mergeCells("A1:H1");
+            worksheet.mergeCells("A1:I1");
             worksheet.getCell("A1").alignment = {
                 horizontal: "center",
                 vertical: "middle",
@@ -1115,7 +1131,7 @@
                 fgColor: { argb: "027937" },
             };
 
-            const dataRange = `A6:H${6 + exportRows.length}`;
+            const dataRange = `A6:I${6 + exportRows.length}`;
             worksheet.autoFilter = dataRange;
 
             worksheet.views = [{ state: "frozen", xSplit: 0, ySplit: 6 }];

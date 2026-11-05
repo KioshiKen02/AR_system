@@ -35,6 +35,7 @@ class PaymentDetails extends Model
         'overage_shortage',
         'floating_deducted_amount',
         'overpayment_amount',
+        'shortage_amount',
         'created_by',
     ];
 }

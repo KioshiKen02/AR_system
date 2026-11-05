@@ -94,8 +94,10 @@ class CheckClearedController extends Controller
     {
         $hasLedgerWhtAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount');
         $hasLedgerOverpaymentAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount');
+        $hasLedgerShortageAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'shortage_amount');
         $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
             && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
+        $hasPaymentDetailsShortage = Schema::connection('tenant')->hasColumn('payment_details', 'shortage_amount');
 
         $ledgerQuery = CustomerLedger::on('tenant')
             ->where('customer_code', $customerCode)
@@ -157,9 +159,21 @@ class CheckClearedController extends Controller
         $shrinkage = (float) ($ledger->shrinkage ?? 0);
         $returnAmount = (float) ($ledger->return ?? 0);
 
+        // Rounding shortage recorded against this document's payment details is
+        // treated as a write-off so clearing a check does not reopen the document.
+        $totalShortage = 0.0;
+        if ($hasPaymentDetailsShortage) {
+            $totalShortage = (float) PaymentDetails::on('tenant')
+                ->where('customer_code', $customerCode)
+                ->where('document_no', $documentNo)
+                ->where('type', $type)
+                ->whereIn('status', ['Paid', 'Cleared'])
+                ->sum('shortage_amount');
+        }
+
         $debit = $baseAmount + $overage - $shrinkage - $returnAmount;
         $totalCredited = $totalPaid + $totalWhtApplied;
-        $runningBalance = max(0, $debit - $totalCredited);
+        $runningBalance = max(0, $debit - $totalCredited - $totalShortage);
         $overpaymentAmount = max(0, $totalCollectiblePaid - $debit);
 
         $ledgerUpdate = [
@@ -171,6 +185,9 @@ class CheckClearedController extends Controller
         }
         if ($hasLedgerOverpaymentAmount) {
             $ledgerUpdate['overpayment_amount'] = $overpaymentAmount;
+        }
+        if ($hasLedgerShortageAmount) {
+            $ledgerUpdate['shortage_amount'] = $totalShortage;
         }
 
         $ledger->update($ledgerUpdate);

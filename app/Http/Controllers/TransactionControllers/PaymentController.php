@@ -33,6 +33,12 @@ use Illuminate\Support\Str;
 
 class PaymentController extends Controller
 {
+    /**
+     * Maximum fractional remainder (below ₱1.00) that may be written off as a
+     * rounding shortage when the tenant allows it.
+     */
+    private const SHORTAGE_TOLERANCE = 1.00;
+
     private const WHT_SUBJECT_PAYMENT_TYPES = [
         '5A - Cash',
         '5B - Journal Voucher',
@@ -657,6 +663,38 @@ class PaymentController extends Controller
         return (bool) ($setting?->allow_overpayment ?? true);
     }
 
+    private function tenantAllowsShortage(): bool
+    {
+        $appSettingId = config('tenant.current_app_setting_id');
+
+        if (
+            !$appSettingId
+            || !Schema::connection('mysql')->hasColumn('app_settings', 'allow_shortage')
+        ) {
+            return true;
+        }
+
+        $setting = AppSetting::on('mysql')
+            ->select('allow_shortage')
+            ->find($appSettingId);
+
+        return (bool) ($setting?->allow_shortage ?? true);
+    }
+
+    /**
+     * Amount to write off when a payment leaves a fractional remainder below the
+     * rounding tolerance (e.g. ₱0.86 on a ₱1001.86 balance). Returns 0 when the
+     * remainder is zero, at/above the tolerance, or when the tenant disallows shortage.
+     */
+    private function resolveShortageWriteOff(float $remainingBalance): float
+    {
+        if ($remainingBalance <= 0 || $remainingBalance >= self::SHORTAGE_TOLERANCE) {
+            return 0.0;
+        }
+
+        return $this->tenantAllowsShortage() ? round($remainingBalance, 2) : 0.0;
+    }
+
     private function getEffectivePaidAmountForLedger(PaymentDetails $detail, bool $hasPaymentDetailsWhtColumns): float
     {
         if (!in_array($detail->status, ['Paid', 'Cleared'], true)) {
@@ -720,6 +758,7 @@ class PaymentController extends Controller
     {
         $hasLedgerWhtAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'wht_amount');
         $hasLedgerOverpaymentAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount');
+        $hasLedgerShortageAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'shortage_amount');
         $hasPaymentDetailsWhtColumns = Schema::connection('tenant')->hasColumn('payment_details', 'wht_amount')
             && Schema::connection('tenant')->hasColumn('payment_details', 'wht_status');
 
@@ -766,8 +805,15 @@ class PaymentController extends Controller
 
         $ledgerDebit = $this->calculateLedgerDebit($ledger);
         $totalCredited = $totalPaid + $totalWhtApplied;
+
+        // Preserve any rounding shortage already written off for this document so
+        // recomputing the balance does not reopen a settled document.
+        $ledgerShortage = $hasLedgerShortageAmount
+            ? max(0, round((float) ($ledger->shortage_amount ?? 0), 2))
+            : 0.0;
+
         $ledgerUpdateData = [
-            'running_balance' => max(0, $ledgerDebit - $totalCredited),
+            'running_balance' => max(0, $ledgerDebit - $totalCredited - $ledgerShortage),
             'amount_paid' => $totalPaid,
         ];
 
@@ -1055,12 +1101,21 @@ class PaymentController extends Controller
                         : max(0, $grossApplied - $availableBalance);
                     $this->ensureOverpaymentAllowed($overpaymentAmount);
 
+                    // Rounding tolerance: write off sub-₱1.00 remainders when allowed.
+                    $shortageAmount = $this->resolveShortageWriteOff($detailsBalance);
+                    $runningBalanceAfter = $shortageAmount > 0
+                        ? $floatingValue
+                        : max(0, $ledger->running_balance - $amountToApply);
+
                     $updateData = [
-                        'running_balance' => max(0, $ledger->running_balance - $amountToApply),
+                        'running_balance' => $runningBalanceAfter,
                         'amount_paid' => $ledger->amount_paid + $amountToApply,
                     ];
                     if (Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount')) {
                         $updateData['overpayment_amount'] = $overpaymentAmount;
+                    }
+                    if (Schema::connection('tenant')->hasColumn('customer_ledger', 'shortage_amount')) {
+                        $updateData['shortage_amount'] = $shortageAmount;
                     }
                     $ledger->update($updateData);
 
@@ -1079,6 +1134,7 @@ class PaymentController extends Controller
                         'floating_deducted' => $floatingValue,
                         'overage_shortage' => $detailsBalance,
                         'overpayment_amount' => $overpaymentAmount,
+                        'shortage_amount' => $shortageAmount,
                     ];
                 }
             } else {
@@ -1132,12 +1188,21 @@ class PaymentController extends Controller
 
                                 $docbalance = max(0, $effectiveBalance - $amountToApply);
 
+                                // Rounding tolerance: write off sub-₱1.00 remainders when allowed.
+                                $shortageAmount = $this->resolveShortageWriteOff($docbalance);
+                                $runningBalanceAfter = $shortageAmount > 0
+                                    ? $floatingValue
+                                    : max(0, $ledger->running_balance - $amountToApply);
+
                                 $updateData = [
-                                    'running_balance' => max(0, $ledger->running_balance - $amountToApply),
+                                    'running_balance' => $runningBalanceAfter,
                                     'amount_paid' => $ledger->amount_paid + $amountToApply,
                                 ];
                                 if (Schema::connection('tenant')->hasColumn('customer_ledger', 'overpayment_amount')) {
                                     $updateData['overpayment_amount'] = 0;
+                                }
+                                if (Schema::connection('tenant')->hasColumn('customer_ledger', 'shortage_amount')) {
+                                    $updateData['shortage_amount'] = $shortageAmount;
                                 }
                                 $ledger->update($updateData);
 
@@ -1155,6 +1220,7 @@ class PaymentController extends Controller
                                     'floating_deducted' => $floatingValue,
                                     'overage_shortage' => $docbalance,
                                     'overpayment_amount' => 0,
+                                    'shortage_amount' => $shortageAmount,
                                 ];
                             }
                         }
@@ -1222,6 +1288,11 @@ class PaymentController extends Controller
                         : max(0, $grossApplied - $availableBalance);
                     $this->ensureOverpaymentAllowed($overpaymentAmount);
 
+                    // Rounding tolerance: write off sub-₱1.00 remainders when allowed.
+                    // This path does not touch the ledger; the write-off is applied
+                    // when the check is cleared.
+                    $shortageAmount = $this->resolveShortageWriteOff($detailsBalance);
+
                     $processedDocuments[] = [
                         'document_no' => $doc['docunumber'],
                         'type' => $doc['type'],
@@ -1235,6 +1306,7 @@ class PaymentController extends Controller
                         'floating_deducted' => $floatingValue,
                         'overage_shortage' => $detailsBalance,
                         'overpayment_amount' => $overpaymentAmount,
+                        'shortage_amount' => $shortageAmount,
                     ];
                 }
             } else { //OLDEST TO NEWEST PAYMENT
@@ -1293,6 +1365,9 @@ class PaymentController extends Controller
                                 $applyBir2307 = $validated['apply_bir_2307'] ?? false;
                                 $detailsBalance = max(0, $effectiveBalance - $amountToApply);
 
+                                // Rounding tolerance: write off sub-₱1.00 remainders when allowed.
+                                $shortageAmount = $this->resolveShortageWriteOff($detailsBalance);
+
                                 $processedDocuments[] = [
                                     'document_no' => $ledger->invoice_number,
                                     'type' => $ledger->type,
@@ -1307,6 +1382,7 @@ class PaymentController extends Controller
                                     'floating_deducted' => $floatingValue,
                                     'overage_shortage' => $detailsBalance,
                                     'overpayment_amount' => 0,
+                                    'shortage_amount' => $shortageAmount,
                                 ];
                             }
                         }
@@ -1456,6 +1532,11 @@ class PaymentController extends Controller
                             ? (float) $doc['overpayment_amount']
                             : 0;
                     }
+                    if (Schema::connection('tenant')->hasColumn('payment_details', 'shortage_amount')) {
+                        $detailsData['shortage_amount'] = isset($doc['shortage_amount'])
+                            ? (float) $doc['shortage_amount']
+                            : 0;
+                    }
                     PaymentDetails::create($detailsData);
                 }
             }
@@ -1505,6 +1586,11 @@ class PaymentController extends Controller
                     if (Schema::connection('tenant')->hasColumn('payment_details', 'overpayment_amount')) {
                         $detailsData['overpayment_amount'] = isset($doc['overpayment_amount'])
                             ? (float) $doc['overpayment_amount']
+                            : 0;
+                    }
+                    if (Schema::connection('tenant')->hasColumn('payment_details', 'shortage_amount')) {
+                        $detailsData['shortage_amount'] = isset($doc['shortage_amount'])
+                            ? (float) $doc['shortage_amount']
                             : 0;
                     }
                     PaymentDetails::create($detailsData);

@@ -58,6 +58,7 @@
                         <th class="px-3 py-2 text-left font-semibold tracking-wider">BASE URL</th>
                         <th class="px-3 py-2 text-left font-semibold tracking-wider">DB DATABASE</th>
                         <th class="px-3 py-2 text-center font-semibold tracking-wider">OVERPAYMENT</th>
+                        <th class="px-3 py-2 text-center font-semibold tracking-wider">SHORTAGE</th>
                         <th class="px-3 py-2 text-center font-semibold tracking-wider">STATUS</th>
                         <th class="px-3 py-2 text-center font-semibold tracking-wider">ACTION</th>
                     </tr>
@@ -66,7 +67,7 @@
                 <!-- Loading State -->
                 <tbody v-if="isLoading">
                     <tr>
-                        <td colspan="6" class="text-center py-8">
+                        <td colspan="7" class="text-center py-8">
                              <div class="flex justify-center items-center">
                                 <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
                                     fill="var(--color-icon)">
@@ -91,6 +92,11 @@
                         <td class="px-3 py-2 text-center">
                             <span class="capitalize">
                                 {{ setting.allow_overpayment ? 'Allowed' : 'Blocked' }}
+                            </span>
+                        </td>
+                        <td class="px-3 py-2 text-center">
+                            <span class="capitalize">
+                                {{ setting.allow_shortage ? 'Allowed' : 'Blocked' }}
                             </span>
                         </td>
                         <td class="px-3 py-2 text-center">
@@ -137,7 +143,7 @@
 
                     <!-- Empty State -->
                     <tr v-if="!isLoading && appSettings.data.length === 0">
-                        <td colspan="6" class="px-5 py-6 text-center">
+                        <td colspan="7" class="px-5 py-6 text-center">
                             <div class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2" fill="none"
                                     viewBox="0 0 24 24" stroke="var(--color-icon)">

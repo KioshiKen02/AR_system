@@ -48,6 +48,15 @@
                                 <span class="text-sm font-medium text-[var(--color-text-primary)]">Allow Overpayment For This Tenant</span>
                             </label>
                         </div>
+                        <div class="sm:col-span-2">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" v-model="form.allow_shortage" class="form-checkbox h-5 w-5 text-[var(--color-primary)] rounded border-[var(--color-border)] bg-[var(--color-bg-primary)] focus:ring-[var(--color-primary)]">
+                                <span class="text-sm font-medium text-[var(--color-text-primary)]">Allow Shortage For This Tenant</span>
+                            </label>
+                            <p class="mt-1 pl-7 text-xs text-[var(--color-text-secondary)]">
+                                Writes off remainders below ₱1.00 and closes the document. Larger remainders stay open.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -106,6 +115,7 @@ const form = useForm({
     description: null,
     is_active: true,
     allow_overpayment: true,
+    allow_shortage: true,
 });
 
 const emit = defineEmits(["close", "closeSuccess"]);
@@ -192,11 +202,13 @@ watch(
             form.description = newVal.description;
             form.is_active = !!newVal.is_active;
             form.allow_overpayment = newVal.allow_overpayment ?? true;
+            form.allow_shortage = newVal.allow_shortage ?? true;
         } else {
             isEdit.value = false;
             form.reset();
             form.is_active = true;
             form.allow_overpayment = true;
+            form.allow_shortage = true;
             form.db_driver = 'mysql';
             form.db_host = '127.0.0.1';
             form.db_port = '3306';

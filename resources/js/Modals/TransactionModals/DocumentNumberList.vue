@@ -567,6 +567,31 @@ const applyBir2307 = ref(false);
 const allowOverpayment = computed(
     () => page.props.tenantSettings?.allow_overpayment ?? true
 );
+const allowShortage = computed(
+    () => page.props.tenantSettings?.allow_shortage ?? true
+);
+
+// Remainders strictly below ₱1.00 are written off as shortage when allowed.
+const SHORTAGE_TOLERANCE = 1.0;
+
+const getShortageAmount = (availableBalance, requestedAmount) => {
+    if (!allowShortage.value) {
+        return 0;
+    }
+
+    const remainder =
+        Math.round(
+            ((parseFloat(availableBalance) || 0) -
+                (parseFloat(requestedAmount) || 0)) *
+                100
+        ) / 100;
+
+    if (remainder <= 0 || remainder >= SHORTAGE_TOLERANCE) {
+        return 0;
+    }
+
+    return remainder;
+};
 const emptyStateMessage = computed(() =>
     props.date
         ? "No transactions available on or before the selected receipt date."
@@ -743,20 +768,27 @@ const resetInvoiceWht = (invoice) => {
 const buildSelectedDocumentsPayload = () => {
     return selectedInvoices.value.map((inv) => {
         const matched = findMatchedDocument(inv);
+        const availableBalance =
+            matched && typeof matched.balance !== "undefined"
+                ? getRealBalance(matched)
+                : getRealBalance(inv);
+        const amountToPay = parseFloat(matched?.amountToPay) || 0;
+        const whtAmount = parseFloat(matched?.wht_amount) || 0;
 
         return {
             docunumber: inv.docunumber,
             type: inv.type,
             date: inv.date,
             amount: inv.amount,
-            balance:
-                matched && typeof matched.balance !== "undefined"
-                    ? getRealBalance(matched)
-                    : getRealBalance(inv),
-            amountToPay: parseFloat(matched?.amountToPay) || 0,
-            wht_amount: parseFloat(matched?.wht_amount) || 0,
+            balance: availableBalance,
+            amountToPay: amountToPay,
+            wht_amount: whtAmount,
             total_amount_less_wht:
                 parseFloat(matched?.total_amount_less_wht) || 0,
+            shortage_amount: getShortageAmount(
+                availableBalance,
+                amountToPay + whtAmount
+            ),
         };
     });
 };

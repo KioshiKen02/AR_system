@@ -1419,11 +1419,53 @@ class GenerateTextFile
             ];
             $overpaymentLineString = implode(',', $overpaymentLine) . "\r\n";
         }
+        $shortageLineString = '';
+        if (($detail->shortage_amount ?? 0) > 0) {
+            $shortageAmountValue = (float) $detail->shortage_amount;
+            $shortageAmount = $this->fmt($shortageAmountValue);
+            $shortageAmountNegative = $this->fmt($shortageAmountValue * -1);
+            $shortageLine = [
+                'CASH RECEI',
+                $prefix1 . 'COLL',
+                ($auto_increment += 10000),
+                'G/L Account',
+                '90.01.07',
+                $formattedDate,
+                'Payment',
+                $prefix . 'PY' . $detail->payment_no,
+                'Cash Shortage',
+                'PHP',
+                $shortageAmountNegative,
+                '',
+                $shortageAmount,
+                $shortageAmountNegative,
+                $shortageAmountNegative,
+                '1',
+                '',
+                '',
+                $companyCode,
+                $deptCode,
+                'CASHRECJNL',
+                '',
+                '',
+                '',
+                $shortageAmountNegative,
+                $shortageAmount,
+                $formattedDate,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
+                '',
+                $bankCode,
+                $shortageAmountNegative,
+                $shortageAmount
+            ];
+            $shortageLineString = implode(',', $shortageLine) . "\r\n";
+        }
 
         return implode(',', $headerLine) . "\r\n"
             . $whtLineString
             . implode(',', $detailLine) . "\r\n"
-            . $overpaymentLineString;
+            . $overpaymentLineString
+            . $shortageLineString;
     }
 
     protected function generateJournalVoucherLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
@@ -1626,11 +1668,53 @@ class GenerateTextFile
             ];
             $overpaymentLineString = implode(',', $overpaymentLine) . "\r\n";
         }
+        $shortageLineString = '';
+        if (($detail->shortage_amount ?? 0) > 0) {
+            $shortageAmountValue = (float) $detail->shortage_amount;
+            $shortageAmount = $this->fmt($shortageAmountValue);
+            $shortageAmountNegative = $this->fmt($shortageAmountValue * -1);
+            $shortageLine = [
+                'CASH RECEI',
+                $prefix1 . 'COLL',
+                ($auto_increment += 10000),
+                'G/L Account',
+                '90.01.07',
+                $formattedDate,
+                'Payment',
+                $prefix . 'PY' . $detail->payment_no,
+                'Cash Shortage',
+                'PHP',
+                $shortageAmountNegative,
+                '',
+                $shortageAmount,
+                $shortageAmountNegative,
+                $shortageAmountNegative,
+                '1',
+                '',
+                '',
+                $companyCode,
+                $deptCode,
+                'CASHRECJNL',
+                '',
+                '',
+                '',
+                $shortageAmountNegative,
+                $shortageAmount,
+                $formattedDate,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
+                '',
+                $bankCode,
+                $shortageAmountNegative,
+                $shortageAmount
+            ];
+            $shortageLineString = implode(',', $shortageLine) . "\r\n";
+        }
 
         return implode(',', $headerLine) . "\r\n"
             . $whtLineString
             . implode(',', $detailLine) . "\r\n"
-            . $overpaymentLineString;
+            . $overpaymentLineString
+            . $shortageLineString;
     }
 
     protected function generateOnlineDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
@@ -1835,11 +1919,53 @@ class GenerateTextFile
             ];
             $overpaymentLineString = implode(',', $overpaymentLine) . "\r\n";
         }
+        $shortageLineString = '';
+        if (($detail->shortage_amount ?? 0) > 0) {
+            $shortageAmountValue = (float) $detail->shortage_amount;
+            $shortageAmount = $this->fmt($shortageAmountValue);
+            $shortageAmountNegative = $this->fmt($shortageAmountValue * -1);
+            $shortageLine = [
+                'CASH RECEI',
+                $prefix1 . 'COLL',
+                ($auto_increment += 10000),
+                'G/L Account',
+                '90.01.07',
+                $formattedDate,
+                $transfer,
+                $prefix . 'PY' . $detail->payment_no,
+                'Cash Shortage',
+                'PHP',
+                $shortageAmountNegative,
+                '',
+                $shortageAmount,
+                $shortageAmountNegative,
+                $shortageAmountNegative,
+                '1',
+                '',
+                '',
+                $companyCode,
+                $deptCode,
+                'CASHRECJNL',
+                '',
+                '',
+                '',
+                $shortageAmountNegative,
+                $shortageAmount,
+                $formattedDate,
+                $prefix . $docCode . '#' . $paymentReferenceNo,
+                '',
+                $bankCode,
+                $shortageAmountNegative,
+                $shortageAmount
+            ];
+            $shortageLineString = implode(',', $shortageLine) . "\r\n";
+        }
 
         return implode(',', $headerLine) . "\r\n"
             . $whtLineString
             . implode(',', $detailLine) . "\r\n"
-            . $overpaymentLineString;
+            . $overpaymentLineString
+            . $shortageLineString;
     }
 
     protected function generateCheckDepositLine(&$auto_increment, $detail, $bankCode, $bankName, $customerCusPosting, $accCode, $custCode, $custCodeHolderName, $customerCode, $customerName, $accCodeName, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
@@ -2002,6 +2128,8 @@ class GenerateTextFile
             $whtLineString = implode(',', $whtLine) . "\r\n";
         }
 
+        $shortageAmountValue = (float) ($detail->shortage_amount ?? 0);
+
         return implode(',', $headerLine) . "\r\n"
             . $whtLineString
             . implode(',', $detailLine) . "\r\n"
@@ -2039,6 +2167,42 @@ class GenerateTextFile
                     $bankCode,
                     $this->fmt($overpaymentAmountValue * -1),
                     $this->fmt($overpaymentAmountValue)
+                ]) . "\r\n"
+                : '')
+            . ($shortageAmountValue > 0
+                ? implode(',', [
+                    'CASH RECEI',
+                    $prefix1 . 'COLL',
+                    ($auto_increment += 10000),
+                    'G/L Account',
+                    '90.01.07',
+                    $formattedDate,
+                    'Payment',
+                    $prefix . 'PY' . $detail->payment_no,
+                    'Cash Shortage',
+                    'PHP',
+                    $this->fmt($shortageAmountValue * -1),
+                    '',
+                    $this->fmt($shortageAmountValue),
+                    $this->fmt($shortageAmountValue * -1),
+                    $this->fmt($shortageAmountValue * -1),
+                    '1',
+                    '',
+                    '',
+                    $companyCode,
+                    $deptCode,
+                    'CASHRECJNL',
+                    '',
+                    '',
+                    '',
+                    $this->fmt($shortageAmountValue * -1),
+                    $this->fmt($shortageAmountValue),
+                    $formattedDate,
+                    $prefix . $docCode . '#' . $paymentReferenceNo,
+                    '',
+                    $bankCode,
+                    $this->fmt($shortageAmountValue * -1),
+                    $this->fmt($shortageAmountValue)
                 ]) . "\r\n"
                 : '');
     }

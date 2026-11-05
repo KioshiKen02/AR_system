@@ -53,24 +53,34 @@ class HandleInertiaRequests extends Middleware
             'tenantSettings' => function () {
                 $appSettingId = config('tenant.current_app_setting_id');
 
+                $defaults = [
+                    'allow_overpayment' => true,
+                    'allow_shortage' => true,
+                ];
+
                 if (!$appSettingId) {
-                    return [
-                        'allow_overpayment' => true,
-                    ];
+                    return $defaults;
                 }
 
-                if (!Schema::connection('mysql')->hasColumn('app_settings', 'allow_overpayment')) {
-                    return [
-                        'allow_overpayment' => true,
-                    ];
+                $columns = [];
+                if (Schema::connection('mysql')->hasColumn('app_settings', 'allow_overpayment')) {
+                    $columns[] = 'allow_overpayment';
+                }
+                if (Schema::connection('mysql')->hasColumn('app_settings', 'allow_shortage')) {
+                    $columns[] = 'allow_shortage';
+                }
+
+                if (empty($columns)) {
+                    return $defaults;
                 }
 
                 $setting = AppSetting::on('mysql')
-                    ->select('allow_overpayment')
+                    ->select($columns)
                     ->find($appSettingId);
 
                 return [
                     'allow_overpayment' => $setting?->allow_overpayment ?? true,
+                    'allow_shortage' => $setting?->allow_shortage ?? true,
                 ];
             },
             'auth.permissions' => function () use ($request) {

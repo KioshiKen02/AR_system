@@ -159,6 +159,12 @@ class CustomerLedgerController extends Controller
             return (float) $creditPaid + (float) $creditFloating;
         };
 
+        $hasLedgerShortageColumn = Schema::connection('tenant')->hasColumn('customer_ledger', 'shortage_amount');
+
+        $computeShortage = function ($record) use ($val, $hasLedgerShortageColumn) {
+            return $hasLedgerShortageColumn ? $val($record->shortage_amount ?? 0) : 0.0;
+        };
+
         $prevQuery = CustomerLedger::where('customer_code', 'like', '%' . $request->customer_code . '%');
         if ($dateStart) {
             $prevQuery->whereDate('date', '<', $dateStart);
@@ -182,7 +188,8 @@ class CustomerLedgerController extends Controller
             $netDebit += ($posSum - $negSum);
 
             $credit = $computeCredit($prev, $paidAmounts, $floatingAmounts);
-            $paymentForwarded += ($netDebit - $credit);
+            $shortage = $computeShortage($prev);
+            $paymentForwarded += ($netDebit - $credit - $shortage);
         }
 
         $records = $query->clone()
@@ -198,6 +205,7 @@ class CustomerLedgerController extends Controller
             $applyToFor,
             $computeNetDebit,
             $computeCredit,
+            $computeShortage,
             $adjustmentsPosNeg,
             $paidAmounts,
             $floatingAmounts
@@ -214,6 +222,7 @@ class CustomerLedgerController extends Controller
             $netDebit += ($posSum - $negSum);
 
             $credit = $computeCredit($record, $paidAmounts, $floatingAmounts);
+            $shortage = $computeShortage($record);
 
             $floatingRow = $floatingAmounts
                 ->get($record->invoice_number, collect())
@@ -226,10 +235,11 @@ class CustomerLedgerController extends Controller
             $record->negative_adjustment_amount = $negSum;
             $record->amount_paid = $credit;
             $record->floating_amount = $floatingAmount;
+            $record->shortage_amount = $shortage;
             $record->has_floating_deduction = (float) $floatingAmount > 0;
-            $record->document_balance = max(0, $netDebit - $credit);
+            $record->document_balance = max(0, $netDebit - $credit - $shortage);
 
-            $runningBalance += ($netDebit - $credit);
+            $runningBalance += ($netDebit - $credit - $shortage);
             $record->running_balance = $runningBalance;
 
             return $record;
@@ -430,6 +440,26 @@ class CustomerLedgerController extends Controller
             ? ($ledgerRow?->wht_amount ?? 0.00)
             : 0.00;
 
+        // Record the rounding shortage write-off, if any, so the running balance reconciles.
+        $hasLedgerShortageAmount = Schema::connection('tenant')->hasColumn('customer_ledger', 'shortage_amount');
+        $shortageAmt = $hasLedgerShortageAmount ? (float) ($ledgerRow?->shortage_amount ?? 0.00) : 0.0;
+
+        if ($shortageAmt > 0) {
+            $runningBalance = max(0, $runningBalance - $shortageAmt);
+            $transactions[] = [
+                'date' => $ledgerRow?->date,
+                'transaction_no' => $ledgerRow?->invoice_number,
+                'description' => 'Shortage (Rounding Write-off)',
+                'type' => 'Shortage',
+                'debit' => 0,
+                'credit' => $shortageAmt,
+                'credit_floating' => 0,
+                'wht_floating' => 0,
+                'floating' => 0,
+                'balance' => $runningBalance,
+            ];
+        }
+
         // Sort transactions by date if needed, but they are usually added in chronological order of processing logic
         // If strict date sorting is needed, we can collect all and sort.
 
@@ -445,6 +475,7 @@ class CustomerLedgerController extends Controller
                 'amount_paid' => $ledgerRow?->amount_paid ?? 0.00,
                 'running_balance' => $ledgerRow?->running_balance ?? 0.00,
                 'overpayment_amount' => $hasLedgerOverpaymentAmount ? ($ledgerRow?->overpayment_amount ?? 0.00) : 0.00,
+                'shortage_amount' => $shortageAmt,
                 'overage' => $ledgerRow?->overage ?? 0.00,
                 'shrinkage' => $ledgerRow?->shrinkage ?? 0.00,
                 'return' => $ledgerRow?->return ?? 0.00,
@@ -458,6 +489,7 @@ class CustomerLedgerController extends Controller
                 'adjusted_amount' => $ledgerRow?->adjusted_amount ?? 0.00,
                 'running_balance' => $ledgerRow?->running_balance ?? 0.00,
                 'overpayment_amount' => $hasLedgerOverpaymentAmount ? ($ledgerRow?->overpayment_amount ?? 0.00) : 0.00,
+                'shortage_amount' => $shortageAmt,
                 'overage' => $ledgerRow?->overage ?? 0.00,
                 'shrinkage' => $ledgerRow?->shrinkage ?? 0.00,
                 'return_amount' => $ledgerRow?->return ?? 0.00,

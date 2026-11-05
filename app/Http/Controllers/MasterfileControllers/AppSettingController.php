@@ -50,6 +50,7 @@ class AppSettingController extends Controller
             'description' => 'nullable|string',
             'is_active' => 'boolean',
             'allow_overpayment' => 'boolean',
+            'allow_shortage' => 'boolean',
         ]);
 
         // Explicitly set connection to mysql for creation
@@ -101,6 +102,7 @@ class AppSettingController extends Controller
             'description' => 'nullable|string',
             'is_active' => 'boolean',
             'allow_overpayment' => 'boolean',
+            'allow_shortage' => 'boolean',
         ]);
 
         $appSetting->update($validated);

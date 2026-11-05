@@ -274,6 +274,22 @@
                                                             Total Overpayment: {{ formatCurrency(totalOverpaymentAmount) }}
                                                         </div>
                                                     </div>
+                                                    <div v-if="hasShortageDisplay"
+                                                        class="col-span-3 rounded-xl border-2 border-sky-400 bg-sky-50 px-4 py-3 text-sm text-sky-900 shadow-sm dark:border-sky-300 dark:bg-sky-100 dark:text-sky-950">
+                                                        <div class="flex items-center gap-2 font-bold uppercase tracking-wide text-sky-800 dark:text-sky-950">
+                                                            <span
+                                                                class="inline-flex rounded-md bg-sky-600 px-2 py-0.5 text-xs font-bold text-white">
+                                                                Notice
+                                                            </span>
+                                                            <span>Shortage Summary</span>
+                                                        </div>
+                                                        <div class="mt-2 font-semibold text-sky-900 dark:text-sky-950">
+                                                            Total Shortage: {{ formatCurrency(totalShortageAmount) }}
+                                                        </div>
+                                                        <p class="mt-1 text-xs text-sky-800 dark:text-sky-950">
+                                                            A remainder below ₱1.00 will be written off and the document will be closed.
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -831,6 +847,32 @@ const totalOverpaymentAmount = computed(() =>
 
 const hasOverpaymentDisplay = computed(
     () => overpaymentDetails.value.length > 0
+);
+
+const shortageDetails = computed(() => {
+    const selectedDocs = Array.isArray(form.selectedDocuments)
+        ? form.selectedDocuments
+        : [];
+
+    return selectedDocs
+        .filter((doc) => (Number(doc?.shortage_amount) || 0) > 0)
+        .map((doc) => ({
+            docunumber: doc.docunumber,
+            type: doc.type,
+            shortage_amount: Number(doc.shortage_amount) || 0,
+        }))
+        .filter((doc) => doc.shortage_amount > 0);
+});
+
+const totalShortageAmount = computed(() =>
+    shortageDetails.value.reduce(
+        (sum, doc) => sum + (Number(doc.shortage_amount) || 0),
+        0
+    )
+);
+
+const hasShortageDisplay = computed(
+    () => shortageDetails.value.length > 0
 );
 
 const handleSelectedInvoices = (selectedData) => {

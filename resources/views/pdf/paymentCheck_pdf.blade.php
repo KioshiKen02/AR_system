@@ -215,6 +215,11 @@
     </table>
 
     <table class="document-table">
+        @php
+            $showOverpayment = $data['show_overpayment'] ?? true;
+            $showShortage = $data['show_shortage'] ?? true;
+            $slipColCount = 6 + ($showOverpayment ? 1 : 0) + ($showShortage ? 1 : 0);
+        @endphp
         <thead>
             <tr>
                 <th>S.I / C.I Date</th>
@@ -223,8 +228,11 @@
                 <th>Balance</th>
                 <th>WHT Amount</th>
                 <th>Amount (w/o WHT)</th>
-                @if ($data['show_overpayment'] ?? true)
+                @if ($showOverpayment)
                     <th>Overpayment</th>
+                @endif
+                @if ($showShortage)
+                    <th>Shortage</th>
                 @endif
                 <th>Total Amount</th>
             </tr>
@@ -238,8 +246,11 @@
                     <td>{{ number_format($doc->slip_balance ?? $doc->balance, 2) }}</td>
                     <td>{{ number_format($doc->wht_amount, 2) }}</td>
                     <td>{{ number_format($doc->total_amount_less_wht ?? (($doc->amount_paid ?? 0) - ($doc->wht_amount ?? 0)), 2) }}</td>
-                    @if ($data['show_overpayment'] ?? true)
+                    @if ($showOverpayment)
                         <td>{{ number_format($doc->overpayment_amount ?? 0, 2) }}</td>
+                    @endif
+                    @if ($showShortage)
+                        <td>{{ number_format($doc->shortage_amount ?? 0, 2) }}</td>
                     @endif
                     <td>{{ number_format($doc->amount_paid, 2) }}</td>
                 </tr>
@@ -247,21 +258,27 @@
         </tbody>
         <tfoot class="tfoot">
             <tr>
-                <td colspan="{{ ($data['show_overpayment'] ?? true) ? 7 : 6 }}" style="text-align: right;">Overall Total Amount >>></td>
+                <td colspan="{{ $slipColCount - 1 }}" style="text-align: right;">Overall Total Amount >>></td>
                 <td>{{ number_format($data['amount_paid'], 2) }}</td>
             </tr>
             <tr>
-                <td colspan="{{ ($data['show_overpayment'] ?? true) ? 7 : 6 }}" style="text-align: right;">Overall Total WHT Amount >>></td>
+                <td colspan="{{ $slipColCount - 1 }}" style="text-align: right;">Overall Total WHT Amount >>></td>
                 <td>{{ number_format($data['wht_amount'], 2) }}</td>
             </tr>
             <tr>
-                <td colspan="{{ ($data['show_overpayment'] ?? true) ? 7 : 6 }}" style="text-align: right;">Overall Total Amount Less WHT >>></td>
+                <td colspan="{{ $slipColCount - 1 }}" style="text-align: right;">Overall Total Amount Less WHT >>></td>
                 <td>{{ number_format($data['total_amount_less_wht'], 2) }}</td>
             </tr>
-            @if ($data['show_overpayment'] ?? true)
+            @if ($showOverpayment)
                 <tr>
-                    <td colspan="7" style="text-align: right;">Overall Total Overpayment >>></td>
+                    <td colspan="{{ $slipColCount - 1 }}" style="text-align: right;">Overall Total Overpayment >>></td>
                     <td>{{ number_format($data['overpayment_amount'] ?? 0, 2) }}</td>
+                </tr>
+            @endif
+            @if ($showShortage)
+                <tr>
+                    <td colspan="{{ $slipColCount - 1 }}" style="text-align: right;">Overall Total Shortage >>></td>
+                    <td>{{ number_format($data['shortage_amount'] ?? 0, 2) }}</td>
                 </tr>
             @endif
         </tfoot>

@@ -851,7 +851,7 @@ class AdjustmentControllers extends Controller
     {
         $map = [
             'Bilar Breeder Local' => 'http://172.16.43.148/centralized_invoicing/sales-invoice/update/adjustment-sales',
-            'Bilar Breeder' => 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Bilar Breeder' => 'http://172.16.220.1/centralized-invoicing/sales-invoice/update/adjustment-sales',
             'Gp Jagna' => 'http://172.16.112.51:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
             'Ice Plant' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
             'Peanut Kisses' => 'http://172.16.184.49:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
@@ -861,7 +861,7 @@ class AdjustmentControllers extends Controller
             'Bilar Hatchery' => 'http://172.16.219.200:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
             'Lapsaon Breeder' => 'http://172.16.220.222:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
             'Rizal Breeder' => 'http://172.16.217.11:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
-            'Feedmill' => 'http://172.16.43.148/centralized-invoicing/sales-invoice/update/adjustment-sales',
+            'Feedmill' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
             'Growout' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
             'Cortes Fertilizer' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',
             'Ubay Fertilizer' => 'http://172.16.105.2:81/centralized-invoicing/sales-invoice/update/adjustment-sales',

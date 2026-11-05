@@ -68,6 +68,21 @@ SET @sql := IF(
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- 4.1) payment_details.shortage_amount
+SET @exists := (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @db
+      AND TABLE_NAME = 'payment_details'
+      AND COLUMN_NAME = 'shortage_amount'
+);
+SET @sql := IF(
+    @exists = 0,
+    'ALTER TABLE `payment_details` ADD COLUMN `shortage_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `overpayment_amount`',
+    'SELECT ''payment_details.shortage_amount already exists'' AS info'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- 5) customer_ledger.overpayment_amount
 SET @exists := (
     SELECT COUNT(*)
@@ -80,6 +95,21 @@ SET @sql := IF(
     @exists = 0,
     'ALTER TABLE `customer_ledger` ADD COLUMN `overpayment_amount` DECIMAL(10,2) NULL AFTER `running_balance`',
     'SELECT ''customer_ledger.overpayment_amount already exists'' AS info'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 5.1) customer_ledger.shortage_amount
+SET @exists := (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @db
+      AND TABLE_NAME = 'customer_ledger'
+      AND COLUMN_NAME = 'shortage_amount'
+);
+SET @sql := IF(
+    @exists = 0,
+    'ALTER TABLE `customer_ledger` ADD COLUMN `shortage_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER `overpayment_amount`',
+    'SELECT ''customer_ledger.shortage_amount already exists'' AS info'
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
@@ -118,7 +148,8 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 UPDATE `payment_details`
 SET
     `overpayment_amount` = COALESCE(`overpayment_amount`, 0),
-    `floating_deducted_amount` = COALESCE(`floating_deducted_amount`, 0)
+    `floating_deducted_amount` = COALESCE(`floating_deducted_amount`, 0),
+    `shortage_amount` = COALESCE(`shortage_amount`, 0)
 WHERE `overpayment_amount` IS NULL
    OR `floating_deducted_amount` IS NULL;
 
@@ -147,6 +178,25 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 UPDATE `app_settings`
 SET `allow_overpayment` = 1
 WHERE `allow_overpayment` IS NULL;
+
+-- 10) app_settings.allow_shortage
+SET @exists := (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @db
+      AND TABLE_NAME = 'app_settings'
+      AND COLUMN_NAME = 'allow_shortage'
+);
+SET @sql := IF(
+    @exists = 0,
+    'ALTER TABLE `app_settings` ADD COLUMN `allow_shortage` TINYINT(1) NOT NULL DEFAULT 1 AFTER `allow_overpayment`',
+    'SELECT ''app_settings.allow_shortage already exists'' AS info'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+UPDATE `app_settings`
+SET `allow_shortage` = 1
+WHERE `allow_shortage` IS NULL;
 
 -- =========================================================
 -- OPTIONAL FK ALIGNMENT

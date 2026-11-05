@@ -92,12 +92,24 @@ class GenerateTransactionPDFJob
             ->sum('amount_paid');
     }
 
+    private function getStoredShortageAmount(PaymentDetails $detail): float
+    {
+        if (!Schema::connection('tenant')->hasColumn('payment_details', 'shortage_amount')) {
+            return 0.0;
+        }
+
+        return max(0, (float) ($detail->shortage_amount ?? 0));
+    }
+
     private function getSlipDisplayBalance(PaymentDetails $detail): float
     {
         $rawBalance = (float) ($detail->balance ?? 0);
         $floatingDeduction = $this->getStoredFloatingDeduction($detail);
+        $shortageWriteOff = $this->getStoredShortageAmount($detail);
 
-        return max(0, $rawBalance - $floatingDeduction);
+        // A shortage is a rounding write-off that settles the document, so it must
+        // not surface as an outstanding balance on the slip.
+        return max(0, $rawBalance - $floatingDeduction - $shortageWriteOff);
     }
 
     private function getSlipDisplayAmount(PaymentDetails $detail): float
@@ -106,8 +118,11 @@ class GenerateTransactionPDFJob
         $grossPaid = (float) ($detail->amount_paid ?? 0);
         $overpayment = (float) ($detail->overpayment_amount ?? 0);
         $effectiveAppliedToDocument = max(0, $grossPaid - $overpayment);
+        $shortageWriteOff = $this->getStoredShortageAmount($detail);
 
-        return $displayBalance + $effectiveAppliedToDocument;
+        // Add the write-off back so the S.I / C.I Amount column still reflects the
+        // full invoice amount even though the remainder was not collected.
+        return $displayBalance + $effectiveAppliedToDocument + $shortageWriteOff;
     }
 
     private function shouldShowOverpayment(): bool
@@ -128,6 +143,26 @@ class GenerateTransactionPDFJob
             ->first();
 
         return (bool) ($setting?->allow_overpayment ?? true);
+    }
+
+    private function shouldShowShortage(): bool
+    {
+        if (!Schema::connection('mysql')->hasColumn('app_settings', 'allow_shortage')) {
+            return true;
+        }
+
+        $tenantSlug = strtolower(trim((string) ($this->passedData['tenant'] ?? '')));
+
+        if ($tenantSlug === '') {
+            return true;
+        }
+
+        $setting = AppSetting::on('mysql')
+            ->select('allow_shortage')
+            ->whereRaw('LOWER(TRIM(base_url)) = ?', [$tenantSlug])
+            ->first();
+
+        return (bool) ($setting?->allow_shortage ?? true);
     }
 
     protected function invoiceTransaction()
@@ -407,12 +442,19 @@ class GenerateTransactionPDFJob
                 return (float) ($detail->overpayment_amount ?? 0);
             })
             : 0;
+        $totalShortage = Schema::connection('tenant')->hasColumn('payment_details', 'shortage_amount')
+            ? $this->passedData['paidDocuments']->sum(function ($detail) {
+                return (float) ($detail->shortage_amount ?? 0);
+            })
+            : 0;
 
         $this->passedData['amount_paid'] = $totalGross;
         $this->passedData['wht_amount'] = $totalWht;
         $this->passedData['total_amount_less_wht'] = $totalNet;
         $this->passedData['overpayment_amount'] = $totalOverpayment;
         $this->passedData['show_overpayment'] = $this->shouldShowOverpayment();
+        $this->passedData['shortage_amount'] = $totalShortage;
+        $this->passedData['show_shortage'] = $this->shouldShowShortage();
         $this->passedData['amount_in_words'] = $this->amountToWords($totalGross);
 
         if ($this->reprintconfirmation) {

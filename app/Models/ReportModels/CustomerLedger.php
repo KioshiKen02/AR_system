@@ -27,6 +27,7 @@ class CustomerLedger extends Model
         'running_balance',
         'wht_amount',
         'overpayment_amount',
+        'shortage_amount',
         'trade_type',
         'shrinkage',
         'overage',

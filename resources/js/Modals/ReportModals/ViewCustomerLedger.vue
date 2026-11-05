@@ -45,6 +45,7 @@
                             <TextInput label="Shrinkage" v-model="form.shrinkage" type="text" readonly />
                             <TextInput label="Return" v-model="form.return" type="text" readonly />
                             <TextInput label="Overpayment" v-model="form.overpayment_amount" type="text" readonly />
+                            <TextInput label="Shortage" v-model="form.shortage_amount" type="text" readonly />
                             <TextInput label="WHT Amount" v-model="form.wht_amount" type="text" readonly />
                         </div>
 
@@ -152,6 +153,7 @@ const form = useForm({
     return: null,
     amount_paid: null,
     overpayment_amount: null,
+    shortage_amount: null,
     wht_amount: null,
     running_balance: null,
     pos_adjustment: null,
@@ -227,6 +229,9 @@ watch(
                 form.running_balance = formatCurrency(ledger.running_balance ?? 0);
                 form.overpayment_amount = formatCurrency(
                     ledger.overpayment_amount ?? 0
+                );
+                form.shortage_amount = formatCurrency(
+                    ledger.shortage_amount ?? 0
                 );
                 form.overage = formatCurrency(ledger.overage ?? 0);
                 form.shrinkage = formatCurrency(ledger.shrinkage ?? 0);
