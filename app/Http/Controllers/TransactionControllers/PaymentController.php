@@ -297,6 +297,8 @@ class PaymentController extends Controller
             'advanced_payment_balance' => ['nullable', 'string'],
             'total_amount' => ['nullable', 'string'],
             'net_total' => ['nullable', 'string'],
+            'wht_amount' => ['nullable', 'string'],
+            'total_amount_less_wht' => ['nullable', 'string'],
             'amount_paid' => [
                 'required',
                 'numeric',
