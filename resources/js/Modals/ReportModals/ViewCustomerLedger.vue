@@ -45,7 +45,7 @@
                             <TextInput label="Shrinkage" v-model="form.shrinkage" type="text" readonly />
                             <TextInput label="Return" v-model="form.return" type="text" readonly />
                             <TextInput label="Overpayment" v-model="form.overpayment_amount" type="text" readonly />
-                            <TextInput label="Shortage" v-model="form.shortage_amount" type="text" readonly />
+                            <TextInput v-if="allowShortage" label="Shortage" v-model="form.shortage_amount" type="text" readonly />
                             <TextInput label="WHT Amount" v-model="form.wht_amount" type="text" readonly />
                         </div>
 
@@ -138,6 +138,11 @@ const props = defineProps({
 });
 
 const page = usePage();
+
+// Shortage is a per-BU setting; hide its field when the active BU forbids it.
+const allowShortage = computed(
+    () => page.props.tenantSettings?.allow_shortage ?? true
+);
 
 const form = useForm({
     invoice_number: null,

@@ -18,6 +18,24 @@
             />
         </Transition>
 
+        <Transition
+            enter-active-class="transition ease-out duration-300"
+            enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition ease-in duration-200"
+            leave-from-class="opacity-100 scale-100"
+            leave-to-class="opacity-0 scale-95"
+        >
+            <PdfPreviewModal
+                v-if="showPdfModal"
+                :show="showPdfModal"
+                :apiEndpoint="apiRoute"
+                :formData="pdfFormData"
+                @closeSuccess="pdfPrintSuccess"
+                @close="showPdfModal = false"
+            />
+        </Transition>
+
         <ToastAlertWarning :show="showToast" :message="toastMessage" />
 
         <Transition
@@ -444,6 +462,7 @@ import ConfirmationDialog from "../../Pages/Components/ConfirmationDialog.vue";
 import TextInput from "../../Pages/Components/TextInput.vue";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import ManagersKey from "../ManagersKey.vue";
+import PdfPreviewModal from "../PdfPreviewModal.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
 import usePermissions from "../../Pages/Composables/usePermissions";
 
@@ -525,28 +544,28 @@ const showWarningToast = (message) => {
 };
 
 //////////// PRINT PDF //////////////////////////////////////////////////////////////////////////////////////////////////////////
+const showPdfModal = ref(false);
+const pdfFormData = ref(null);
+const apiRoute = ref(null);
 const previewInvoice = async () => {
     try {
-        const submissionData = {
+        apiRoute.value = "previewWhtCleared";
+        pdfFormData.value = {
             ...form.data(),
             _reprint_confirmation: true,
             _person_authored: person_authored.value,
         };
-
-        const response = await axios.post(
-            route("previewWhtCleared", { tenant: page.props.tenant }),
-            submissionData,
-            {
-                responseType: "blob", // important to handle PDF as binary
-            }
-        );
-
-        const file = new Blob([response.data], { type: "application/pdf" });
-        const fileURL = URL.createObjectURL(file);
-        window.open(fileURL); // Open PDF in new browser tab
+        showPdfModal.value = true;
     } catch (error) {
         console.error("Error previewing invoice:", error);
     }
+};
+
+const pdfPrintSuccess = () => {
+    showPdfModal.value = false;
+    form.reset();
+    paymentDetails.value = [];
+    emit("close");
 };
 
 const showDialog = ref(false);
@@ -555,9 +574,6 @@ const handleConfirm = async (confirmed) => {
     if (confirmed) {
         previewInvoice();
     }
-    form.reset();
-    paymentDetails.value = [];
-    emit("close");
 };
 
 /////// WATCH //////////////////////////////////////////////////////////////////////////////////////////////////////////////

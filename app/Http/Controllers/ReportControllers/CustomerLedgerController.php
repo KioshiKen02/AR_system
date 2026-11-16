@@ -143,12 +143,25 @@ class CustomerLedgerController extends Controller
             return $amount - $shrinkage + $overage - $return;
         };
 
-        $computeCredit = function ($record, $paidAmounts, $floatingAmounts) use ($val) {
+        // Credited amount for a document, restricted to the filtered date window.
+        //
+        // When a date range is applied we must NOT fall back to the ledger's stored
+        // all-time `amount_paid`: that value already includes later payments, so a
+        // November payment on an October document would wrongly appear in an
+        // October-only report that was still unpaid at the time.
+        $computeCredit = function ($record, $paidAmounts, $floatingAmounts) use ($val, $dateEnd) {
             $paidRow = $paidAmounts
                 ->get($record->invoice_number, collect())
                 ->get($record->type, collect())
                 ->first();
-            $creditPaid = $paidRow?->total_paid ?? $record->amount_paid ?? 0;
+
+            if ($paidRow !== null) {
+                $creditPaid = $paidRow->total_paid;
+            } elseif ($dateEnd) {
+                $creditPaid = 0;
+            } else {
+                $creditPaid = $record->amount_paid ?? 0;
+            }
 
             $floatingRow = $floatingAmounts
                 ->get($record->invoice_number, collect())
@@ -156,13 +169,27 @@ class CustomerLedgerController extends Controller
                 ->first();
             $creditFloating = $floatingRow?->total_floating ?? 0;
 
-            return (float) $creditPaid + (float) $creditFloating;
+            return [
+                'credit' => (float) $creditPaid + (float) $creditFloating,
+                'has_payment_in_range' => $paidRow !== null,
+            ];
         };
 
         $hasLedgerShortageColumn = Schema::connection('tenant')->hasColumn('customer_ledger', 'shortage_amount');
 
-        $computeShortage = function ($record) use ($val, $hasLedgerShortageColumn) {
-            return $hasLedgerShortageColumn ? $val($record->shortage_amount ?? 0) : 0.0;
+        $computeShortage = function ($record, $hasPaymentInRange = true) use ($val, $hasLedgerShortageColumn, $dateEnd) {
+            if (! $hasLedgerShortageColumn) {
+                return 0.0;
+            }
+
+            // The shortage write-off is created together with a payment. When a
+            // date window is applied and the document has no payment inside it,
+            // the shortage belongs to a later payment and must not be counted here.
+            if ($dateEnd && ! $hasPaymentInRange) {
+                return 0.0;
+            }
+
+            return $val($record->shortage_amount ?? 0);
         };
 
         $prevQuery = CustomerLedger::where('customer_code', 'like', '%' . $request->customer_code . '%');
@@ -187,9 +214,9 @@ class CustomerLedgerController extends Controller
             $negSum = $posNeg->neg_sum ?? 0;
             $netDebit += ($posSum - $negSum);
 
-            $credit = $computeCredit($prev, $paidAmounts, $floatingAmounts);
-            $shortage = $computeShortage($prev);
-            $paymentForwarded += ($netDebit - $credit - $shortage);
+            $creditInfo = $computeCredit($prev, $paidAmounts, $floatingAmounts);
+            $shortage = $computeShortage($prev, $creditInfo['has_payment_in_range']);
+            $paymentForwarded += ($netDebit - $creditInfo['credit'] - $shortage);
         }
 
         $records = $query->clone()
@@ -221,8 +248,9 @@ class CustomerLedgerController extends Controller
             $negSum = $posNeg->neg_sum ?? 0;
             $netDebit += ($posSum - $negSum);
 
-            $credit = $computeCredit($record, $paidAmounts, $floatingAmounts);
-            $shortage = $computeShortage($record);
+            $creditInfo = $computeCredit($record, $paidAmounts, $floatingAmounts);
+            $credit = $creditInfo['credit'];
+            $shortage = $computeShortage($record, $creditInfo['has_payment_in_range']);
 
             $floatingRow = $floatingAmounts
                 ->get($record->invoice_number, collect())

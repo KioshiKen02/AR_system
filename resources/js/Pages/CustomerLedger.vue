@@ -240,9 +240,9 @@
                     Showing {{ renderedRows.length }} of {{ filteredRows.length }}
                 </div>
             </div>
-            <div ref="scrollContainer" class="max-h-[65vh] overflow-auto rounded-xl">
-                <table class="w-full text-sm text-[var(--color-text-primary)] rounded-xl overflow-hidden mb-2">
-                    <thead class="sticky top-0 z-10">
+            <div class="rounded-xl">
+                <table class="w-full text-sm text-[var(--color-text-primary)] mb-2">
+                    <thead class="sticky top-0 z-10 bg-[var(--color-bg-secondary)]">
                         <tr>
                             <th class="px-3 py-2 w-[11%] text-left font-semibold tracking-wider">
                                 DOCUMENT NO
@@ -262,7 +262,8 @@
                             <th class="px-3 py-2 w-[9%] text-center font-semibold tracking-wider">
                                 CREDIT
                             </th>
-                            <th class="px-3 py-2 w-[9%] text-center font-semibold tracking-wider">
+                            <th v-if="allowShortage"
+                                class="px-3 py-2 w-[9%] text-center font-semibold tracking-wider">
                                 SHORTAGE
                             </th>
                             <th class="px-3 py-2 w-[10%] text-center font-semibold tracking-wider">
@@ -278,7 +279,7 @@
                     <tbody>
                         <!-- Loading State -->
                         <tr v-if="isLoading && generateTableData">
-                            <td colspan="9" class="text-center py-8">
+                            <td :colspan="allowShortage ? 9 : 8" class="text-center py-8">
                                 <div class="flex justify-center items-center">
                                     <svg width="30" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
                                         fill="var(--color-icon)">
@@ -373,7 +374,7 @@
                             <td class="px-3 py-1 text-right">
                                 {{ formatCurrency(getDisplayCredit(customerledger, idx)) }}
                             </td>
-                            <td class="px-3 py-1 text-right">
+                            <td v-if="allowShortage" class="px-3 py-1 text-right">
                                 {{ formatCurrency(getDisplayShortage(customerledger)) }}
                             </td>
                             <td class="px-3 py-1 text-right">
@@ -412,7 +413,7 @@
                             shouldUseInfiniteScroll &&
                             renderedRows.length < filteredRows.length
                         ">
-                            <td colspan="9" class="px-5 py-4 text-center">
+                            <td :colspan="allowShortage ? 9 : 8" class="px-5 py-4 text-center">
                                 <div ref="loadMoreSentinel" class="text-xs text-[var(--color-text-secondary)]">
                                     Loading more rows...
                                 </div>
@@ -424,7 +425,7 @@
                             (!generateTableData ||
                                 (generateTableData && filteredRows.length === 0))
                         ">
-                            <td colspan="9" class="px-5 py-6 text-center">
+                            <td :colspan="allowShortage ? 9 : 8" class="px-5 py-6 text-center">
                                 <div class="flex flex-col items-center justify-center text-[var(--color-text-primary)]">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2" fill="none"
                                         viewBox="0 0 24 24" stroke="currentColor">
@@ -500,6 +501,12 @@
 
     const search = ref(props.searchTerm || "");
     const hideFloatingDeducted = ref(false);
+
+    // Shortage is a per-BU setting. When the selected BU has shortage disabled,
+    // hide the Shortage column entirely.
+    const allowShortage = computed(
+        () => page.props.tenantSettings?.allow_shortage ?? true
+    );
 
     // Invoice type picker for the Excel export
     const showExportTypeModal = ref(false);
@@ -758,7 +765,6 @@
         renderLimit.value = 250;
     });
 
-    const scrollContainer = ref(null);
     const loadMoreSentinel = ref(null);
     let loadMoreObserver = null;
 
@@ -776,7 +782,7 @@
 
         if (typeof IntersectionObserver === "undefined") return;
         if (!shouldUseInfiniteScroll.value) return;
-        if (!scrollContainer.value || !loadMoreSentinel.value) return;
+        if (!loadMoreSentinel.value) return;
 
         loadMoreObserver = new IntersectionObserver(
             (entries) => {
@@ -785,7 +791,9 @@
                 }
             },
             {
-                root: scrollContainer.value,
+                // The table no longer has its own scrollbar; the layout content
+                // area is the scroller, so observe against the viewport.
+                root: null,
                 rootMargin: "400px",
                 threshold: 0,
             }
@@ -796,7 +804,6 @@
 
     watch(
         [
-            () => scrollContainer.value,
             () => loadMoreSentinel.value,
             shouldUseInfiniteScroll,
             filteredRows,
@@ -990,7 +997,7 @@
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet("Customer Ledgers");
 
-            const headerRow = worksheet.addRow([
+            const headerColumns = [
                 "Invoice Number",
                 "Date",
                 "Customer Name",
@@ -998,9 +1005,13 @@
                 "Type",
                 "Net Amount",
                 "Amount Paid",
-                "Shortage",
-                "Running Balance",
-            ]);
+            ];
+            if (allowShortage.value) {
+                headerColumns.push("Shortage");
+            }
+            headerColumns.push("Running Balance");
+
+            const headerRow = worksheet.addRow(headerColumns);
 
             headerRow.eachCell((cell) => {
                 cell.font = { bold: true, color: { argb: "FFFFFF" } };
@@ -1047,7 +1058,7 @@
             );
 
             exportRows.forEach(({ row: customerledger, idx }) => {
-                const row = worksheet.addRow([
+                const rowValues = [
                     customerledger.invoice_number || "",
                     customerledger.date ? formatDate(customerledger.date) : "",
                     customerledger.customer_name || "Loading...",
@@ -1055,9 +1066,15 @@
                     customerledger.type || "",
                     calculateNetAmount(customerledger) || 0,
                     getExportCredit(customerledger, idx),
-                    Math.max(0, toNumber(customerledger?.shortage_amount)),
-                    getExportRunningBalance(customerledger, idx),
-                ]);
+                ];
+                if (allowShortage.value) {
+                    rowValues.push(
+                        Math.max(0, toNumber(customerledger?.shortage_amount))
+                    );
+                }
+                rowValues.push(getExportRunningBalance(customerledger, idx));
+
+                const row = worksheet.addRow(rowValues);
 
                 row.eachCell((cell) => {
                     cell.border = {
@@ -1069,7 +1086,7 @@
                 });
             });
 
-            worksheet.columns = [
+            const columnDefs = [
                 { key: "invoice_number", width: 20 },
                 { key: "date", width: 15 },
                 { key: "customer_name", width: 35 },
@@ -1077,11 +1094,18 @@
                 { key: "type", width: 18 },
                 { key: "net_amount", width: 15 },
                 { key: "amount_paid", width: 15 },
-                { key: "shortage", width: 15 },
-                { key: "running_balance", width: 18 },
             ];
+            if (allowShortage.value) {
+                columnDefs.push({ key: "shortage", width: 15 });
+            }
+            columnDefs.push({ key: "running_balance", width: 18 });
 
-            const currencyColumns = [6, 7, 8, 9]; // Columns F, G, H, I
+            worksheet.columns = columnDefs;
+
+            // F Net Amount, G Amount Paid, [H Shortage], Running Balance
+            const currencyColumns = allowShortage.value
+                ? [6, 7, 8, 9]
+                : [6, 7, 8];
             currencyColumns.forEach((colIndex) => {
                 worksheet.getColumn(colIndex).numFmt = "#,##0.00";
             });
@@ -1120,7 +1144,10 @@
             worksheet.getCell("B4").numFmt = "#,##0.00";
             worksheet.getCell("B4").value = exportPaymentForwarded;
 
-            worksheet.mergeCells("A1:I1");
+            // Last populated column: H when the Shortage column is hidden, otherwise I.
+            const lastColumnLetter = allowShortage.value ? "I" : "H";
+
+            worksheet.mergeCells(`A1:${lastColumnLetter}1`);
             worksheet.getCell("A1").alignment = {
                 horizontal: "center",
                 vertical: "middle",
@@ -1131,7 +1158,7 @@
                 fgColor: { argb: "027937" },
             };
 
-            const dataRange = `A6:I${6 + exportRows.length}`;
+            const dataRange = `A6:${lastColumnLetter}${6 + exportRows.length}`;
             worksheet.autoFilter = dataRange;
 
             worksheet.views = [{ state: "frozen", xSplit: 0, ySplit: 6 }];
