@@ -284,7 +284,7 @@ sub, subIndex
                                                             menu.name,
                                                             sub.name
                                                         )
-                                                        " v-if="canView(sub?.roleId)">
+                                                        " v-if="canAccessMenu(sub)">
                                                     <ArrowTurnDownRightIcon class="submenuicon flex-shrink-0" />
                                                     <span>{{ sub.name }}</span>
                                                 </Link>
@@ -1029,6 +1029,16 @@ const menus = ref([
                 link: route("exporttogl", { tenant: page.props.tenant }),
                 roleId: "0404-EXPRTGL",
             },
+            {
+                name: "Untag Transaction Export",
+                link: route("transactionAudit.untagPage", { tenant: page.props.tenant }),
+                roleId: "0405-UNTAG",
+            },
+            {
+                name: "Transaction Audit Trail",
+                link: route("transactionAudit", { tenant: page.props.tenant }),
+                roleId: "0406-AUDIT",
+            },
         ],
     },
     {
@@ -1069,8 +1079,11 @@ const user_menus = computed(() => [
 //     return !!perms[roleId]?.can_view;
 // };
 
+const canAccessMenu = (sub) => sub?.adminOnly
+    ? page.props.auth?.user?.role === "Admin"
+    : canView(sub?.roleId);
 const filteredMenus = computed(() =>
-    menus.value.filter((m) => m?.subMenus?.some((sub) => canView(sub.roleId)))
+    menus.value.filter((m) => m?.subMenus?.some(canAccessMenu))
 );
 
 // Methods

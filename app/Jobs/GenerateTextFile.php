@@ -106,8 +106,8 @@ class GenerateTextFile
         }
 
         $row = $lookup instanceof \Illuminate\Support\Collection
-            ? $lookup->get($cashInBankLabel)
-            : ($lookup[$cashInBankLabel] ?? null);
+            ? ($lookup->get($cashInBankLabel) ?? $lookup->get($label))
+            : ($lookup[$cashInBankLabel] ?? $lookup[$label] ?? null);
 
         $code = is_object($row) ? ($row->bank_code ?? '') : (is_array($row) ? ($row['bank_code'] ?? '') : '');
         $name = is_object($row) ? ($row->bank_name ?? '') : (is_array($row) ? ($row['bank_name'] ?? '') : '');
@@ -460,6 +460,8 @@ class GenerateTextFile
                 $customers,
                 $locCodeByCustomer,
             ) {
+                // Keep receipt corrections from racing a GL export of the same rows.
+                $query->lockForUpdate();
                 $query->chunkById(500, function ($adjustments) use (
                     &$stream,
                     &$auto_increment,
@@ -641,6 +643,7 @@ class GenerateTextFile
                 &$lastProgress
             ) {
 
+                $query->lockForUpdate();
                 $query->chunkById(500, function ($payments) use (
                     &$stream,
                     &$auto_increment,
@@ -771,7 +774,8 @@ class GenerateTextFile
                                     $paymentReferenceNo,
                                     $docCode,
                                     $lineCustomerLocCode,
-                                    $shouldGenerateInlineWhtLine
+                                    $shouldGenerateInlineWhtLine,
+                                    $payment->cash_in_bank ?? ''
                                 );
                             } elseif ($payment->payment_type === '5B - Journal Voucher') {
                                 $lines[] = $this->generateJournalVoucherLine(
@@ -1244,7 +1248,7 @@ class GenerateTextFile
         return $this->formatLines($headerLine, $detailLine);
     }
 
-    protected function generateCashPaymentLine(&$auto_increment, $bankCode, $detail, $bankName, $customerNavCode, $customerCusPosting, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true)
+    protected function generateCashPaymentLine(&$auto_increment, $bankCode, $detail, $bankName, $customerNavCode, $customerCusPosting, string $paymentReferenceNo, string $docCode, $locCode = null, bool $includeWhtLine = true, string $cashInBankLabel = '')
     {
         $formattedDate = $this->formatDate($detail->payment_receipt_date);
 
@@ -1270,11 +1274,16 @@ class GenerateTextFile
         $grossAmount = $this->fmt($customerGrossAmountValue);
         $grossAmountNegative = $this->fmt($customerGrossAmountValue * -1);
 
+        $accountType = $this->appName === 'Ice Plant'
+            && strcasecmp(trim($cashInBankLabel), 'Coh: Peso Denominations') === 0
+                ? 'G/L Account'
+                : 'Bank Account';
+
         $headerLine = [
             'CASH RECEI',
             $prefix1 . 'COLL',
             ($auto_increment += 10000),
-            'Bank Account',
+            $accountType,
             $bankCode,
             $formattedDate,
             'Payment',
@@ -1299,7 +1308,7 @@ class GenerateTextFile
             $cashAmountNegative,
             $formattedDate,
             $prefix . $docCode . '#' . $paymentReferenceNo,
-            'Bank Account',
+            $accountType,
             $bankCode,
             $cashAmount,
             $cashAmountNegative

@@ -30,6 +30,7 @@ use App\Http\Controllers\TransactionControllers\BeginningBalanceController;
 use App\Http\Controllers\TransactionControllers\InvoiceController;
 use App\Http\Controllers\TransactionControllers\InvoiceItemController;
 use App\Http\Controllers\TransactionControllers\PaymentController;
+use App\Http\Controllers\TransactionControllers\TransactionCorrectionController;
 use App\Http\Controllers\UtilityControllers\CancelPaymentController;
 use App\Http\Controllers\UtilityControllers\CancelPaymentItemsController;
 use App\Http\Controllers\UtilityControllers\CheckClearedController;
@@ -117,7 +118,8 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         Route::post('/addUser', [UserController::class, 'addUser'])->name('addUser');
         Route::put('/updateUser/{id}', [UserController::class, 'updateUser'])->name('updateUser');
         Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('deleteUser');
-        Route::post('/users/{user}/assign-role-permissions', [UserController::class, 'assignRolePermissions'])->name('assign.role.permissions');
+        Route::post('/users/{user}/assign-role-permissions', [UserController::class, 'assignRolePermissions'])
+            ->middleware('check.permission:0102-USER,update')->name('assign.role.permissions');
         Route::get('/users-photo', [UserController::class, 'serveImageUserAdd'])->name('userPhoto');
         Route::get('/get-employee-data', [UserController::class, 'getEmployeeData'])->name('getEmployeeData');
 
@@ -218,6 +220,8 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         Route::post('/addAdjustment', [AdjustmentControllers::class, 'addAdjustment'])->name('addAdjustment');
         Route::post('/adjustment/{adjustment}/sync-sales', [AdjustmentControllers::class, 'syncAdjustmentSales'])->middleware(EnsureUserIsAdmin::class)->name('adjustment.syncSales');
         Route::put('/editAdjustment/{id}', [AdjustmentControllers::class, 'editAdjustment'])->name('editAdjustment');
+        Route::put('/adjustment/{id}/receipt', [TransactionCorrectionController::class, 'updateAdjustment'])
+            ->middleware('check.permission:0202-ADT,update')->name('adjustment.updateReceipt');
         Route::delete('/deleteAdjustment/{id}', [AdjustmentControllers::class, 'destroy'])->middleware(EnsureUserIsAdmin::class)->name('deleteAdjustment');
         Route::get('/getlatestadjustmentno', [AdjustmentControllers::class, 'latest'])->name('getlatestadjustmentno');
         Route::get('/adjustment-reason-setup', [AdjustmentControllers::class, 'getAdjustmentReasonSetup'])->name('getAdjustmentReasonSetup');
@@ -231,6 +235,14 @@ Route::prefix($baseUrl)->whereIn('tenant', $validTenants)->middleware([\App\Http
         Route::get('/payment-tax-candidates', [PaymentController::class, 'getTaxCandidates'])->name('payment.taxCandidates');
         Route::post('/payment-add-tax', [PaymentController::class, 'addTax'])->name('payment.addTax');
         Route::put('/editPayment/{id}', [PaymentController::class, 'editPayment'])->name('editPayment');
+        Route::put('/payment/{id}/receipt', [TransactionCorrectionController::class, 'updatePayment'])
+            ->middleware('check.permission:0203-PAYT,update')->name('payment.updateReceipt');
+        Route::get('/transaction-audit', [TransactionCorrectionController::class, 'index'])
+            ->middleware('check.permission:0406-AUDIT,view')->name('transactionAudit');
+        Route::get('/transaction-export-untag', [TransactionCorrectionController::class, 'untagPage'])
+            ->middleware('check.permission:0405-UNTAG,view')->name('transactionAudit.untagPage');
+        Route::post('/transaction-audit/untag', [TransactionCorrectionController::class, 'untag'])
+            ->middleware(['check.permission:0405-UNTAG,view', 'check.permission:0405-UNTAG,update'])->name('transactionAudit.untag');
         Route::delete('/deletePayment/{id}', [PaymentController::class, 'destroy'])->name('deletePayment');
         Route::get('/getlatestpaymentnoauth', [PaymentController::class, 'latestPaymentNO'])->name('getlatestpaymentno');
         Route::get('/cashinbank-list', [CashInBankController::class, 'getCashInBankList'])->name('getCashInBankList');

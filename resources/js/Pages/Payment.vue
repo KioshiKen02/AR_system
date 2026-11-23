@@ -350,6 +350,8 @@
                 @closeSuccess="closeSuccessTaxModal" />
         </Transition>
 
+        <EditTransactionReceipt v-if="editingPayment" kind="Payment" :selected="editingPayment"
+            @close="editingPayment = null" @saved="receiptSaved" />
         <ToastAlert :show="showToast" :message="toastMessage" />
 
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
@@ -495,6 +497,13 @@
                         </td>
                         <td class="px-3 py-2">
                             <div class="flex justify-center gap-2">
+                                <button v-if="canUpdate('0203-PAYT')" type="button"
+                                    :disabled="Boolean(Number(payment.exported))"
+                                    :title="Number(payment.exported) ? 'Exported to GL. An Admin must untag this payment before editing.' : 'Edit receipt date and DS No'"
+                                    aria-label="Edit payment receipt" @click="editingPayment = payment"
+                                    class="p-1.5 rounded-lg bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    <svg-icon type="mdi" :path="mdiPencil" class="w-4 h-4 text-[var(--color-primary)]" />
+                                </button>
                                 <button @click="openViewModal(payment)"
                                     class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100">
                                     <svg-icon type="mdi" :path="mdiEye" class="w-4 h-4 text-[var(--color-primary)]" />
@@ -537,7 +546,8 @@ import ConfirmationDialog from "./Components/ConfirmationDialog.vue";
 import AddPayment from "../Modals/TransactionModals/AddPayment.vue";
 import AddPaymentTax from "../Modals/TransactionModals/AddPaymentTax.vue";
 import ViewPayment from "../Modals/TransactionModals/ViewPayment.vue";
-import { mdiClose, mdiEye, mdiMagnify, mdiPlus, mdiReceiptTextPlus } from "@mdi/js";
+import EditTransactionReceipt from "../Modals/TransactionModals/EditTransactionReceipt.vue";
+import { mdiClose, mdiEye, mdiMagnify, mdiPlus, mdiReceiptTextPlus, mdiPencil } from "@mdi/js";
 import { FunnelIcon } from "@heroicons/vue/24/solid";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import DatePicker from "./Components/DatePicker.vue";
@@ -559,6 +569,11 @@ const showModal = ref(false);
 const showViewModal = ref(false);
 const showTaxModal = ref(false);
 const selectedRow = ref(null);
+const editingPayment = ref(null);
+const receiptSaved = () => {
+    editingPayment.value = null;
+    showSuccessToast("Payment receipt updated and recorded in the audit trail.");
+};
 const showToast = ref(false);
 const toastMessage = ref("");
 const showDialog = ref(false);

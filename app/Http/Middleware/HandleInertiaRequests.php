@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
             'tenant' => $request->route('tenant'),
             'flash' => [
                 'warning' => fn() => $request->session()->get('warning'),
+                'success' => fn() => $request->session()->get('success'),
                 'successful' => fn() => $request->session()->get('successful'),
             ],
             'auth.user' => fn() => $request->user()

@@ -269,6 +269,8 @@
                 @closeSuccess="closeSuccessViewModal" />
         </Transition>
 
+        <EditTransactionReceipt v-if="editingAdjustment" kind="Adjustment" :selected="editingAdjustment"
+            @close="editingAdjustment = null" @saved="receiptSaved" />
         <ToastAlert :show="showToast" :message="toastMessage" />
 
         <Transition enter-active-class="transition ease-out duration-300" enter-from-class="opacity-0 scale-95"
@@ -398,6 +400,13 @@
                         </td>
                         <td class="px-3 py-2">
                             <div class="flex justify-center gap-2">
+                                <button v-if="canUpdate('0202-ADT')" type="button"
+                                    :disabled="Boolean(Number(adjustment.exported))"
+                                    :title="Number(adjustment.exported) ? 'Exported to GL. An Admin must untag this adjustment before editing.' : 'Edit receipt date'"
+                                    aria-label="Edit adjustment receipt" @click="editingAdjustment = adjustment"
+                                    class="p-1.5 rounded-lg bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    <svg-icon type="mdi" :path="mdiPencil" class="w-4 h-4 text-[var(--color-primary)]" />
+                                </button>
                                 <button type="button" @click="openViewModal(adjustment)"
                                     class="p-1.5 cursor-pointer rounded-lg transition-all duration-200 bg-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/50 hover:shadow-lg group-hover:opacity-100">
                                     <svg-icon type="mdi" :path="mdiEye" class="w-4 h-4 text-[var(--color-primary)]" />
@@ -449,7 +458,8 @@ import ToastAlert from "./Components/ToastAlert.vue";
 import ConfirmationDialog from "./Components/ConfirmationDialog.vue";
 import AddAdjustment from "../Modals/TransactionModals/AddAdjustment.vue";
 import ViewAdjustment from "../Modals/TransactionModals/ViewAdjustment.vue";
-import { mdiClose, mdiDelete, mdiEye, mdiMagnify, mdiPlus, mdiSync } from "@mdi/js";
+import EditTransactionReceipt from "../Modals/TransactionModals/EditTransactionReceipt.vue";
+import { mdiClose, mdiDelete, mdiEye, mdiMagnify, mdiPlus, mdiSync, mdiPencil } from "@mdi/js";
 import { FunnelIcon } from "@heroicons/vue/24/solid";
 import { route } from "../../../vendor/tightenco/ziggy/src/js";
 import DatePicker from "./Components/DatePicker.vue";
@@ -466,7 +476,7 @@ const props = defineProps({
 
 const page = usePage();
 
-const { canInsert } = usePermissions();
+const { canInsert, canUpdate } = usePermissions();
 
 const isAdmin = computed(() => page.props.auth?.user?.role === "Admin");
 
@@ -474,6 +484,11 @@ const showModal = ref(false);
 const addAdjustmentKey = ref(0);
 const showViewModal = ref(false);
 const selectedRow = ref(null);
+const editingAdjustment = ref(null);
+const receiptSaved = () => {
+    editingAdjustment.value = null;
+    showSuccessToast("Adjustment receipt updated and recorded in the audit trail.");
+};
 const showToast = ref(false);
 const toastMessage = ref("");
 const showDialog = ref(false);

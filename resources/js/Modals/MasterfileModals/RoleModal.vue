@@ -156,6 +156,7 @@
                                                 >
                                                     <input
                                                         type="checkbox"
+                                                        :aria-label="`${role.description} ${action}`"
                                                         v-model="
                                                             form.roles[role.id][
                                                                 action
@@ -255,7 +256,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from "vue";
+import { ref, reactive, watch } from "vue";
 import { useForm, usePage } from "@inertiajs/vue3";
 import ToastAlertWarning from "../../Pages/Components/ToastAlertWarning.vue";
 import { mdiClose, mdiNavigationVariantOutline } from "@mdi/js";
@@ -329,7 +330,7 @@ const roles = ref([
     {
         id: "0202-ADT",
         description: "Adjustment Transaction",
-        enabledActions: ["can_view", "can_insert", "can_print", "can_reprint"],
+        enabledActions: ["can_view", "can_insert", "can_update", "can_print", "can_reprint"],
     },
     {
         id: "0203-PAYT",
@@ -372,6 +373,16 @@ const roles = ref([
         enabledActions: ["can_view", "can_update"],
     },
     {
+        id: "0405-UNTAG",
+        description: "Untag Transaction Export",
+        enabledActions: ["can_view", "can_update"],
+    },
+    {
+        id: "0406-AUDIT",
+        description: "Transaction Audit Trail",
+        enabledActions: ["can_view"],
+    },
+    {
         id: "NOTIFICATIONS",
         description: "Notifications Create",
         enabledActions: ["can_insert"],
@@ -396,20 +407,17 @@ const isActionEnabled = (roleId, action) => {
     const role = roles.value.find((r) => r.id === roleId);
     return role?.enabledActions?.includes(action) || false;
 };
-// Set up default permissions
-const permissions = reactive({});
-roles.value.forEach((role) => {
-    modalLoading.value = true;
-
-    permissions[role.id] = {};
-    actionKeys.forEach((action) => {
-        const value = props.permissions?.[role.id]?.[action];
-        permissions[role.id][action] = value === 1;
+const form = useForm({ roles: reactive({}) });
+watch(() => [props.userId, props.permissions], () => {
+    roles.value.forEach((role) => {
+        form.roles[role.id] = {};
+        actionKeys.forEach((action) => {
+            const value = props.permissions?.[role.id]?.[action];
+            form.roles[role.id][action] = isActionEnabled(role.id, action)
+                && (value === true || value === 1 || value === "1");
+        });
     });
-    modalLoading.value = false;
-});
-
-const form = useForm({ roles: reactive(permissions) });
+}, { immediate: true });
 
 const emit = defineEmits(["close", "closeSuccess"]);
 const closeModal = () => {

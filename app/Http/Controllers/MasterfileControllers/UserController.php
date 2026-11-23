@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -158,6 +159,8 @@ class UserController extends Controller
                 '0402-WHTCLR',
                 '0403-CNCLPY',
                 '0404-EXPRTGL',
+                '0405-UNTAG',
+                '0406-AUDIT',
                 'NOTIFICATIONS',
                 'MANAGERKEY'
             ],
@@ -178,15 +181,17 @@ class UserController extends Controller
             '0108-PCKT' => ['can_view', 'can_insert', 'can_update', 'can_delete'],
             '0109-SAMNT' => ['can_view', 'can_insert', 'can_update', 'can_delete'],
             '0201-CIT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
-            '0202-ADT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
+            '0202-ADT' => ['can_view', 'can_insert', 'can_update', 'can_print', 'can_reprint'],
             '0203-PAYT' => ['can_view', 'can_insert', 'can_update', 'can_delete', 'can_print', 'can_reprint'],
-            '0204-BGBLT' => ['can_view', 'can_insert'],
+            '0204-BGBLT' => ['can_view', 'can_insert', 'can_update'],
             '0301-GNRPRT' => ['can_view'],
             '0302-CUSLED' => ['can_view'],
             '0401-CHKCLR' => ['can_view', 'can_insert', 'can_update', 'can_print', 'can_reprint'],
             '0402-WHTCLR' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
             '0403-CNCLPY' => ['can_view', 'can_insert'],
             '0404-EXPRTGL' => ['can_view', 'can_update'],
+            '0405-UNTAG' => ['can_view', 'can_update'],
+            '0406-AUDIT' => ['can_view'],
             'NOTIFICATIONS' => ['can_insert'],
             'MANAGERKEY' => ['can_insert'],
         ];
@@ -312,6 +317,8 @@ class UserController extends Controller
                     '0402-WHTCLR',
                     '0403-CNCLPY',
                     '0404-EXPRTGL',
+                    '0405-UNTAG',
+                    '0406-AUDIT',
                     'NOTIFICATIONS',
                     'MANAGERKEY'
                 ],
@@ -332,15 +339,17 @@ class UserController extends Controller
                 '0108-PCKT' => ['can_view', 'can_insert', 'can_update', 'can_delete'],
                 '0109-SAMNT' => ['can_view', 'can_insert', 'can_update', 'can_delete'],
                 '0201-CIT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
-                '0202-ADT' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
+                '0202-ADT' => ['can_view', 'can_insert', 'can_update', 'can_print', 'can_reprint'],
                 '0203-PAYT' => ['can_view', 'can_insert', 'can_update', 'can_delete', 'can_print', 'can_reprint'],
-                '0204-BGBLT' => ['can_view', 'can_insert'],
+                '0204-BGBLT' => ['can_view', 'can_insert', 'can_update'],
                 '0301-GNRPRT' => ['can_view'],
                 '0302-CUSLED' => ['can_view'],
                 '0401-CHKCLR' => ['can_view', 'can_insert', 'can_update', 'can_print', 'can_reprint'],
                 '0402-WHTCLR' => ['can_view', 'can_insert', 'can_print', 'can_reprint'],
                 '0403-CNCLPY' => ['can_view', 'can_insert'],
                 '0404-EXPRTGL' => ['can_view', 'can_update'],
+                '0405-UNTAG' => ['can_view', 'can_update'],
+                '0406-AUDIT' => ['can_view'],
                 'NOTIFICATIONS' => ['can_insert'],
                 'MANAGERKEY' => ['can_insert'],
             ];
@@ -422,35 +431,35 @@ class UserController extends Controller
              }
         }
         
-        // Find the user
-        $user = User::findOrFail($targetId);
-
-        // Loop through roles and permissions from the request
-        foreach ($request->roles as $roleId => $permissions) {
-            $existingPermission = Permission::where('user_id', $targetId)
-                ->where('role_id', $roleId)
-                ->first();
-
-            $data = [
-                'can_view' => $permissions['can_view'] ?? false,
-                'can_insert' => $permissions['can_insert'] ?? false,
-                'can_update' => $permissions['can_update'] ?? false,
-                'can_delete' => $permissions['can_delete'] ?? false,
-                'can_print' => $permissions['can_print'] ?? false,
-                'can_tag' => $permissions['can_tag'] ?? false,
-                'can_reprint' => $permissions['can_reprint'] ?? false,
-            ];
-
-            if ($existingPermission) {
-                $existingPermission->update($data);
-            } else {
-                Permission::create(array_merge([
-                    'user_id' => $targetId,
-                    'role_id' => $roleId,
-                ], $data));
+        User::on('tenant')->findOrFail($targetId);
+        $validated = $request->validate([
+            'roles' => ['required', 'array'],
+            'roles.*' => ['array'],
+            'roles.*.can_view' => ['nullable', 'boolean'],
+            'roles.*.can_insert' => ['nullable', 'boolean'],
+            'roles.*.can_update' => ['nullable', 'boolean'],
+            'roles.*.can_delete' => ['nullable', 'boolean'],
+            'roles.*.can_print' => ['nullable', 'boolean'],
+            'roles.*.can_tag' => ['nullable', 'boolean'],
+            'roles.*.can_reprint' => ['nullable', 'boolean'],
+        ]);
+        DB::connection('tenant')->transaction(function () use ($validated, $targetId) {
+            foreach ($validated['roles'] as $roleId => $permissions) {
+                $existingPermission = Permission::on('tenant')->where('user_id', $targetId)
+                    ->where('role_id', $roleId)->first();
+                $data = [];
+                foreach (['can_view', 'can_insert', 'can_update', 'can_delete', 'can_print', 'can_reprint'] as $action) {
+                    $data[$action] = (bool) ($permissions[$action] ?? false);
+                }
+                $data['can_tag'] = array_key_exists('can_tag', $permissions)
+                    ? (bool) $permissions['can_tag'] : (bool) ($existingPermission?->can_tag ?? false);
+                Permission::on('tenant')->updateOrCreate(
+                    ['user_id' => $targetId, 'role_id' => $roleId], $data
+                );
             }
-        }
+        });
         event(new NewCreated('user'));
+        return back()->with('success', 'User permissions updated successfully.');
     }
 
     public function serveImageUserAdd(Request $request)
